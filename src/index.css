@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+  
+  body {
+    @apply antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar for Chrome, Safari and Opera */
+  .no-scrollbar::-webkit-scrollbar {
+      display: none;
+  }
+  /* Hide scrollbar for IE, Edge and Firefox */
+  .no-scrollbar {
+      -ms-overflow-style: none;  /* IE and Edge */
+      scrollbar-width: none;  /* Firefox */
+  }
+  
+  /* Custom scrollbar styles */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+}
+
+.text-dark {
+    color: #000000;
+}
+
+.bg-dark {
+    background-color: #000000;
+}
+
+/* Improved table scrollbar */
+.overflow-x-auto::-webkit-scrollbar {
+    height: 8px;
+}
+  
+.overflow-x-auto::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+  
+.overflow-x-auto::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+  
+.overflow-x-auto::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.normal-text {
+    font-size: 16px;
+    line-height: 20px;
+    color: #000000;
+}
+
+/* Button base styles */
+.btn-primary {
+    @apply px-4 md:px-6 py-2 md:py-3 bg-[#007BE5] text-white rounded-lg font-medium 
+           hover:bg-blue-600 active:bg-blue-700 transition-all duration-200 
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+           disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+    @apply px-4 md:px-6 py-2 md:py-3 bg-white text-gray-700 border border-gray-300 rounded-lg 
+           font-medium hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 
+           focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2;
+}
+
+.btn-danger {
+    @apply px-4 md:px-6 py-2 md:py-3 bg-red-600 text-white rounded-lg font-medium 
+           hover:bg-red-700 active:bg-red-800 transition-all duration-200 
+           focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+}
+
+/* Responsive table wrapper */
+.table-wrapper {
+    @apply overflow-x-auto custom-scrollbar;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Card styles */
+.card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6;
+}
+
+/* Input styles */
+.input-field {
+    @apply w-full px-4 py-2 md:py-3 border border-gray-300 rounded-lg 
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
+           transition-all duration-200;
+}
