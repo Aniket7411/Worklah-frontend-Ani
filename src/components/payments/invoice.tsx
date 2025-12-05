@@ -36,14 +36,14 @@ export default function Invoicereport() {
                 setLoading(true);
                 setError(null);
                 const response = await axiosInstance.get("/admin/invoice-report").catch(() => null);
-                
+
                 if (response?.data) {
                     setInvoices(response.data.invoices || response.data.data || []);
                 } else {
                     // Fallback: fetch employers
                     const employersResponse = await axiosInstance.get("/employers");
                     const employers = employersResponse.data.employers || [];
-                    
+
                     const invoicesData = employers.map((emp: any) => ({
                         id: emp._id,
                         employer: {
@@ -61,7 +61,7 @@ export default function Invoicereport() {
                         gst: emp.gst || 0,
                         total: emp.total || 0,
                     }));
-                    
+
                     setInvoices(invoicesData);
                 }
             } catch (err: any) {
@@ -157,7 +157,7 @@ export default function Invoicereport() {
                             scope="col"
                             className="px-6 py-3 text-center truncate text-xs font-medium text-[#6B7280] uppercase tracking-wider"
                         >
-                            GST (8%)
+                            Total
                         </th>
                         <th
                             scope="col"
@@ -169,87 +169,101 @@ export default function Invoicereport() {
                     </tr>
                 </thead>
                 <tbody className="bg-white">
-                    {payments.map((payment) => (
-                        <tr key={payment.id} className="hover:bg-[#F9FAFB]">
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap">
-                                <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-[#D1D5DB] text-[#0070F3] focus:ring-[#0070F3]"
-                                />
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.id}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap w-max overflow-hidden">
-                                <div className="flex items-center w-max bg-[#F6F6F6] rounded-full p-2">
-                                    <div className="h-8 w-8 rounded-full overflow-hidden">
-                                        <img
-                                            alt={payment.worker.name}
-                                            src={payment.worker.avatar}
-                                            width={32}
-                                            height={32}
-                                        />
-                                    </div>
-                                    <div className="ml-4">
-                                        <div className="text-sm font-medium text-[#111827]">
-                                            {payment.worker.name}
-                                        </div>
-                                    </div>
+                    {loading ? (
+                        <tr>
+                            <td colSpan={14} className="px-6 py-8 text-center">
+                                <div className="flex justify-center items-center">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                    <span className="ml-2 text-gray-600">Loading invoices...</span>
                                 </div>
                             </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.worker.nric}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap w-max overflow-hidden">
-                                <div className="flex items-center w-max">
-                                    <img
-                                        alt={payment.employer.name}
-                                        src={payment.employer.logo}
-                                        width={32}
-                                        height={32}
-                                        className="h-8 w-8 rounded"
-                                    />
-                                    <div className="ml-4 text-left">
-                                        <div className="text-[12px] font-medium text-[#111827]">
-                                            {payment.employer.name}
-                                        </div>
-                                        <div className="text-[10px] font-medium text-[#111827]">
-                                            <a href="#" className="text-blue-400 underline">View Employer</a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.jobId}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.day}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.shiftDate}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.shiftId}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.timeIn}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.timeOut}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.clockedIn}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.clockedOut}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.breakTime}
-                            </td>
-
-
                         </tr>
-                    ))}
+                    ) : error ? (
+                        <tr>
+                            <td colSpan={14} className="px-6 py-8 text-center text-red-600">
+                                {error}
+                            </td>
+                        </tr>
+                    ) : invoices.length === 0 ? (
+                        <tr>
+                            <td colSpan={14} className="px-6 py-8 text-center text-gray-500">
+                                No invoices found
+                            </td>
+                        </tr>
+                    ) : (
+                        invoices.map((invoice) => (
+                            <tr key={invoice.id || invoice._id} className="hover:bg-[#F9FAFB]">
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-[#D1D5DB] text-[#0070F3] focus:ring-[#0070F3]"
+                                    />
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.id?.slice(-4) || invoice._id?.slice(-4) || 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap w-max overflow-hidden">
+                                    <div className="flex items-center w-max">
+                                        {invoice.employer?.logo ? (
+                                            <img
+                                                alt={invoice.employer?.name || 'Employer'}
+                                                src={invoice.employer.logo.startsWith('http')
+                                                    ? invoice.employer.logo
+                                                    : `${IMAGE_BASE_URL}${invoice.employer.logo}`}
+                                                width={32}
+                                                height={32}
+                                                className="h-8 w-8 rounded object-cover"
+                                            />
+                                        ) : (
+                                            <div className="h-8 w-8 rounded bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
+                                                {invoice.employer?.name?.charAt(0)?.toUpperCase() || "?"}
+                                            </div>
+                                        )}
+                                        <div className="ml-4 text-left">
+                                            <div className="text-[12px] font-medium text-[#111827]">
+                                                {invoice.employer?.name || 'N/A'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.invoicePeriod || 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.jobsPosted || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.jobsFulfilled || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.fulfillmentRate ? `${invoice.fulfillmentRate}%` : '0%'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.numberOfOutlets || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.hoursFulfilled || 0} hrs
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {invoice.totalHours || 0} hrs
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    ${invoice.subtotal || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    ${invoice.gst || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    ${invoice.total || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap">
+                                    <button className="px-3 py-1 border border-[#D1D5DB] text-[#374151] rounded-md text-xs font-medium hover:bg-gray-50">
+                                        Download
+                                    </button>
+                                </td>
+                            </tr>
+                        ))
+                    )}
                 </tbody>
             </table>
         </div>

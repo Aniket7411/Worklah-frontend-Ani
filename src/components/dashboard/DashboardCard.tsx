@@ -32,21 +32,21 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
 
   const handleNaviagtion = (title:string) =>{
       if(title === "No. of Active Job now"){
-          navigate('/jobs/job-management')
+          navigate('/jobs/job-management?filter=active')
       } else if (title === "Activated Hustle Heroes"){
-        navigate('/hustle-heroes')
+        navigate('/hustle-heroes?filter=activated')
     } else if (title === "Current Headcount Fulfilment"){
-        navigate('/jobs/job-management')
+        navigate('/jobs/job-management?filter=headcount-fulfillment')
     } else if (title === "Pending Verifications"){
-        navigate('/hustle-heroes')
+        navigate('/hustle-heroes?filter=pending-verification')
     } else if (title === "Pending Wages Transfer"){
-        navigate('/payments')
+        navigate('/payments?filter=pending')
     } else if (title === "No Show"){
-        navigate('/hustle-heroes')
+        navigate('/hustle-heroes?filter=no-show')
     } else if (title === "Outstanding Payment"){
-        navigate('/payments')
+        navigate('/payments?filter=outstanding')
     } else if (title === "Verified Hustle Heroes"){
-        navigate('/hustle-heroes')
+        navigate('/hustle-heroes?filter=verified')
     }
   }
 

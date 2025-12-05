@@ -19,6 +19,11 @@ interface Employer {
   isChecked: boolean
 }
 
+interface JobEmployerFilterProps {
+  onClose: () => void
+  onSelect: (selected: Employer[]) => void
+}
+
 export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilterProps) {
 
   const [searchTerm, setSearchTerm] = useState('')

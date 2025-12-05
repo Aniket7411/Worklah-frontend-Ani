@@ -33,14 +33,14 @@ export default function SalesReport() {
                 // Try to fetch sales report from API
                 // If endpoint doesn't exist, fetch employers and calculate stats
                 const response = await axiosInstance.get("/admin/sales-report").catch(() => null);
-                
+
                 if (response?.data) {
                     setReports(response.data.reports || response.data.data || []);
                 } else {
                     // Fallback: fetch employers and show empty state or calculate from available data
                     const employersResponse = await axiosInstance.get("/employers");
                     const employers = employersResponse.data.employers || [];
-                    
+
                     // Transform employers to sales report format
                     const reportsData = employers.map((emp: any) => ({
                         id: emp._id,
@@ -54,7 +54,7 @@ export default function SalesReport() {
                         revenue: emp.revenue || 0,
                         hoursFulfilled: emp.hoursFulfilled || 0,
                     }));
-                    
+
                     setReports(reportsData);
                 }
             } catch (err: any) {
@@ -160,15 +160,21 @@ export default function SalesReport() {
                                 </td>
                                 <td className="px-6 py-4 text-center truncate whitespace-nowrap w-max overflow-hidden">
                                     <div className="flex items-center w-max">
-                                        <img
-                                            alt={report.employer?.name || 'Employer'}
-                                            src={report.employer?.logo?.startsWith('http') 
-                                                ? report.employer.logo 
-                                                : `${IMAGE_BASE_URL}${report.employer?.logo}`}
-                                            width={32}
-                                            height={32}
-                                            className="h-8 w-8 rounded"
-                                        />
+                                        {report.employer?.logo ? (
+                                            <img
+                                                alt={report.employer?.name || 'Employer'}
+                                                src={report.employer.logo.startsWith('http')
+                                                    ? report.employer.logo
+                                                    : `${IMAGE_BASE_URL}${report.employer.logo}`}
+                                                width={32}
+                                                height={32}
+                                                className="h-8 w-8 rounded object-cover"
+                                            />
+                                        ) : (
+                                            <div className="h-8 w-8 rounded bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
+                                                {report.employer?.name?.charAt(0)?.toUpperCase() || "?"}
+                                            </div>
+                                        )}
                                         <div className="ml-4 text-left">
                                             <div className="text-[12px] font-medium text-[#111827]">
                                                 {report.employer?.name || 'Unknown'}

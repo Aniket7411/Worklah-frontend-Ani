@@ -36,14 +36,14 @@ export default function Servicereport() {
                 setLoading(true);
                 setError(null);
                 const response = await axiosInstance.get("/admin/service-report").catch(() => null);
-                
+
                 if (response?.data) {
                     setReports(response.data.reports || response.data.data || []);
                 } else {
                     // Fallback: fetch jobs
                     const jobsResponse = await axiosInstance.get("/admin/jobs?limit=50");
                     const jobs = jobsResponse.data.jobs || [];
-                    
+
                     const reportsData = jobs.map((job: any) => ({
                         id: job._id,
                         employer: {
@@ -61,7 +61,7 @@ export default function Servicereport() {
                         issues: job.issues || 'None',
                         clockedOut: job.clockedOut || 'N/A',
                     }));
-                    
+
                     setReports(reportsData);
                 }
             } catch (err: any) {
@@ -164,89 +164,105 @@ export default function Servicereport() {
                     </tr>
                 </thead>
                 <tbody className="bg-white">
-                    {payments.map((payment) => (
-                        <tr key={payment.id} className="hover:bg-[#F9FAFB]">
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap">
-                                <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-[#D1D5DB] text-[#0070F3] focus:ring-[#0070F3]"
-                                />
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.id}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap w-max overflow-hidden">
-                                <div className="flex items-center w-max bg-[#F6F6F6] rounded-full p-2">
-                                    <div className="h-8 w-8 rounded-full overflow-hidden">
-                                        <img
-                                            alt={payment.worker.name}
-                                            src={payment.worker.avatar}
-                                            width={32}
-                                            height={32}
-                                        />
-                                    </div>
-                                    <div className="ml-4">
-                                        <div className="text-sm font-medium text-[#111827]">
-                                            {payment.worker.name}
-                                        </div>
-                                    </div>
+                    {loading ? (
+                        <tr>
+                            <td colSpan={13} className="px-6 py-8 text-center">
+                                <div className="flex justify-center items-center">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                                    <span className="ml-2 text-gray-600">Loading service reports...</span>
                                 </div>
                             </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.worker.nric}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap w-max overflow-hidden">
-                                <div className="flex items-center w-max">
-                                    <img
-                                        alt={payment.employer.name}
-                                        src={payment.employer.logo}
-                                        width={32}
-                                        height={32}
-                                        className="h-8 w-8 rounded"
-                                    />
-                                    <div className="ml-4 text-left">
-                                        <div className="text-[12px] font-medium text-[#111827]">
-                                            {payment.employer.name}
-                                        </div>
-                                        <div className="text-[10px] font-medium text-[#111827]">
-                                            <a href="#" className="text-blue-400 underline">View Employer</a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.jobId}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.day}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.shiftDate}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.shiftId}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.timeIn}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.timeOut}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.clockedIn}
-                            </td>
-                            <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
-                                {payment.clockedOut}
-                            </td>
-
-
-
-
-
                         </tr>
-                    ))}
+                    ) : error ? (
+                        <tr>
+                            <td colSpan={13} className="px-6 py-8 text-center text-red-600">
+                                {error}
+                            </td>
+                        </tr>
+                    ) : reports.length === 0 ? (
+                        <tr>
+                            <td colSpan={13} className="px-6 py-8 text-center text-gray-500">
+                                No service reports found
+                            </td>
+                        </tr>
+                    ) : (
+                        reports.map((report) => (
+                            <tr key={report.id || report._id} className="hover:bg-[#F9FAFB]">
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-[#D1D5DB] text-[#0070F3] focus:ring-[#0070F3]"
+                                    />
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    <div className="flex items-center w-max">
+                                        {report.employer?.logo ? (
+                                            <img
+                                                alt={report.employer?.name || 'Employer'}
+                                                src={report.employer.logo.startsWith('http')
+                                                    ? report.employer.logo
+                                                    : `${IMAGE_BASE_URL}${report.employer.logo}`}
+                                                width={32}
+                                                height={32}
+                                                className="h-8 w-8 rounded object-cover"
+                                            />
+                                        ) : (
+                                            <div className="h-8 w-8 rounded bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
+                                                {report.employer?.name?.charAt(0)?.toUpperCase() || "?"}
+                                            </div>
+                                        )}
+                                        <div className="ml-4 text-left">
+                                            <div className="text-[12px] font-medium text-[#111827]">
+                                                {report.employer?.name || 'N/A'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.date ? new Date(report.date).toLocaleDateString() : 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.jobRole || 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.scheduledShifts || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.outletAddress || 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.completedShifts || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.workersAssigned || 0}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.headcountAttendance || 0}%
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.hoursWorked || 0} hrs
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.issues || 'None'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap text-sm text-[#6B7280]">
+                                    {report.clockedOut || 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 text-center truncate whitespace-nowrap">
+                                    <button className="px-3 py-1 border border-[#D1D5DB] text-[#374151] rounded-md text-xs font-medium hover:bg-gray-50">
+                                        Download
+                                    </button>
+                                </td>
+                            </tr>
+
+
+
+
+
+                        ))
+                    )}
                 </tbody>
             </table>
-        </div>
+        </div >
     );
 }

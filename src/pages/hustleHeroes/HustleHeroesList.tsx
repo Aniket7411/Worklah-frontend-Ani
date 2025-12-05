@@ -9,7 +9,7 @@ import {
   Plus,
 } from "lucide-react";
 import { CustomScrollbar } from "../../components/layout/CustomScrollbar";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { convertIdToFourDigits } from "../../lib/utils";
 import { MdOutlineAccountBalanceWallet } from "react-icons/md";
@@ -33,11 +33,18 @@ interface Employee {
   workingHours: string;
   avgAttendRate: string;
   workPassStatus: "Verified" | "Approved" | "Pending" | "Rejected";
+  status?: string;
+  verificationStatus?: string;
+  attendanceStatus?: string;
   profilePicture?: string;
+  [key: string]: any;
 }
 
 export default function HustleHeroesList() {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "";
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [showRejectReasonId, setShowRejectReasonId] = useState<string | null>(
@@ -49,12 +56,28 @@ export default function HustleHeroesList() {
   // const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
+  // Get page title based on filter
+  const getPageTitle = () => {
+    switch (filter) {
+      case "activated":
+        return "Activated Hustle Heroes";
+      case "pending-verification":
+        return "Pending Verifications";
+      case "verified":
+        return "Verified Hustle Heroes";
+      case "no-show":
+        return "No Show Hustle Heroes";
+      default:
+        return "Hustle Heroes";
+    }
+  };
+
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
         const response = await axiosInstance.get("/admin/candidates");
         if (response?.data?.candidates) {
-          setEmployees(response.data.candidates);
+          setAllEmployees(response.data.candidates);
         }
       } catch (error: any) {
         console.error("Error fetching employees:", error);
@@ -62,6 +85,47 @@ export default function HustleHeroesList() {
     };
     fetchEmployees();
   }, []);
+
+  // Filter employees based on URL parameter
+  useEffect(() => {
+    let filtered = [...allEmployees];
+
+    switch (filter) {
+      case "activated":
+        // Filter for activated heroes (status: Active or Approved)
+        filtered = allEmployees.filter(
+          (emp) => emp.status === "Active" || emp.status === "Approved"
+        );
+        break;
+      case "pending-verification":
+        // Filter for pending verification (workPassStatus: Pending)
+        filtered = allEmployees.filter(
+          (emp) => emp.workPassStatus === "Pending" || emp.verificationStatus === "Pending"
+        );
+        break;
+      case "verified":
+        // Filter for verified heroes (workPassStatus: Verified)
+        filtered = allEmployees.filter(
+          (emp) => emp.workPassStatus === "Verified" || emp.verificationStatus === "Verified"
+        );
+        break;
+      case "no-show":
+        // Filter for no-show heroes (need to check if backend has this field)
+        // For now, filtering by low turn-up rate or specific status
+        filtered = allEmployees.filter(
+          (emp) =>
+            (emp.turnUpRate && parseFloat(emp.turnUpRate) < 50) ||
+            emp.status === "No Show" ||
+            emp.attendanceStatus === "No Show"
+        );
+        break;
+      default:
+        // Show all employees
+        filtered = allEmployees;
+    }
+
+    setEmployees(filtered);
+  }, [filter, allEmployees]);
   const toggleSelectAll = () => {
     if (selectedRows.length === employees.length) {
       setSelectedRows([]);
@@ -71,11 +135,25 @@ export default function HustleHeroesList() {
   };
 
   const formatDob = (dob: string) => {
+    if (!dob) return "N/A";
+
     const date = new Date(dob);
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return "N/A";
+    }
+
     const day = date.getDate();
     const month = date.toLocaleString("default", { month: "long" });
     const year = date.getFullYear();
+
+    // Validate day, month, and year are valid numbers
+    if (isNaN(day) || isNaN(year) || !month) {
+      return "N/A";
+    }
+
     const getOrdinal = (n: number) => {
+      if (isNaN(n)) return "";
       if (n > 3 && n < 21) return "th";
       switch (n % 10) {
         case 1:
@@ -92,11 +170,24 @@ export default function HustleHeroesList() {
   };
 
   const calculateAge = (dob: string) => {
+    if (!dob) return "N/A";
+
     const birthDate = new Date(dob);
+    // Check if date is valid
+    if (isNaN(birthDate.getTime())) {
+      return "N/A";
+    }
+
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+
+    // Validate age is a valid number
+    if (isNaN(age) || age < 0) {
+      return "N/A";
+    }
+
     return `${age} yrs`;
   };
 
@@ -179,7 +270,7 @@ export default function HustleHeroesList() {
 
 
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 p-4">
-        <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">Hustle Heroes</h1>
+        <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">{getPageTitle()}</h1>
         <div className="flex items-center gap-4">
 
           <button className="p-[14px] rounded-[26px] shadow-lg bg-dark hover:bg-slate-950 ">
@@ -292,7 +383,21 @@ export default function HustleHeroesList() {
                   </td>
 
                   <td className="p-4 truncate text-center border">
-                    {employee?.registrationDate || "N/A"}
+                    {employee?.registrationDate ? (() => {
+                      try {
+                        const regDate = new Date(employee.registrationDate);
+                        if (isNaN(regDate.getTime())) {
+                          return "N/A";
+                        }
+                        return regDate.toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        });
+                      } catch {
+                        return employee.registrationDate || "N/A";
+                      }
+                    })() : "N/A"}
                   </td>
                   {/* <td className="p-4 truncate text-center border">{employee.turnUpRate}</td> */}
                   {/* <td className="p-4 truncate text-center border">{employee.workingHours}</td> */}

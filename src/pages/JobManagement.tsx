@@ -16,11 +16,10 @@ import { MoreVertical } from "lucide-react";
 import DatePicker from "react-datepicker";
 import { FaCaretDown } from "react-icons/fa";
 import { CustomScrollbar } from "../components/layout/CustomScrollbar";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { axiosInstance } from "../lib/authInstances";
 import { BiDuplicate } from "react-icons/bi";
 import JobFilter from "../components/Filter/JobFilter";
-import JobEmployerFilter from "../components/Filter/JobEmployerFilter";
 import { convertIdToFourDigits, formatDate } from "../lib/utils";
 import UpcomingDeploymentTable from "./UpcomingDeploymentTable";
 
@@ -60,12 +59,33 @@ interface JobRow {
 interface Employer {
   id: string;
   name: string;
+  outlets?: Array<{
+    id: string;
+    name: string;
+    isChecked?: boolean;
+    [key: string]: any;
+  }>;
+  isChecked?: boolean;
   [key: string]: any;
 }
 
 const JobManagement = () => {
+  const [searchParams] = useSearchParams();
+  const filter = searchParams.get("filter") || "";
   const [currentPage, setCurrentPage] = useState(1);
   const tabs = ["All Jobs", "Jobs-Today", "Active", "Pending", "Cancelled", "Completed", "Deactivated"];
+
+  // Get page title based on filter
+  const getPageTitle = () => {
+    switch (filter) {
+      case "active":
+        return "Active Jobs";
+      case "headcount-fulfillment":
+        return "Current Headcount Fulfilment";
+      default:
+        return "Jobs";
+    }
+  };
 
   const [queryParams, setQueryParams] = useState({
     search: "",
@@ -75,6 +95,8 @@ const JobManagement = () => {
     page: 1,
     limit: 5,
     sortOrder: "desc",
+    startDate: new Date("2024-01-01").toISOString().split("T")[0],
+    endDate: new Date("2024-12-31").toISOString().split("T")[0],
   });
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [jobsData, setJobsData] = useState<any[]>([]);
@@ -82,7 +104,6 @@ const JobManagement = () => {
   const [startDate, setStartDate] = useState(new Date("2024-01-01"));
   const [endDate, setEndDate] = useState(new Date("2024-12-31"));
   const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
-  const [isEmployerPopupOpen, setIsEmployerPopupOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeJobs, setActiveJobs] = useState(0);
@@ -90,6 +111,7 @@ const JobManagement = () => {
   const [cancelledJobs, setCancelledJobs] = useState(0);
   const [attendanceRate, setAttendanceRate] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedOption, setSelectedOption] = useState("desc");
   const [selectedEmployers, setSelectedEmployers] = useState<Employer[]>([]);
   const [activeTab, setActiveTab] = useState("All Jobs");
@@ -131,18 +153,23 @@ const JobManagement = () => {
         !popupRef.current.contains(event.target as Node)
       ) {
         setIsLimitPopupOpen(false);
-        setIsEmployerPopupOpen(false);
+      }
+      if (
+        sortDropdownRef.current &&
+        !sortDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
       }
     };
 
-    if (isLimitPopupOpen || isEmployerPopupOpen) {
+    if (isLimitPopupOpen || isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     } else {
       document.removeEventListener("mousedown", handleClickOutside);
     }
 
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isLimitPopupOpen, isEmployerPopupOpen]);
+  }, [isLimitPopupOpen, isOpen]);
 
   const CustomInput = React.forwardRef(({ value, onClick, label }: any, ref: any) => (
     <div
@@ -208,7 +235,23 @@ const JobManagement = () => {
   };
 
   const fetchJobDetails = async (params: any) => {
-    const selectedEmployerId = selectedEmployers?.[0]?.id;
+    // Get selected employer IDs and outlet IDs
+    const selectedEmployerIds: string[] = [];
+    const selectedOutletIds: string[] = [];
+    
+    selectedEmployers.forEach(emp => {
+      if (emp.isChecked || (emp.outlets && emp.outlets.some((o: any) => o.isChecked))) {
+        selectedEmployerIds.push(emp.id);
+        // Collect outlet IDs if any are selected
+        if (emp.outlets) {
+          emp.outlets.forEach((outlet: any) => {
+            if (outlet.isChecked) {
+              selectedOutletIds.push(outlet.id);
+            }
+          });
+        }
+      }
+    });
 
     try {
       setIsLoading(true);
@@ -216,8 +259,26 @@ const JobManagement = () => {
 
       const updatedParams: any = {
         ...params,
-        ...(selectedEmployerId && { employerId: selectedEmployerId }),
       };
+
+      // If outlets are selected, prefer outlet filtering
+      if (selectedOutletIds.length > 0) {
+        // If backend supports multiple outlet IDs, send them
+        if (selectedOutletIds.length === 1) {
+          updatedParams.outletId = selectedOutletIds[0];
+        } else {
+          // For multiple outlets, use first one for now (backend may need to support multiple)
+          updatedParams.outletId = selectedOutletIds[0];
+        }
+      } else if (selectedEmployerIds.length > 0) {
+        // Use employer ID if no outlets selected
+        if (selectedEmployerIds.length === 1) {
+          updatedParams.employerId = selectedEmployerIds[0];
+        } else {
+          // For multiple employers, use first one for now (backend may need to support multiple)
+          updatedParams.employerId = selectedEmployerIds[0];
+        }
+      }
 
       // Handle status filtering - if statuses array has values, use it; otherwise use single status
       if (updatedParams.statuses && updatedParams.statuses.length > 0) {
@@ -283,8 +344,29 @@ const JobManagement = () => {
     }
   };
 
+  // Apply filter from URL on mount
+  useEffect(() => {
+    if (filter === "active") {
+      setQueryParams((prev) => ({
+        ...prev,
+        status: "Active",
+        page: 1,
+      }));
+      setActiveTab("Active");
+    } else if (filter === "headcount-fulfillment") {
+      // For headcount fulfillment, show active jobs and highlight vacancy information
+      setQueryParams((prev) => ({
+        ...prev,
+        status: "Active",
+        page: 1,
+      }));
+      setActiveTab("Active");
+    }
+  }, [filter]);
+
   useEffect(() => {
     fetchJobDetails(queryParams);
+    setCurrentPage(queryParams.page);
   }, [queryParams, selectedEmployers]);
 
   const handlePopupToggle = (index: number) => {
@@ -344,7 +426,7 @@ const JobManagement = () => {
       {/* Jobs Section */}
       <div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">Jobs</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">{getPageTitle()}</h1>
 
           <div className="flex flex-wrap items-center gap-3 md:gap-6 w-full sm:w-auto">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-initial">
@@ -420,6 +502,7 @@ const JobManagement = () => {
                           page: 1,
                         }));
                         setActiveTab("All Jobs"); // Reset tab when filter is applied
+                        setIsLimitPopupOpen(false); // Close the filter popup
                       }}
                       onClose={() => setIsLimitPopupOpen(false)}
                     />
@@ -470,35 +553,8 @@ const JobManagement = () => {
 
 
         {/*Filter */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 py-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <div className="flex items-center gap-2 bg-black text-white px-3 py-2 rounded-lg cursor-pointer text-sm">
-                <p className="whitespace-nowrap">Select Employer</p>
-                <button
-                  className="p-1 hover:bg-gray-800 rounded transition-colors"
-                  onClick={() => setIsEmployerPopupOpen(!isEmployerPopupOpen)}
-                >
-                  <FaCaretDown />
-                </button>
-              </div>
-
-              {isEmployerPopupOpen && (
-                <div
-                  ref={popupRef}
-                  className="absolute left-0 sm:left-auto top-full mt-2 bg-white border rounded-xl shadow-xl z-50 min-w-[280px]"
-                >
-                  <JobEmployerFilter
-                    onClose={() => setIsEmployerPopupOpen(false)}
-                    onSelect={(selected) => {
-                      setSelectedEmployers(selected);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="relative inline-block text-left">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3 py-3">
+          <div className="relative inline-block text-left" ref={sortDropdownRef}>
               <div
                 className="flex items-center gap-2 bg-white text-black border border-gray-300 px-3 py-2 rounded-lg cursor-pointer hover:border-gray-400 transition-colors text-sm"
                 onClick={() => setIsOpen(!isOpen)}
@@ -545,6 +601,15 @@ const JobManagement = () => {
                 if (tab === "All Jobs") {
                   newStatus = "";
                   newStatuses = [];
+                  // Reset to default date range
+                  const defaultStart = new Date("2024-01-01");
+                  const defaultEnd = new Date("2024-12-31");
+                  setStartDate(defaultStart);
+                  setEndDate(defaultEnd);
+                  dateParams = {
+                    startDate: defaultStart.toISOString().split("T")[0],
+                    endDate: defaultEnd.toISOString().split("T")[0],
+                  };
                 } else if (tab === "Jobs-Today") {
                   newStatus = "";
                   newStatuses = [];
@@ -560,18 +625,24 @@ const JobManagement = () => {
                 } else if (tab === "Active") {
                   newStatus = "Active";
                   newStatuses = [];
+                  // Keep current date range, don't reset
+                  dateParams = {};
                 } else if (tab === "Pending") {
                   newStatus = "Pending";
                   newStatuses = [];
+                  dateParams = {};
                 } else if (tab === "Cancelled") {
                   newStatus = "Cancelled";
                   newStatuses = [];
+                  dateParams = {};
                 } else if (tab === "Completed") {
                   newStatus = "Completed";
                   newStatuses = [];
+                  dateParams = {};
                 } else if (tab === "Deactivated") {
                   newStatus = "Deactivated";
                   newStatuses = [];
+                  dateParams = {};
                 }
 
                 setQueryParams((prev) => ({
