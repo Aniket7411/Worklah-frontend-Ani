@@ -1,837 +1,889 @@
-"use client";
-
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { axiosInstance } from "../../lib/authInstances";
 import {
   ArrowLeft,
-  Settings,
-  MessagesSquare,
-  Clock,
-  MessageSquare,
-  Camera,
-  History,
-  CalendarClock,
-  CalendarCheck,
-  CalendarX2,
-  Ban,
-  Image,
-  RotateCcw,
-  Wallet2,
   User,
+  Phone,
+  Mail,
+  Calendar,
   MapPin,
-  Flag,
-  ImageIcon,
-  PencilIcon,
-  CalendarIcon,
+  Camera,
+  FileText,
+  GraduationCap,
+  Wallet2,
+  Save,
+  X,
+  UploadCloud,
+  Eye,
+  EyeOff,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { FaRegIdCard } from "react-icons/fa";
-import {
-  MdOutlineDateRange,
-  MdOutlineOutlinedFlag,
-  MdOutlineVerifiedUser,
-} from "react-icons/md";
-import { TbGenderGenderfluid } from "react-icons/tb";
-import { CiUser } from "react-icons/ci";
-import { GoChecklist } from "react-icons/go";
-import { FiEdit3 } from "react-icons/fi";
-import { FaHandHoldingWater } from "react-icons/fa";
-import { TbUserHexagon } from "react-icons/tb";
-
-import { Link, useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
+import Loader from "../../components/Loader";
 import JobHistory from "../../components/employerDetail/JobHistory";
 import WorkHistory from "../../components/employerDetail/WorkHistory";
-import { axiosInstance } from "../../lib/authInstances";
-import uploadImageOnCloudinary from "../../utils/images/imageUpload";
-import toast from "react-hot-toast";
 
-interface PersonalDetails {
-  EWalletAmount: string;
-  Race: string;
-  NRIC: string;
-  PostalCode: string;
-  FoodHygineCert: string;
-  Photo: string;
-  Nationality: string;
-  nricFront: string;
-  nricBack: string;
+const IMAGE_BASE_URL = "https://worklah.onrender.com";
+
+interface EmployeeFormData {
+  fullName: string;
+  mobile: string;
+  email: string;
+  nric: string;
+  dateOfBirth: string;
+  gender: "Male" | "Female";
+  postalCode: string;
+  streetAddress: string;
+  profilePicture: File | string | null;
+  nricFront: File | string | null;
+  nricBack: File | string | null;
+  plocImage: File | string | null;
+  plocExpiryDate: string;
+  foodHygieneCert: File | string | null;
+  schools: string;
+  studentPassImage: File | string | null;
+  studentIdNo: string;
+  eWalletAmount: number;
+  registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)";
 }
 
-interface ActiveJobs {
-  job: string;
-  ongoingShift: string;
-  clockedIn: string;
-  employer: string;
-  duration: string;
-  clockedOut: string;
-  date: string;
-  totalWage: string;
-  wageGenerated: string;
-  rateType: string;
-}
-
-export default function EditCandidateProfile() {
+const EditCandidateProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [userData, setUserData] = useState<any>(null);
-  console.log("userData", userData);
-  const [formData, setFormData] = useState({
-    name: "",
-    gender: "Male",
-    workPassStatus: "Verified",
-    dob: "01/01/2002",
-    status: "",
+  const [showNRIC, setShowNRIC] = useState(false);
+  const [schoolsList, setSchoolsList] = useState<string[]>([]);
+
+  const [formData, setFormData] = useState<EmployeeFormData>({
+    fullName: "",
     mobile: "",
     email: "",
+    nric: "",
+    dateOfBirth: "",
+    gender: "Male",
     postalCode: "",
-    country: "",
-    city: "",
-    street: "",
-    town: "", // add this line
-    foodHygieneCert: null,
-    selfie: null,
+    streetAddress: "",
+    profilePicture: null,
     nricFront: null,
     nricBack: null,
-    finFront: null,
-    finBack: null,
     plocImage: null,
-    studentCard: null,
-    plocExpiry: "",
-    studentId: "",
-    nricNo: ""
-
+    plocExpiryDate: "",
+    foodHygieneCert: null,
+    schools: "",
+    studentPassImage: null,
+    studentIdNo: "",
+    eWalletAmount: 0,
+    registrationType: "Singaporean/PR",
   });
 
-  const [activeTab, setActiveTab] = useState("jobHistory");
+  const [existingFiles, setExistingFiles] = useState({
+    profilePicture: "",
+    nricFront: "",
+    nricBack: "",
+    plocImage: "",
+    foodHygieneCert: "",
+    studentPassImage: "",
+  });
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (id) {
+      fetchEmployeeData();
+      fetchSchoolsList();
+    }
+  }, [id]);
 
-  const toggleMenu = () => setIsOpen(!isOpen);
-
-  const tabs = [
-    { id: "jobHistory", label: "Job History", icon: History },
-    { id: "workHistory", label: "Work History", icon: CalendarClock },
-  ];
-
-  const personalDetails: PersonalDetails = {
-    EWalletAmount:
-      userData?.candidateProfile?.personalDetails?.eWalletAmount || "N/A",
-    // Race: userData?.candidateProfile?.personalDetails?.race || "N/A",
-    NRIC: userData?.candidateProfile?.personalDetails?.nric || "N/A",
-    PostalCode:
-      userData?.candidateProfile?.personalDetails?.postalCode || "N/A",
-    // FoodHygineCert: userData?.candidateProfile?.personalDetails?.foodHygieneCert || "N/A",
-    // Photo: userData?.candidateProfile?.personalDetails?.photo || "N/A",
-    Nationality:
-      userData?.candidateProfile?.personalDetails?.nationality || "N/A",
-    nricFront: userData?.candidateProfile?.personalDetails?.nricFront || "N/A",
-    nricBack: userData?.candidateProfile?.personalDetails?.nricBack || "N/A",
-  };
-
-  const activeJobs: ActiveJobs = {
-    job: "Tray Collecter",
-    ongoingShift: "07:00 PM ---- 11:00 PM",
-    clockedIn: "07:06 AM",
-    employer: "Right Service PTE. LTD.",
-    duration: "4 Hrs",
-    clockedOut: " -- ",
-    date: "10 Sep, 24",
-    totalWage: " $72",
-    wageGenerated: "$--",
-    rateType: "Flat Rate",
-  };
-
-  const customLabels: Record<string, string> = {
-    EWalletAmount: "E-Wallet Amount",
-    // Race: "Race",
-    NRIC: "NRIC",
-    PostalCode: "Postal Code",
-    // FoodHygineCert: "Food & Hygiene Cert",
-    // Photo: "Photo",
-    Nationality: "Nationality",
-    nricFront: "NRIC Front",
-    nricBack: "NRIC Back",
-  };
-
-  const navigate = useNavigate();
-
-  const customLablesActiveJobs: Record<string, string> = {
-    job: "Job",
-    ongoingShift: "Ongoing shift",
-    clockedIn: "Clocked In Time",
-    employer: "Employer",
-    duration: "Duration",
-    clockedOut: "Clcoked Out time ",
-    date: "Date",
-    totalWage: "Total Wage",
-    wageGenerated: "Wage Generated",
-    rateType: "Rate Type",
-  };
-
-  const getImageUrl = useCallback(async (e, type) => {
-    // debugger
+  const fetchEmployeeData = async () => {
     try {
-      setLoading(true)
-      const url = await uploadImageOnCloudinary(e);
-      setLoading(false)
-      console.log("Uploaded URL:", url);
+      setLoading(true);
+      const response = await axiosInstance.get(`/admin/candidates/${id}`);
+      const data = response.data;
+      const candidate = data.candidateProfile || data;
 
-      setFormData((prevState) => ({
-        ...prevState,
-        [type]: url, // Save the URL in the formData
-      }));
+      // Determine registration type
+      let registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)" = "Singaporean/PR";
+      if (candidate.workPassStatus === "LTVP" || candidate.workPassStatus === "Long Term Visit Pass Holder") {
+        registrationType = "LTVP";
+      } else if (candidate.workPassStatus === "Student Pass" || candidate.workPassStatus === "Student Pass (Foreigner)") {
+        registrationType = "Student Pass (Foreigner)";
+      }
 
-      // Set preview for the uploaded image
-    } catch (error) {
-      console.error("Image upload failed:", error);
-      alert("Failed to upload image. Please try again.");
+      setFormData({
+        fullName: candidate.fullName || candidate.name || "",
+        mobile: candidate.mobile || candidate.personalDetails?.contactNumber || "",
+        email: candidate.email || candidate.personalDetails?.email || "",
+        nric: candidate.nric || candidate.personalDetails?.nric || candidate.icNumber || "",
+        dateOfBirth: candidate.dob || candidate.personalDetails?.dob || "",
+        gender: candidate.gender || "Male",
+        postalCode: candidate.postalCode || candidate.personalDetails?.postalCode || "",
+        streetAddress: candidate.streetAddress || candidate.personalDetails?.street || "",
+        profilePicture: null,
+        nricFront: null,
+        nricBack: null,
+        plocImage: null,
+        plocExpiryDate: candidate.plocExpiryDate || candidate.plocExpiry || "",
+        foodHygieneCert: null,
+        schools: candidate.schools || "",
+        studentPassImage: null,
+        studentIdNo: candidate.studentIdNo || candidate.studentId || "",
+        eWalletAmount: candidate.eWalletAmount || candidate.personalDetails?.eWalletAmount || 0,
+        registrationType,
+      });
+
+      setExistingFiles({
+        profilePicture: candidate.profilePicture || candidate.selfie || "",
+        nricFront: candidate.nricFront || "",
+        nricBack: candidate.nricBack || "",
+        plocImage: candidate.plocImage || "",
+        foodHygieneCert: candidate.foodHygieneCert || candidate.foodHygieneCert || "",
+        studentPassImage: candidate.studentPassImage || candidate.studentCard || "",
+      });
+
+      setUserData(data);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to load employee data");
+      navigate(-1);
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const handleChange = (e) => {
-    //debugger
-    const { name, value } = e.target;
-
-    if (name === 'plocExpiry') {
-      const selectedDate = new Date(value);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Normalize to midnight
-
-      if (selectedDate < today) {
-        alert("this date is not valid");
-        return; // Stop here if invalid
-      }
-    }
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
   };
 
-
-
-  useEffect(() => {
-    // debugger;
-    axiosInstance
-      .get(`/admin/candidates/${id}`)
-      .then((response) => {
-        const { candidateProfile } = response.data;
-        setUserData(response.data);
-
-        setFormData({
-          name: candidateProfile.fullName || "",
-          gender: candidateProfile.gender || "Male",
-          workPassStatus: candidateProfile.employmentStatus || "",
-          dob: candidateProfile.dob || "",
-          status: candidateProfile.employmentStatus || "",
-          mobile: candidateProfile.personalDetails?.contactNumber || "",
-          email: candidateProfile.email || "",
-          postalCode: candidateProfile.personalDetails?.postalCode || "",
-          country: candidateProfile.personalDetails?.nationality || "",
-          city: candidateProfile.personalDetails?.city || "",
-          street: candidateProfile.personalDetails?.street || "",
-          // town is not included in your formData, add it if needed
-          town: candidateProfile.personalDetails?.town || "",
-          foodHygieneCert: candidateProfile?.foodHygieneCert || null,
-          selfie: candidateProfile?.selfie || null,
-          nricFront: candidateProfile?.nricFront || null,
-          nricBack: candidateProfile?.nricBack || null,
-          finFront: candidateProfile?.finFront || null,
-          finBack: candidateProfile?.finBack || null,
-          plocImage: candidateProfile?.plocImage || null,
-          studentCard: candidateProfile?.studentCard || null,
-          plocExpiry: candidateProfile?.plocExpiry || "",
-          studentId: candidateProfile?.studentId || "",
-          nricNo: candidateProfile?.nricNo || "",
-        });
-      })
-      .catch((error) => {
-        console.error("Error fetching employee:", error);
-      });
-  }, []);
-
-  const InputForRole = {
-    "Singaporean/Permanent Resident": [
-      "nricFront",
-      "nricBack",
-      "finFront",
-      "finBack",
-      "selfie",
-      "foodHygieneCert"
-    ],
-    "Long Term Visit Pass Holder": [
-      "plocImage",
-      "selfie",
-      "foodHygieneCert"
-    ],
-    "Student Pass": [
-      "studentCard",
-      "foodHygieneCert",
-      "selfie",
-
-    ],
-    "No Valid Work Pass": [
-      "selfie",
-      "foodHygieneCert"
-    ]
-  };
-
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    //debugger
-    const formDataToSend = {
-      fullName: formData.name,
-      phoneNumber: formData.mobile,
-      email: formData.email,
-      gender: formData.gender,
-      dob: formData.dob,
-      city: formData.city,
-      town: formData.town,
-      country: formData.country,
-      employmentStatus: formData.status,
-      foodHygieneCert: formData.foodHygieneCert,
-      selfie: formData.selfie,
-      nricFront: formData.nricFront,
-      nricBack: formData.nricBack,
-      finFront: formData.finFront,
-      finBack: formData.finBack,
-      plocImage: formData.plocImage,
-      studentCard: formData.studentCard,
-      plocExpiry: formData.plocExpiry,
-      studentId: formData.studentId,
-      nricNo: formData.nricNo
-
-
-    };
-    console.log("submit", formDataToSend);
-
+  const fetchSchoolsList = async () => {
     try {
-      const response = await axiosInstance.post(
-        `/admin/candidates/${id}`,
-        formDataToSend,
-        {
-          headers: { "Content-Type": "application/json" },
+      const response = await axiosInstance.get("/admin/schools");
+      if (response.data?.schools && Array.isArray(response.data.schools)) {
+        setSchoolsList(response.data.schools);
+      } else {
+        setSchoolsList([]);
+        toast.error("Failed to load schools list");
+      }
+    } catch (error) {
+      console.error("Error fetching schools:", error);
+      setSchoolsList([]);
+      toast.error("Failed to load schools list. Please contact support.");
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Auto-fill street address when postal code is entered (6 digits)
+    if (name === "postalCode" && value.length === 6 && /^\d{6}$/.test(value)) {
+      fetchPostalCodeAddress(value);
+    }
+  };
+
+  const fetchPostalCodeAddress = async (postalCode: string) => {
+    try {
+      const response = await axiosInstance.get(`/admin/postal-code/${postalCode}`);
+      if (response.data?.streetAddress) {
+        setFormData(prev => ({ ...prev, streetAddress: response.data.streetAddress }));
+      }
+    } catch (error) {
+      // Silently fail - user can enter manually
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    if (e.target.files && e.target.files[0]) {
+      setFormData(prev => ({ ...prev, [field]: e.target.files![0] }));
+    }
+  };
+
+  const removeFile = (field: string) => {
+    setFormData(prev => ({ ...prev, [field]: null }));
+    setExistingFiles(prev => ({ ...prev, [field]: "" }));
+  };
+
+  const formatDateForDisplay = (dateString: string) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      const day = date.getDate().toString().padStart(2, "0");
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateString;
+    }
+  };
+
+  const parseDateToInput = (dateString: string) => {
+    if (!dateString) return "";
+    try {
+      // Handle DD/MM/YYYY format
+      if (dateString.includes("/")) {
+        const [day, month, year] = dateString.split("/");
+        return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+      }
+      return dateString;
+    } catch {
+      return dateString;
+    }
+  };
+
+  const validateForm = () => {
+    // Email validation
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast.error("Please enter a valid email address");
+      return false;
+    }
+
+    // Postal code validation (6 digits)
+    if (formData.postalCode && !/^\d{6}$/.test(formData.postalCode)) {
+      toast.error("Postal code must be exactly 6 digits");
+      return false;
+    }
+
+    // Date of birth validation (DD/MM/YYYY)
+    if (formData.dateOfBirth && !/^\d{2}\/\d{2}\/\d{4}$/.test(formatDateForDisplay(formData.dateOfBirth))) {
+      toast.error("Date of birth must be in DD/MM/YYYY format");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+    try {
+      const formDataToSend = new FormData();
+
+      // Append all text fields
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value instanceof File) {
+          formDataToSend.append(key, value);
+        } else if (key !== "eWalletAmount" && value !== null && value !== undefined) {
+          formDataToSend.append(key, String(value));
         }
-      );
+      });
 
-      console.log(response);
-
-      if (!response.status == 200) {
-        throw new Error("Failed to update profile");
+      // Convert date format if needed
+      if (formData.dateOfBirth) {
+        formDataToSend.set("dateOfBirth", formatDateForDisplay(formData.dateOfBirth));
       }
 
-      console.log("Profile updated successfully:", response);
-      alert("Profile updated successfully!");
-      navigate(-1);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      alert("Failed to update profile. Please try again.");
+      const response = await axiosInstance.put(`/admin/candidates/${id}`, formDataToSend, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        toast.success("Employee profile updated successfully!");
+        navigate(-1);
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to update employee profile");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const getIcon = (key: string) => {
-    switch (key) {
-      case "EWalletAmount":
-        return <Wallet2 className="w-5 h-5 text-[#048BE1]" />;
-      // case "Race":
-      //   return <User className="w-5 h-5 text-[#048BE1]" />;
-      case "NRIC":
-        return <FaRegIdCard className="w-5 h-5 text-[#048BE1]" />;
-      case "PostalCode":
-        return <MapPin className="w-5 h-5 text-[#048BE1]" />;
-      // case "FoodHygineCert":
-      //   return <FaHandHoldingWater className="w-5 h-5 text-[#048BE1]" />;
-      // case "Photo":
-      //   return <ImageIcon className="w-5 h-5 text-[#048BE1]" />;
-      case "Nationality":
-        return <MdOutlineOutlinedFlag className="w-5 h-5 text-[#048BE1]" />;
-      case "nricFront":
-        return <TbUserHexagon className="w-6 h-6 text-[#048BE1]" />;
-      case "nricBack":
-        return <TbUserHexagon className="w-6 h-6 text-[#048BE1]" />;
-      default:
-        return null;
-    }
-  };
-
-  if (!userData) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p>Loading candidate profile...</p>
-      </div>
-    );
+  if (loading) {
+    return <Loader />;
   }
 
+  const isSingaporeanPR = formData.registrationType === "Singaporean/PR";
+  const isLTVP = formData.registrationType === "LTVP";
+  const isStudentPass = formData.registrationType === "Student Pass (Foreigner)";
+  const showEmail = !userData?.candidateProfile?.email && !userData?.email;
+
   return (
-    <div className="min-h-screen pb-20">
-      <div className=" mx-auto px-4 -mt-14">
-        <div className="gap-6 flex flex-col">
-          {/* Profile Card */}
-          <div className=" p-6  z-10">
-            <div className="flex justify-between items-start pb-2">
-              <div className="flex items-center gap-4">
-                <div className="relative">
+    <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6 flex items-center gap-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Edit Employee Profile</h1>
+        </div>
+
+        {/* Profile Summary Card */}
+        {userData && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="relative">
+                {existingFiles.profilePicture ? (
                   <img
-                    src="./assets/teamm1.svg"
+                    src={existingFiles.profilePicture.startsWith("http") ? existingFiles.profilePicture : `${IMAGE_BASE_URL}${existingFiles.profilePicture}`}
                     alt="Profile"
-                    width={100}
-                    height={100}
-                    className="rounded-full "
+                    className="w-20 h-20 rounded-full object-cover border-2 border-blue-500"
                   />
-                </div>
-                {/* <div className="flex flex-col items-start gap-1">
-                  <p className="text-[16px] leading-[24px] font-medium text-[#4c4c4c]">
-                    ID:{" "}
-                    <span className="text-[#000000] text-[16px] leading-[24px] font-medium ml-2">
-                      {" "}
-                      24575
-                    </span>
-                  </p>
-                </div> */}
-              </div>
-            </div>
-
-            <div className=" flex justify-between pb-6 border-b border-[#DDDDDD]">
-              <div className="flex flex-col items-start gap-1">
-                <div className="flex items-center">
-                  <h1 className=" text-[24px] leading-[30px] font-medium">
-                    {userData?.candidateProfile?.fullName || "N/A"}{" "}
-                  </h1>
-                  <span className="text-[#049609] bg-[#CEFFCF] rounded-full px-3 py-0.5 mt-2 text-[16px] leading-[24px] font-medium ml-2">
-                    {" "}
-                    {userData?.candidateProfile?.employmentStatus}
-                  </span>
-                </div>
-
-                <p className="text-[16px] leading-[24px] font-medium text-[#4c4c4c]">
-                  Age:{" "}
-                  <span className="text-[#000] text-[16px] leading-[24px] font-medium ml-2">
-                    {" "}
-                    {userData?.candidateProfile?.personalDetails.age}
-                  </span>
-                </p>
-
-                <p className="text-[16px] leading-[24px] font-medium text-[#4c4c4c]">
-                  DOB:{" "}
-                  <span className="text-[#000] text-[16px] leading-[24px] font-medium ml-2">
-                    {" "}
-                    {userData?.candidateProfile?.personalDetails.dob}
-                  </span>
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-[#4C4C4C] font-medium mt-2">
-                  <p className="text-[16px] leading-[24px] font-medium text-[#4c4c4c]">
-                    Registered at:{" "}
-                    <span className="text-[#000000] text-[16px] leading-[24px] font-medium ml-2">
-                      {userData?.candidateProfile?.registeredAt}
-                    </span>
-                  </p>
-                </p>
-                <p className="text-sm text-[#4C4C4C] font-medium mt-2">
-                  <p className="text-[16px] leading-[24px] font-medium text-[#4c4c4c]">
-                    Contact Number:{" "}
-                    <span className="text-[#000000] text-[16px] leading-[24px] font-medium ml-2">
-                      {
-                        userData?.candidateProfile?.personalDetails
-                          .contactNumber
-                      }
-                    </span>
-                  </p>
-                </p>
-                {/* <p className="text-sm text-[#4C4C4C] font-medium mt-2">
-                  <p className="text-[16px] leading-[24px] font-medium text-[#4c4c4c]">
-                    Email Address:{" "}
-                    <span className="text-[#000000] text-[16px] leading-[24px] font-medium ml-2">
-                    {userData.candidateProfile?.personalDetails.contactNumber}
-                    </span>
-                  </p>
-                </p> */}
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h2 className="font-semibold mb-4 text-[16px] leading-[24px] text-[#000000]">
-                Personal Details
-              </h2>
-              <div className=" mt-8 grid grid-cols-4 gap-6">
-                {Object.entries(personalDetails).map(([key, value]) => (
-                  <div className="flex flex-col">
-                    <div key={key} className="flex items-start gap-3 my-3">
-                      {/* Icon */}
-                      <div className="w-5 h-5 mt-0.5">{getIcon(key)}</div>
-
-                      {/* Label and Value */}
-                      <div>
-                        <p className="text-[16px] font-medium leading-[24px] text-[#048BE1]">
-                          {customLabels[key] ||
-                            key.replace(/([A-Z])/g, " $1").trim()}
-                        </p>
-                      </div>
-                    </div>
-                    {/* Render as image if it's NRIC front/back */}
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center">
+                    <User className="w-10 h-10 text-blue-600" />
                   </div>
-                ))}
+                )}
+              </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-semibold text-gray-900">{formData.fullName || "N/A"}</h2>
+                <p className="text-sm text-gray-600">Mobile: {formData.mobile || "N/A"}</p>
+                <p className="text-sm text-gray-600">E-Wallet: ${formData.eWalletAmount.toFixed(2)}</p>
               </div>
             </div>
           </div>
+        )}
 
-          {/* Stats Section */}
-          <div className="bg-white rounded-3xl py-8 px-12 shadow-sm border border-gray-200 z-10">
-            {/* <div className="flex gap-6 py-8 border-b">
-              {tabs.map((tab) => {
-                const Icon = tab.icon; // Get the icon for the current tab
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)} // Set the active tab on click
-                    className={`px-[38px] py-[18px] flex items-center gap-4 rounded-[10px] text-[16px] leading-[20px] font-medium 
-              ${
-                activeTab === tab.id
-                  ? "bg-[#048BE1] text-white " // Active styles
-                  : "bg-[#EBEBEB] text-black" // Inactive styles
-              }`}
-                  >
-                    <Icon
-                      className={activeTab === tab.id ? "h-7 w-7" : "h-6 w-6"}
-                      color={activeTab === tab.id ? "#ffffff" : "#000000"}
-                    />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div> */}
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
+          <div className="space-y-8">
+            {/* Section 1: Basic Information */}
+            <section className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
+                Basic Information
+              </h2>
 
-            {/* {activeTab === "jobHistory" ? <JobHistory /> : <WorkHistory />} */}
-            {/* {activeTab === "jobHistory" ? <JobHistory /> :  <JobHistory />  } */}
-
-            {/* Title Section (Optional) */}
-            <h2 className="text-2xl font-semibold mb-6">Job Overview</h2>
-
-            <div className="mb-12">
-              <h3 className="text-xl font-medium mb-4">Job History</h3>
-              <JobHistory jobHistory={userData?.workHistory || {}} />
-            </div>
-
-            {/* JobHistory Section */}
-            <div className="">
-              <h3 className="text-xl font-medium mb-4 ">Work History</h3>
-              <WorkHistory workHistory={userData?.jobHistory || {}} />
-            </div>
-
-            {/* WorkHistory Section */}
-          </div>
-
-          {/* form */}
-          <div className="p-6 pt-6 border-t border-[#DDDDDD]">
-            <div className="flex items-center gap-2 mb-6">
-              <PencilIcon className="w-4 h-4" />
-              <h1 className="text-lg font-medium">Edit Candidate Details</h1>
-            </div>
-
-            <form
-              onSubmit={handleSubmit}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6"
-            >
-              {/* Candidate Name */}
-              <div>
-                <label className="block text-sm mb-2">Candidate Name</label>
-                <div className="relative">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Full Name - Pre-filled, editable by admin */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Full Name (As per NRIC) <span className="text-gray-400 text-xs">(Pre-filled)</span>
+                  </label>
                   <input
                     type="text"
-                    name="name"
-                    value={formData.name}
+                    name="fullName"
+                    value={formData.fullName}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border rounded-lg pr-10"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
-              </div>
 
-              {/* Gender */}
-              <div>
-                <label className="block text-sm mb-2">Gender</label>
-                <select
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg appearance-none bg-white"
-                >
-                  <option>Male</option>
-                  <option>Female</option>
-                  <option>Other</option>
-                </select>
-              </div>
-
-              {/* Work Pass Status */}
-              <div>
-                <label className="block text-sm mb-2">Work Pass Status</label>
-                <select
-                  className="w-full px-3 py-2 border rounded-lg appearance-none bg-white"
-                  name="status"
-                  value={formData.status}
-                  onChange={handleChange}
-                >
-                  <option>Singaporean/Permanent Resident</option>
-                  <option>Long Term Visit Pass Holder</option>
-                  <option>Student Pass</option>
-                  <option>No Valid Work Pass</option>
-                </select>
-              </div>
-
-              {/* DOB */}
-              <div>
-                <label className="block text-sm mb-2">DOB</label>
-                <div
-                  name="dob"
-                  type="date"
-                  value={formData.dob}
-                  onChange={handleChange}
-                  className="flex gap-2"
-                >
-                  <select className="px-3 py-2 border rounded-lg appearance-none bg-white">
-                    <option>1</option>
-                    {/* Add more days */}
-                  </select>
-                  <select className="px-3 py-2 border rounded-lg appearance-none bg-white">
-                    <option>January</option>
-                    {/* Add more months */}
-                  </select>
-                  <select className="px-3 py-2 border rounded-lg appearance-none bg-white">
-                    <option>2024</option>
-                    {/* Add more years */}
-                  </select>
-                  <button
-                    type="button"
-                    className="px-3 py-2 bg-blue-500 text-white rounded-lg"
-                  >
-                    <CalendarIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Mobile Number */}
-              <div>
-                <label className="block text-sm mb-2">Mobile Number</label>
-                <div className="relative">
+                {/* Mobile Number - Pre-filled, editable by admin */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mobile Number <span className="text-gray-400 text-xs">(Pre-filled)</span>
+                  </label>
                   <input
                     type="tel"
                     name="mobile"
                     value={formData.mobile}
                     onChange={handleChange}
-                    className="w-full px-3 py-2 border rounded-lg pr-10"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
-              </div>
 
-              {/* Email Address */}
-              <div>
-                <label className="block text-sm mb-2">Email Address</label>
-                <div className="relative">
+                {/* Email Address - Conditional visibility */}
+                {showEmail && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                )}
+
+                {/* NRIC or FIN No - Conditional masking */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    NRIC or FIN No <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={isStudentPass && !showNRIC ? "password" : "text"}
+                      name="nric"
+                      value={formData.nric}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                    />
+                    {isStudentPass && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNRIC(!showNRIC)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showNRIC ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
+                  {isStudentPass && (
+                    <p className="text-xs text-gray-500 mt-1">Masked for Student Pass holders</p>
+                  )}
+                </div>
+
+                {/* Date of Birth */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date of Birth <span className="text-red-500">*</span> <span className="text-gray-400 text-xs">(DD/MM/YYYY)</span>
+                  </label>
                   <input
-                    type="email"
-                    value={formData.email}
-                    name="email"
-                    onChange={handleChange}
-                    className="w-full px-3 py-2 border rounded-lg pr-10"
+                    type="date"
+                    name="dateOfBirth"
+                    value={parseDateToInput(formData.dateOfBirth)}
+                    onChange={(e) => {
+                      const date = e.target.value;
+                      if (date) {
+                        const [year, month, day] = date.split("-");
+                        setFormData(prev => ({ ...prev, dateOfBirth: `${day}/${month}/${year}` }));
+                      }
+                    }}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
-              </div>
 
-              {/* Postal code */}
-              <div>
-                <label className="block text-sm mb-2">Postal code</label>
-                <div className="relative">
+                {/* Gender */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Gender <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value="Male"
+                        checked={formData.gender === "Male"}
+                        onChange={handleChange}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span>Male</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value="Female"
+                        checked={formData.gender === "Female"}
+                        onChange={handleChange}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span>Female</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Postal Code */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Postal Code <span className="text-red-500">*</span> <span className="text-gray-400 text-xs">(6 digits)</span>
+                  </label>
                   <input
                     type="text"
                     name="postalCode"
-                    onChange={handleChange}
                     value={formData.postalCode}
-                    className="w-full px-3 py-2 border rounded-lg pr-10"
+                    onChange={handleChange}
+                    maxLength={6}
+                    pattern="\d{6}"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
-              </div>
 
-              {/* Country */}
-              <div>
-                <label className="block text-sm mb-2">Country</label>
-                <input
-                  type="text"
-                  name="country"
-                  onChange={handleChange}
-                  value={formData.country}
-                  className="w-full px-3 py-2 bg-gray-100 rounded-lg"
-                // disabled
-                />
-              </div>
-
-              {/* City */}
-              <div>
-                <label className="block text-sm mb-2">City</label>
-                <input
-                  name="city"
-                  onChange={handleChange}
-                  type="text"
-                  value={formData.city}
-                  className="w-full px-3 py-2 bg-gray-100 rounded-lg"
-                // disabled
-                />
-              </div>
-
-              {/* Street/Town */}
-              <div>
-                <label className="block text-sm mb-2">Street/Town</label>
-                <div className="relative">
+                {/* Street Address - Auto-filled from postal code */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Street Address <span className="text-gray-400 text-xs">(Auto-filled from postal code)</span>
+                  </label>
                   <input
                     type="text"
-                    name="town"
+                    name="streetAddress"
+                    value={formData.streetAddress}
                     onChange={handleChange}
-                    value={formData.town}
-                    className="w-full px-3 py-2 border rounded-lg pr-10"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
               </div>
+            </section>
 
-              {/* upload NRIC Front */}
-              {loading === false ? (
-                <>
-                  {InputForRole[formData.workPassStatus]?.map((doc, index) => (
-                    <div key={doc} className="mb-4">
-                      <label className="block text-sm mb-2 capitalize">
-                        Upload {doc}
+            {/* Section 2: Documents & Certificates */}
+            <section className="space-y-6 border-t border-gray-200 pt-8">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-blue-600" />
+                Documents & Certificates
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Profile Picture - Required */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Profile Picture (Live Selfie) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, "profilePicture")}
+                      className="hidden"
+                      id="profilePicture"
+                      capture="user"
+                    />
+                    <label
+                      htmlFor="profilePicture"
+                      className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
+                    >
+                      <Camera className="w-5 h-5 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-600">Upload Selfie</span>
+                    </label>
+                    {(formData.profilePicture || existingFiles.profilePicture) && (
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={
+                            formData.profilePicture instanceof File
+                              ? URL.createObjectURL(formData.profilePicture)
+                              : existingFiles.profilePicture.startsWith("http")
+                                ? existingFiles.profilePicture
+                                : `${IMAGE_BASE_URL}${existingFiles.profilePicture}`
+                          }
+                          alt="Profile preview"
+                          className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeFile("profilePicture")}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* NRIC Images - Conditional (Singaporean/PR) */}
+                {isSingaporeanPR && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NRIC Image (Front) <span className="text-red-500">*</span>
                       </label>
-                      <div className="relative">
+                      <div className="flex items-center gap-4">
                         <input
                           type="file"
-                          accept="image/*,application/pdf,text/plain"
-                          className="w-full border border-gray-300 rounded-lg p-3"
-                          onChange={(e) => getImageUrl(e, doc)}
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "nricFront")}
+                          className="hidden"
+                          id="nricFront"
                         />
-
-                        {formData[doc] != null && (
-                          <img
-                            src={formData[doc]}
-                            alt={`${doc} preview`}
-                            className="mt-2 rounded-md max-h-40 object-contain"
-                          />
+                        <label
+                          htmlFor="nricFront"
+                          className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        >
+                          <UploadCloud className="w-5 h-5 text-gray-600" />
+                          <span className="text-sm font-medium text-gray-700">Upload Front</span>
+                        </label>
+                        {(formData.nricFront || existingFiles.nricFront) && (
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={
+                                formData.nricFront instanceof File
+                                  ? URL.createObjectURL(formData.nricFront)
+                                  : existingFiles.nricFront.startsWith("http")
+                                    ? existingFiles.nricFront
+                                    : `${IMAGE_BASE_URL}${existingFiles.nricFront}`
+                              }
+                              alt="NRIC Front"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFile("nricFront")}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
-
-                        <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       </div>
                     </div>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <p>loading....</p>
-                </>
-              )}
 
-              {formData.workPassStatus === "Long Term Visit Pass Holder" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        NRIC Image (Back) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "nricBack")}
+                          className="hidden"
+                          id="nricBack"
+                        />
+                        <label
+                          htmlFor="nricBack"
+                          className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        >
+                          <UploadCloud className="w-5 h-5 text-gray-600" />
+                          <span className="text-sm font-medium text-gray-700">Upload Back</span>
+                        </label>
+                        {(formData.nricBack || existingFiles.nricBack) && (
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={
+                                formData.nricBack instanceof File
+                                  ? URL.createObjectURL(formData.nricBack)
+                                  : existingFiles.nricBack.startsWith("http")
+                                    ? existingFiles.nricBack
+                                    : `${IMAGE_BASE_URL}${existingFiles.nricBack}`
+                              }
+                              alt="NRIC Back"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFile("nricBack")}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* PLOC Image - Conditional (LTVP) */}
+                {isLTVP && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        PLOC Image <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "plocImage")}
+                          className="hidden"
+                          id="plocImage"
+                        />
+                        <label
+                          htmlFor="plocImage"
+                          className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        >
+                          <UploadCloud className="w-5 h-5 text-gray-600" />
+                          <span className="text-sm font-medium text-gray-700">Upload PLOC</span>
+                        </label>
+                        {(formData.plocImage || existingFiles.plocImage) && (
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={
+                                formData.plocImage instanceof File
+                                  ? URL.createObjectURL(formData.plocImage)
+                                  : existingFiles.plocImage.startsWith("http")
+                                    ? existingFiles.plocImage
+                                    : `${IMAGE_BASE_URL}${existingFiles.plocImage}`
+                              }
+                              alt="PLOC"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFile("plocImage")}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        PLOC Expiry Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        name="plocExpiryDate"
+                        value={formData.plocExpiryDate}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Student Pass Fields - Conditional (Student Pass) */}
+                {isStudentPass && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Schools <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        name="schools"
+                        value={formData.schools}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select School</option>
+                        {schoolsList.map((school) => (
+                          <option key={school} value={school}>
+                            {school}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Student Pass Image <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleFileChange(e, "studentPassImage")}
+                          className="hidden"
+                          id="studentPassImage"
+                        />
+                        <label
+                          htmlFor="studentPassImage"
+                          className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                        >
+                          <UploadCloud className="w-5 h-5 text-gray-600" />
+                          <span className="text-sm font-medium text-gray-700">Upload Student Pass</span>
+                        </label>
+                        {(formData.studentPassImage || existingFiles.studentPassImage) && (
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={
+                                formData.studentPassImage instanceof File
+                                  ? URL.createObjectURL(formData.studentPassImage)
+                                  : existingFiles.studentPassImage.startsWith("http")
+                                    ? existingFiles.studentPassImage
+                                    : `${IMAGE_BASE_URL}${existingFiles.studentPassImage}`
+                              }
+                              alt="Student Pass"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeFile("studentPassImage")}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Student ID No. <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="studentIdNo"
+                        value={formData.studentIdNo}
+                        onChange={handleChange}
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Food Hygiene Cert - Optional but conditionally required */}
                 <div>
-                  <label className="block text-sm mb-2">ploc expiry date</label>
-                  <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Food Hygiene Cert <span className="text-gray-400 text-xs">(Optional - Required if job listing mandates it)</span>
+                  </label>
+                  <div className="flex items-center gap-4">
                     <input
-                      type="date"
-                      name="plocExpiry"
-                      value={formData.plocExpiry}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border rounded-lg pr-10"
-                      required
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleFileChange(e, "foodHygieneCert")}
+                      className="hidden"
+                      id="foodHygieneCert"
                     />
-                    <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <label
+                      htmlFor="foodHygieneCert"
+                      className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                    >
+                      <FileText className="w-5 h-5 text-gray-600" />
+                      <span className="text-sm font-medium text-gray-700">Upload Certificate</span>
+                    </label>
+                    {(formData.foodHygieneCert || existingFiles.foodHygieneCert) && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-700">Certificate uploaded</span>
+                        <button
+                          type="button"
+                          onClick={() => removeFile("foodHygieneCert")}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
 
-              {formData.workPassStatus === "Student Pass" && (
+                {/* E-Wallet Amount - Display only */}
                 <div>
-                  <label className="block text-sm mb-2">StudentID</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      name="studentId"
-                      value={formData.studentId}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border rounded-lg pr-10"
-                      required
-                    />
-                    <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    E-Wallet Amount <span className="text-gray-400 text-xs">(Display only)</span>
+                  </label>
+                  <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg">
+                    <Wallet2 className="w-5 h-5 text-green-600" />
+                    <span className="text-lg font-semibold text-gray-900">${formData.eWalletAmount.toFixed(2)}</span>
                   </div>
-                </div>
-              )}
-
-              {formData.workPassStatus === "Singaporean/Permanent Resident" && (
-                <div>
-                  <label className="block text-sm mb-2">NRIC/FIN no.</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      name="nricNo"
-                      value={formData.nricNo}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 border rounded-lg pr-10"
-                      required
-                    />
-                    <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  </div>
-                </div>
-              )}
-
-              {/* <div>
-                <label className="block text-sm mb-2"></label>
-                <select className="w-full px-3 py-2 border rounded-lg appearance-none bg-white"
-                name="status"
-                value={formData.status}
-                onChange={handleChange}>
-                  <option>Singaporean/Permanent Resident</option>
-                  <option>Long Term Visit Pass Holder</option>
-                  <option>Student Pass</option>
-                  <option>No Valid Work Pass</option>
-                </select>
-              </div> */}
-
-              {/* Full Address */}
-              {/* <div className="">
-                <label className="block text-sm mb-2">Full Address</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={formData.fullAddress}
-                    className="w-full px-3 py-2 border rounded-lg pr-10"
-                  />
-                  <PencilIcon className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 </div>
               </div>
-              <div></div> */}
+            </section>
 
-              {/* Buttons */}
+            {/* Job History Section */}
+            {userData && (
+              <section className="space-y-6 border-t border-gray-200 pt-8">
+                <h2 className="text-xl font-semibold text-gray-900">Job History</h2>
+                <JobHistory jobHistory={userData.workHistory || {}} />
+                <h2 className="text-xl font-semibold text-gray-900 mt-6">Work History</h2>
+                <WorkHistory workHistory={userData.jobHistory || {}} />
+              </section>
+            )}
 
-              <div className="flex w-full items-start mx-[25%] gap-4 mt-20">
-                <button
-                  type="button"
-                  className="flex-1 px-14 py-4 border border-[#0099FF] text-[#0099FF] rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-14 py-4 bg-[#0099FF] text-white rounded-lg hover:bg-blue-600"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
+            {/* Submit Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Save Changes
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
-}
+};
+
+export default EditCandidateProfile;

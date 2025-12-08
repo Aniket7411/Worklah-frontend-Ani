@@ -1,1043 +1,964 @@
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { axiosInstance } from "../../lib/authInstances";
 import {
   ArrowLeft,
   Briefcase,
-  Pencil,
-  Rows2,
+  Clock,
+  Save,
+  Plus,
   Trash2,
-  Loader2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { TiDocumentText } from "react-icons/ti";
-import { axiosInstance } from "../../lib/authInstances";
-import { useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+import Loader from "../../components/Loader.jsx";
 
-const IMAGE_BASE_URL = "https://worklah.onrender.com";
+interface Employer {
+  id: string;
+  name: string;
+  outlets?: Array<{ id: string; address: string; name?: string }>;
+}
 
-export default function ModifyJob() {
-  const { jobId } = useParams();
+interface Shift {
+  id: number;
+  startTime: string;
+  endTime: string;
+  breakDuration: number;
+  totalWorkingHours: number;
+  rateType: "Weekend" | "Weekday" | "Public Holiday";
+  payPerHour: number;
+  totalWages: number;
+}
+
+const ModifyJob: React.FC = () => {
+  const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-
-  // Loading states
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingEmployers, setIsLoadingEmployers] = useState(false);
-  const [isLoadingOutlets, setIsLoadingOutlets] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [employers, setEmployers] = useState<Employer[]>([]);
+  const [selectedEmployer, setSelectedEmployer] = useState<string>("");
+  const [availableOutlets, setAvailableOutlets] = useState<Array<{ id: string; address: string; name?: string }>>([]);
 
-  // Error states
-  const [error, setError] = useState("");
-  const [submitError, setSubmitError] = useState("");
-
-  // Dropdown states
-  const [selectedCompanyOption, setSelectedCompanyOption] = useState("");
-  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
-  const [selectedOutlet, setSelectedOutlet] = useState("");
-  const [isOutletDropdownOpen, setIsOutletDropdownOpen] = useState(false);
-
-  // Data states
-  const [companies, setCompanies] = useState<any[]>([]);
-  const [outlets, setOutlets] = useState<any[]>([]);
-  const [filteredOutlets, setFilteredOutlets] = useState<any[]>([]);
-
-  // Form state - simple variables
-  const [jobName, setJobName] = useState("");
-  const [jobLogo, setJobLogo] = useState("/assets/icons/plus-emoji.png");
-  const [location, setLocation] = useState("");
-  const [industry, setIndustry] = useState("Hotel");
-  const [jobScopeDescription, setJobScopeDescription] = useState("");
-  const [jobRequirements, setJobRequirements] = useState("");
-
-  // Date state - simple format
-  const [date, setDate] = useState({
-    day: new Date().getDate(),
-    month: new Date().getMonth() + 1,
-    year: new Date().getFullYear(),
+  const [formData, setFormData] = useState({
+    jobDate: new Date().toISOString().split("T")[0],
+    jobTitle: "",
+    jobDescription: "",
+    jobRoles: "",
+    employerId: "",
+    employerName: "", // For manual entry
+    outletId: "",
+    outletAddress: "", // For manual entry
+    useManualOutlet: false, // Toggle between dropdown and manual entry
+    totalPositions: 1,
+    foodHygieneCertRequired: false,
+    jobStatus: "Active",
+    applicationDeadline: "",
+    jobRequirements: "",
+    locationDetails: "",
+    contactPhone: "",
+    contactEmail: "",
+    currentFulfilment: { filled: 0, total: 1 },
   });
 
-  // Shifts state
-  const [shifts, setShifts] = useState([{
-    id: Date.now(),
-    startTime: { hours: "09", minutes: "00", period: "AM" },
-    endTime: { hours: "17", minutes: "00", period: "PM" },
-    vacancy: 3,
-    standbyVacancy: 1,
-    duration: 4,
-    breakHours: 1,
-    breakType: "Paid",
-    rateType: "Flat rate",
-    payRate: 20,
-    totalWage: 80,
-  }]);
+  const [shifts, setShifts] = useState<Shift[]>([
+    {
+      id: Date.now(),
+      startTime: "09:00",
+      endTime: "17:00",
+      breakDuration: 0,
+      totalWorkingHours: 8,
+      rateType: "Weekday",
+      payPerHour: 0,
+      totalWages: 0,
+    },
+  ]);
 
-  // Fetch employers
+  const [rateTypes, setRateTypes] = useState<string[]>([]);
+  const [defaultPayRates, setDefaultPayRates] = useState<{ [key: string]: number }>({});
+
   useEffect(() => {
-    const fetchEmployers = async () => {
-      try {
-        setIsLoadingEmployers(true);
-        const response = await axiosInstance.get("/employers");
-        const employerList = response.data.employers;
-
-        if (!Array.isArray(employerList)) {
-          throw new Error("Invalid response format");
-        }
-
-        const formattedEmployers = employerList.map((employer) => ({
-          value: employer._id,
-          label: employer.companyLegalName,
-          image: employer.companyLogo ? `${IMAGE_BASE_URL}${employer.companyLogo}` : "",
-        }));
-
-        setCompanies(formattedEmployers);
-      } catch (err: any) {
-        console.error("Error fetching employers:", err);
-        setError("Failed to load employers");
-      } finally {
-        setIsLoadingEmployers(false);
-      }
-    };
-
     fetchEmployers();
-  }, []);
-
-  // Fetch outlets
-  useEffect(() => {
-    const fetchOutlets = async () => {
-      try {
-        setIsLoadingOutlets(true);
-        const response = await axiosInstance.get("/outlets");
-        const outletsData = response.data.data || [];
-
-        const formattedOutlets = outletsData.map((outlet) => ({
-          value: outlet._id,
-          label: outlet.outletName,
-          image: outlet.outletImage ? `${IMAGE_BASE_URL}${outlet.outletImage}` : "/static/outletImage.png",
-          employerId: outlet.employerId || outlet.employer?._id || "",
-        }));
-
-        setOutlets(formattedOutlets);
-      } catch (err: any) {
-        console.error("Error fetching outlets:", err);
-        setError("Failed to load outlets");
-      } finally {
-        setIsLoadingOutlets(false);
-      }
-    };
-
-    fetchOutlets();
-  }, []);
-
-  // Filter outlets when employer changes
-  useEffect(() => {
-    if (selectedCompanyOption) {
-      const filtered = outlets.filter(
-        (outlet: any) => outlet.employerId === selectedCompanyOption
-      );
-      setFilteredOutlets(filtered);
-      if (selectedOutlet && !filtered.find(o => o.value === selectedOutlet)) {
-        setSelectedOutlet("");
-      }
-    } else {
-      setFilteredOutlets([]);
-      setSelectedOutlet("");
+    fetchRateConfiguration();
+    if (jobId) {
+      fetchJobData();
     }
-  }, [selectedCompanyOption, outlets, selectedOutlet]);
-
-  // Fetch job details
-  useEffect(() => {
-    const fetchJobDetails = async () => {
-      if (!jobId) return;
-
-      try {
-        setIsLoading(true);
-        setError("");
-        const response = await axiosInstance.get(`/admin/jobs/${jobId}`);
-        const jobData = response.data.job;
-
-        // Format shifts
-        const formattedShifts = jobData.shifts.map((shift, index) => {
-          const startParts = shift.startTime.split(":");
-          const endParts = shift.endTime.split(":");
-          
-          return {
-            id: Date.now() + index,
-            startTime: {
-              hours: startParts[0] || "09",
-              minutes: startParts[1] || "00",
-              period: shift.startMeridian || "AM",
-            },
-            endTime: {
-              hours: endParts[0] || "17",
-              minutes: endParts[1] || "00",
-              period: shift.endMeridian || "PM",
-            },
-            vacancy: shift.vacancy || 3,
-            standbyVacancy: shift.standbyVacancy || 1,
-            duration: shift.totalDuration || shift.duration || 4,
-            breakHours: shift.breakIncluded || shift.breakHours || 1,
-            breakType: shift.breakType || "Paid",
-            rateType: shift.rateType || "Flat rate",
-            payRate: shift.payRate || 20,
-            totalWage: shift.totalWage || 80,
-          };
-        });
-
-        // Set form data
-        setJobName(jobData.jobName || "");
-        setJobLogo(jobData.jobLogo || "/assets/icons/plus-emoji.png");
-        setLocation(jobData.location || "");
-        setIndustry(jobData.industry || "Hotel");
-        setJobScopeDescription(jobData.jobScope?.join(", ") || "");
-        setJobRequirements(jobData.jobRequirements?.join(", ") || "");
-        if (formattedShifts.length > 0) {
-          setShifts(formattedShifts);
-        }
-
-        // Set date
-        if (jobData.date) {
-          const jobDate = new Date(jobData.date);
-          setDate({
-            day: jobDate.getDate(),
-            month: jobDate.getMonth() + 1,
-            year: jobDate.getFullYear(),
-          });
-        }
-
-        // Set selected company and outlet
-        if (jobData.employer?._id) {
-          setSelectedCompanyOption(jobData.employer._id);
-        }
-        if (jobData.outlet?._id) {
-          setSelectedOutlet(jobData.outlet._id);
-        }
-      } catch (err) {
-        console.error("Error fetching job details:", err);
-        setError("Failed to load job details");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchJobDetails();
   }, [jobId]);
 
-  // Calculate shift total wage
-  const calculateShiftTotal = (shift: any) => {
-    const totalWage = shift.rateType === "Hourly rate"
-      ? shift.payRate * shift.duration
-      : shift.payRate;
-    return totalWage;
+  useEffect(() => {
+    if (selectedEmployer) {
+      const employer = employers.find((e) => e.id === selectedEmployer);
+      if (employer?.outlets && employer.outlets.length > 0) {
+        setAvailableOutlets(employer.outlets);
+        setFormData((prev) => ({ ...prev, useManualOutlet: false }));
+      } else {
+        fetchEmployerOutlets(selectedEmployer);
+      }
+    }
+  }, [selectedEmployer, employers]);
+
+  const fetchEmployers = async () => {
+    try {
+      const response = await axiosInstance.get("/employers?limit=100");
+      if (response.data?.employers) {
+        setEmployers(response.data.employers);
+      }
+    } catch (error) {
+      console.error("Error fetching employers:", error);
+    }
   };
 
-  const handleCompanyOptionSelect = (value: string) => {
-    setSelectedCompanyOption(value);
-    setIsCompanyDropdownOpen(false);
-    setSelectedOutlet(""); // Reset outlet
+  const fetchEmployerOutlets = async (employerId: string) => {
+    try {
+      const response = await axiosInstance.get(`/employers/${employerId}`);
+      if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
+        setAvailableOutlets(response.data.employer.outlets);
+        setFormData((prev) => ({ ...prev, useManualOutlet: false }));
+      } else {
+        // No outlets available, allow manual entry
+        setAvailableOutlets([]);
+        setFormData((prev) => ({ ...prev, useManualOutlet: true }));
+      }
+    } catch (error) {
+      console.error("Error fetching outlets:", error);
+      // On error, allow manual entry
+      setAvailableOutlets([]);
+      setFormData((prev) => ({ ...prev, useManualOutlet: true }));
+    }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    
-    if (name === "jobName") setJobName(value);
-    else if (name === "location") setLocation(value);
-    else if (name === "industry") setIndustry(value);
-    else if (name === "jobScopeDescription") setJobScopeDescription(value);
-    else if (name === "jobRequirements") setJobRequirements(value);
-    
-    setSubmitError("");
+  const fetchRateConfiguration = async () => {
+    try {
+      const response = await axiosInstance.get("/admin/rate-configuration");
+      if (response.data?.rateTypes) {
+        setRateTypes(response.data.rateTypes);
+      }
+      if (response.data?.defaultPayRates) {
+        setDefaultPayRates(response.data.defaultPayRates);
+      }
+    } catch (error) {
+      console.error("Error fetching rate configuration:", error);
+      setRateTypes([]);
+    }
   };
 
-  const handleDateChange = (field: string, value: string) => {
-    setDate(prev => ({
-      ...prev,
-      [field]: parseInt(value),
-    }));
+  const fetchJobData = async () => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get(`/jobs/${jobId}`);
+      const job = response.data?.job || response.data;
+
+      if (job) {
+        const hasOutletId = !!(job.outlet?.id || job.outletId);
+        setFormData({
+          jobDate: job.jobDate || job.date || new Date().toISOString().split("T")[0],
+          jobTitle: job.jobTitle || job.jobName || "",
+          jobDescription: job.jobDescription || job.jobScope || "",
+          jobRoles: job.jobRoles || "",
+          employerId: job.employer?.id || job.employerId || "",
+          employerName: job.employerName || job.employer?.name || "",
+          outletId: job.outlet?.id || job.outletId || "",
+          outletAddress: job.outletAddress || job.outlet?.address || "",
+          useManualOutlet: !hasOutletId && !!(job.outletAddress || job.outlet?.address),
+          totalPositions: job.totalPositions || job.totalPositionsNeeded || 1,
+          foodHygieneCertRequired: job.foodHygieneCertRequired || false,
+          jobStatus: job.jobStatus || job.status || "Active",
+          applicationDeadline: job.applicationDeadline || "",
+          jobRequirements: Array.isArray(job.requirements) ? job.requirements.join(", ") : job.jobRequirements || "",
+          locationDetails: job.locationDetails || job.location || "",
+          contactPhone: job.contactInfo?.phone || "",
+          contactEmail: job.contactInfo?.email || "",
+          currentFulfilment: job.currentFulfilment || { filled: 0, total: job.totalPositions || 1 },
+        });
+
+        setSelectedEmployer(job.employer?.id || job.employerId || "");
+
+        // Handle shifts
+        if (job.shifts && Array.isArray(job.shifts) && job.shifts.length > 0) {
+          setShifts(
+            job.shifts.map((shift: any, index: number) => ({
+              id: Date.now() + index,
+              startTime: shift.startTime || "09:00",
+              endTime: shift.endTime || "17:00",
+              breakDuration: shift.breakDuration || shift.breakHours || 0,
+              totalWorkingHours: shift.totalWorkingHours || shift.duration || 8,
+              rateType: shift.rateType || "Weekday",
+              payPerHour: shift.payPerHour || shift.payRate || 0,
+              totalWages: shift.totalWages || shift.totalWage || 0,
+            }))
+          );
+        }
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to load job data");
+      navigate(-1);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateTotalWorkingHours = (startTime: string, endTime: string, breakDuration: number): number => {
+    const start = new Date(`2000-01-01T${startTime}`);
+    let end = new Date(`2000-01-01T${endTime}`);
+
+    if (end <= start) {
+      end = new Date(`2000-01-02T${endTime}`);
+    }
+
+    const diffMs = end.getTime() - start.getTime();
+    const totalHours = diffMs / (1000 * 60 * 60);
+    return Math.max(0, totalHours - breakDuration);
+  };
+
+  const formatTimeDisplay = (startTime: string, endTime: string): string => {
+    const start = new Date(`2000-01-01T${startTime}`);
+    const startHour = start.getHours();
+    const startMin = start.getMinutes();
+    const startPeriod = startHour >= 12 ? "pm" : "am";
+    const startHour12 = startHour % 12 || 12;
+
+    let end = new Date(`2000-01-01T${endTime}`);
+    if (end <= start) {
+      end = new Date(`2000-01-02T${endTime}`);
+    }
+    const endHour = end.getHours();
+    const endMin = end.getMinutes();
+    const endPeriod = endHour >= 12 ? "pm" : "am";
+    const endHour12 = endHour % 12 || 12;
+
+    return `${startHour12}:${startMin.toString().padStart(2, "0")}${startPeriod} to ${endHour12}:${endMin.toString().padStart(2, "0")}${endPeriod}`;
+  };
+
+  const updateShift = (id: number, field: keyof Shift, value: any) => {
+    setShifts((prevShifts) =>
+      prevShifts.map((shift) => {
+        if (shift.id === id) {
+          const updated = { ...shift, [field]: value };
+
+          if (field === "startTime" || field === "endTime" || field === "breakDuration") {
+            updated.totalWorkingHours = calculateTotalWorkingHours(
+              updated.startTime,
+              updated.endTime,
+              updated.breakDuration
+            );
+          }
+
+          updated.totalWages = updated.payPerHour * updated.totalWorkingHours;
+
+          return updated;
+        }
+        return shift;
+      })
+    );
   };
 
   const addShift = () => {
-    const newShift = {
+    const defaultRateType = rateTypes.length > 0 ? rateTypes[0] : "Weekday";
+    const defaultPayRate = defaultPayRates[defaultRateType] || 0;
+    const newShift: Shift = {
       id: Date.now(),
-      startTime: { hours: "09", minutes: "00", period: "AM" },
-      endTime: { hours: "17", minutes: "00", period: "PM" },
-      vacancy: 3,
-      standbyVacancy: 1,
-      duration: 4,
-      breakHours: 1,
-      breakType: "Paid",
-      rateType: "Flat rate",
-      payRate: 20,
-      totalWage: 80,
+      startTime: "09:00",
+      endTime: "17:00",
+      breakDuration: 0,
+      totalWorkingHours: 8,
+      rateType: defaultRateType as "Weekend" | "Weekday" | "Public Holiday",
+      payPerHour: defaultPayRate,
+      totalWages: defaultPayRate * 8,
     };
     setShifts([...shifts, newShift]);
   };
 
-  const deleteShift = (id: number) => {
-    if (shifts.length <= 1) {
-      setSubmitError("At least one shift is required");
-      return;
+  const removeShift = (id: number) => {
+    if (shifts.length > 1) {
+      setShifts(shifts.filter((shift) => shift.id !== id));
+    } else {
+      toast.error("At least one shift is required");
     }
-    setShifts(shifts.filter(shift => shift.id !== id));
   };
 
-  const updateShift = (id: number, field: string, value: any) => {
-    setShifts(shifts.map(shift => {
-      if (shift.id === id) {
-        const updatedShift = { ...shift, [field]: value };
-        const totalWage = calculateShiftTotal(updatedShift);
-        return { ...updatedShift, totalWage };
-      }
-      return shift;
-    }));
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    if (type === "checkbox") {
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormData((prev) => ({ ...prev, [name]: checked }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
 
-  const updateTime = (id: number, timeType: string, field: string, value: string) => {
-    setShifts(shifts.map(shift => {
-      if (shift.id === id) {
-        return {
-          ...shift,
-          [timeType]: { ...shift[timeType], [field]: value },
-        };
+    // Auto-fill location details from outlet
+    if (name === "outletId" && value) {
+      const outlet = availableOutlets.find((o) => o.id === value);
+      if (outlet) {
+        setFormData((prev) => ({ ...prev, locationDetails: outlet.address, outletAddress: outlet.address }));
       }
-      return shift;
-    }));
-  };
+    }
 
-  const handleJobLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setSubmitError("Image size should be less than 5MB");
-        return;
+    // Auto-fill location details from manual outlet entry
+    if (name === "outletAddress") {
+      setFormData((prev) => ({ ...prev, locationDetails: value }));
+    }
+
+    // Auto-fill contact info from employer
+    if (name === "employerId" && value) {
+      const employer = employers.find((e) => e.id === value);
+      if (employer) {
+        setFormData((prev) => ({
+          ...prev,
+          employerId: value,
+          employerName: (employer as any).name || (employer as any).companyLegalName || ""
+        }));
       }
-
-      if (!file.type.startsWith('image/')) {
-        setSubmitError("Please select a valid image file");
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (reader.result && typeof reader.result === 'string') {
-          setJobLogo(reader.result);
-        }
-      };
-      reader.onerror = () => {
-        setSubmitError("Failed to read image file");
-      };
-      reader.readAsDataURL(file);
     }
   };
 
   const validateForm = () => {
-    if (!jobName.trim()) {
-      setSubmitError("Job name is required");
+    if (!formData.jobTitle.trim()) {
+      toast.error("Job title is required");
       return false;
     }
-
-    if (!selectedCompanyOption) {
-      setSubmitError("Please select a company");
+    if (!formData.jobDescription.trim()) {
+      toast.error("Job description is required");
       return false;
     }
-
-    if (!selectedOutlet) {
-      setSubmitError("Please select an outlet");
+    if (!formData.jobRoles.trim()) {
+      toast.error("Job roles is required");
       return false;
     }
-
-    if (!location.trim()) {
-      setSubmitError("Location is required");
+    if (!formData.employerId && !formData.employerName.trim()) {
+      toast.error("Please select an employer or enter employer name");
       return false;
     }
-
+    if (!formData.useManualOutlet && !formData.outletId) {
+      toast.error("Please select an outlet");
+      return false;
+    }
+    if (formData.useManualOutlet && !formData.outletAddress.trim()) {
+      toast.error("Please enter outlet address");
+      return false;
+    }
+    if (!formData.locationDetails.trim()) {
+      toast.error("Location details is required");
+      return false;
+    }
     if (shifts.length === 0) {
-      setSubmitError("At least one shift is required");
+      toast.error("At least one shift is required");
       return false;
     }
-
-    for (const shift of shifts) {
-      if (shift.vacancy < 0 || shift.standbyVacancy < 0) {
-        setSubmitError("Headcount cannot be negative");
-        return false;
-      }
-      if (shift.payRate <= 0) {
-        setSubmitError("Pay rate must be greater than 0");
-        return false;
-      }
-    }
-
-    if (!jobScopeDescription.trim()) {
-      setSubmitError("Job description is required");
-      return false;
-    }
-
-    if (!jobRequirements.trim()) {
-      setSubmitError("Job requirements are required");
-      return false;
-    }
-
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitError("");
+    if (!validateForm()) return;
 
-    if (!validateForm()) {
-      return;
-    }
-
+    setIsSubmitting(true);
     try {
-      setIsSubmitting(true);
-
-      // Format date
-      const formattedDate = `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
-
-      // Format shifts
-      const formattedShifts = shifts.map((shift) => ({
-        startTime: `${shift.startTime.hours}:${shift.startTime.minutes}`,
-        startMeridian: shift.startTime.period,
-        endTime: `${shift.endTime.hours}:${shift.endTime.minutes}`,
-        endMeridian: shift.endTime.period,
-        vacancy: shift.vacancy,
-        standbyVacancy: shift.standbyVacancy,
-        duration: shift.duration,
-        breakHours: shift.breakHours,
-        breakType: shift.breakType,
-        rateType: shift.rateType,
-        payRate: shift.payRate,
-        totalWage: calculateShiftTotal(shift),
-      }));
-
-      const requestData = {
-        jobName: jobName.trim(),
-        employerId: selectedCompanyOption,
-        outletId: selectedOutlet,
-        date: formattedDate,
-        location: location.trim(),
-        industry: industry || "Hotel",
-        jobScope: jobScopeDescription.split(", ").filter(s => s),
-        jobRequirements: jobRequirements.split(", ").filter(s => s),
-        shifts: formattedShifts,
+      const jobData = {
+        jobDate: formData.jobDate,
+        jobTitle: formData.jobTitle,
+        jobDescription: formData.jobDescription,
+        jobRoles: formData.jobRoles,
+        employerId: formData.employerId || null,
+        employerName: formData.employerName || null, // For manual entry
+        outletId: formData.useManualOutlet ? null : formData.outletId,
+        outletAddress: formData.useManualOutlet ? formData.outletAddress : null, // For manual entry
+        totalPositions: formData.totalPositions,
+        foodHygieneCertRequired: formData.foodHygieneCertRequired,
+        jobStatus: formData.jobStatus,
+        applicationDeadline: formData.applicationDeadline || null,
+        jobRequirements: formData.jobRequirements
+          ? formData.jobRequirements.split(",").map((r) => r.trim()).filter((r) => r)
+          : [],
+        locationDetails: formData.locationDetails,
+        contactInfo: {
+          phone: formData.contactPhone,
+          email: formData.contactEmail,
+        },
+        shifts: shifts.map((shift) => ({
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          breakDuration: shift.breakDuration,
+          totalWorkingHours: shift.totalWorkingHours,
+          rateType: shift.rateType,
+          payPerHour: shift.payPerHour,
+          totalWages: shift.totalWages,
+        })),
       };
 
-      const response = await axiosInstance.put(`/admin/jobs/${jobId}`, requestData);
+      const response = await axiosInstance.put(`/jobs/${jobId}`, jobData);
 
-      if (response.data) {
-        navigate("/jobs/job-management");
+      if (response.status === 200 || response.status === 201) {
+        toast.success("Job posting updated successfully!");
+        navigate(`/jobs/${jobId}`);
       }
     } catch (error: any) {
-      console.error("Error submitting form:", error);
-      setSubmitError(
-        error?.response?.data?.message ||
-        "Failed to update job. Please try again."
-      );
+      toast.error(error?.response?.data?.message || "Failed to update job posting");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-          <p className="text-gray-600">Loading job details...</p>
-        </div>
-      </div>
-    );
+  if (loading) {
+    return <Loader />;
   }
 
+  const totalWages = shifts.reduce((sum, shift) => sum + shift.totalWages, 0);
+
   return (
-    <div className="mx-auto p-12 max-w-6xl">
-      <div className="flex items-center gap-2 mb-6">
-        <button
-          type="button"
-          className="p-2 rounded-full shadow-custom bg-white hover:bg-gray-50"
-          onClick={() => navigate(-1)}
-        >
-          <ArrowLeft className="w-4 h-4" color="#000000" />
-        </button>
-        <h1 className="text-lg font-medium">Modify</h1>
-      </div>
-
-      {(error || submitError) && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-          {error || submitError}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Job Info Section */}
-        <div className="pb-4 border-b">
-          <h2 className="flex items-center gap-2 text-blue-500 text-xl">
-            <Briefcase className="w-6 h-6" />
-            Job Info
-          </h2>
+    <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6 flex items-center gap-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Edit Job Posting</h1>
         </div>
 
-        <div className="grid gap-6 mt-6 mb-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Job name</label>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 flex items-center gap-2 px-3 py-2 border rounded-lg">
-                  <div className="border-r px-2 border-dashed cursor-pointer">
-                    <label htmlFor="jobLogoUpload" className="cursor-pointer">
-                      <img
-                        src={jobLogo}
-                        alt="Job Logo"
-                        width={38}
-                        height={38}
-                        className="rounded-full p-1"
-                      />
-                    </label>
-                    <input
-                      id="jobLogoUpload"
-                      type="file"
-                      accept="image/*"
-                      style={{ display: "none" }}
-                      onChange={handleJobLogoChange}
-                    />
-                  </div>
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
+          <div className="space-y-8">
+            {/* Section 1: Basic Job Information */}
+            <section className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-blue-600" />
+                Basic Job Information
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Job Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="jobDate"
+                    value={formData.jobDate}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Job Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Title <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
-                    className="flex-1 border-none p-0 focus:outline-none"
-                    name="jobName"
-                    value={jobName}
-                    onChange={handleInputChange}
+                    name="jobTitle"
+                    value={formData.jobTitle}
+                    onChange={handleChange}
+                    placeholder="Enter job title"
                     required
-                    placeholder="Enter job name"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <button type="button" className="p-2 hover:bg-gray-100 rounded-lg">
-                    <Pencil className="w-4 h-4" />
-                  </button>
                 </div>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Company</label>
-              {isLoadingEmployers ? (
-                <div className="flex items-center gap-2 px-3 py-2 border rounded-lg text-gray-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading companies...
+                {/* Job Roles */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Roles <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="jobRoles"
+                    value={formData.jobRoles}
+                    onChange={handleChange}
+                    placeholder="e.g., Waiter, Cashier, Kitchen Staff"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                 </div>
-              ) : (
-                <div className="relative">
-                  <div
-                    className="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer"
-                    onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
-                  >
-                    {companies.find(opt => opt.value === selectedCompanyOption)?.image ? (
-                      <img
-                        src={companies.find(opt => opt.value === selectedCompanyOption)?.image}
-                        alt="Company logo"
-                        width={24}
-                        height={24}
-                        className="rounded"
-                      />
-                    ) : (
-                      <div className="w-6 h-6 rounded bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
-                        {companies.find(opt => opt.value === selectedCompanyOption)?.label?.charAt(0)?.toUpperCase() || "?"}
-                      </div>
-                    )}
-                    <p className="flex-1">
-                      {companies.find(opt => opt.value === selectedCompanyOption)?.label || "Select Employer"}
-                    </p>
-                    <button
-                      type="button"
-                      className="p-1 rounded-lg hover:bg-gray-100"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
+
+                {/* Total Positions Needed */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Total Positions Needed <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="totalPositions"
+                    value={formData.totalPositions}
+                    onChange={handleChange}
+                    min={1}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Current Fulfilment - Display only */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Fulfilment <span className="text-gray-400 text-xs">(Auto-calculated)</span>
+                  </label>
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-700 font-medium">
+                    {formData.currentFulfilment.filled}/{formData.currentFulfilment.total}
                   </div>
+                </div>
 
-                  {isCompanyDropdownOpen && (
-                    <div className="absolute mt-2 bg-white border rounded-lg shadow-lg w-full z-10 max-h-60 overflow-y-auto">
-                      {companies.map((option) => (
-                        <div
-                          key={option.value}
-                          className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-100"
-                          onClick={() => handleCompanyOptionSelect(option.value)}
-                        >
-                          {option.image && (
-                            <img
-                              src={option.image}
-                              alt={option.label}
-                              width={24}
-                              height={24}
-                              className="rounded"
-                            />
-                          )}
-                          <p>{option.label}</p>
-                        </div>
+                {/* Employer */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Employer <span className="text-red-500">*</span>
+                  </label>
+                  {employers.length > 0 ? (
+                    <select
+                      name="employerId"
+                      value={selectedEmployer}
+                      onChange={(e) => {
+                        setSelectedEmployer(e.target.value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          employerId: e.target.value,
+                          employerName: "",
+                          outletId: "",
+                          useManualOutlet: false
+                        }));
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select Employer</option>
+                      {employers.map((employer) => (
+                        <option key={employer.id} value={employer.id}>
+                          {(employer as any).name || (employer as any).companyLegalName || `Employer ${employer.id}`}
+                        </option>
                       ))}
+                    </select>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500 mb-2">No employers found. Enter manually:</p>
+                      <input
+                        type="text"
+                        name="employerName"
+                        value={formData.employerName}
+                        onChange={handleChange}
+                        placeholder="Enter employer name"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Outlet</label>
-              {isLoadingOutlets ? (
-                <div className="flex items-center gap-2 px-3 py-2 border rounded-lg text-gray-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading outlets...
-                </div>
-              ) : (
-                <div className="relative">
-                  <div
-                    className="flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer"
-                    onClick={() => setIsOutletDropdownOpen(!isOutletDropdownOpen)}
-                  >
-                    <img
-                      src={outlets.find(opt => opt.value === selectedOutlet)?.image || `${IMAGE_BASE_URL}/static/outletImage.png`}
-                      alt="Outlet logo"
-                      width={24}
-                      height={24}
-                      className="rounded"
-                    />
-                    <p className="flex-1">
-                      {outlets.find(opt => opt.value === selectedOutlet)?.label || "Select Outlet"}
-                    </p>
-                    <button
-                      type="button"
-                      className="p-1 rounded-lg hover:bg-gray-100"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {isOutletDropdownOpen && (
-                    <div className="absolute mt-2 bg-white border rounded-lg shadow-lg w-full z-10 max-h-60 overflow-y-auto">
-                      {filteredOutlets.length > 0 ? filteredOutlets.map((option) => (
-                        <div
-                          key={option.value}
-                          className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-100"
-                          onClick={() => {
-                            setSelectedOutlet(option.value);
-                            setIsOutletDropdownOpen(false);
-                          }}
-                        >
-                          <img
-                            src={option.image}
-                            alt={option.label}
-                            width={24}
-                            height={24}
-                            className="rounded"
-                          />
-                          <p>{option.label}</p>
-                        </div>
-                      )) : (
-                        <div className="px-3 py-2 text-gray-500">No outlets available</div>
+                  {employers.length > 0 && !selectedEmployer && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmployer("");
+                          setFormData((prev) => ({ ...prev, employerId: "", employerName: "" }));
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Or enter employer name manually
+                      </button>
+                      {!selectedEmployer && (
+                        <input
+                          type="text"
+                          name="employerName"
+                          value={formData.employerName}
+                          onChange={handleChange}
+                          placeholder="Enter employer name manually"
+                          className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
                       )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Date</label>
-              <div className="flex items-center gap-2">
-                <select
-                  id="day"
-                  name="day"
-                  value={date.day}
-                  onChange={(e) => handleDateChange("day", e.target.value)}
-                  className="w-20 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {Array.from({ length: 31 }, (_, i) => (
-                    <option key={i + 1} value={i + 1}>
-                      {i + 1}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  id="month"
-                  name="month"
-                  value={date.month}
-                  onChange={(e) => handleDateChange("month", e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {[
-                    "January", "February", "March", "April", "May", "June",
-                    "July", "August", "September", "October", "November", "December"
-                  ].map((month, index) => (
-                    <option key={index} value={index + 1}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  id="year"
-                  name="year"
-                  value={date.year}
-                  onChange={(e) => handleDateChange("year", e.target.value)}
-                  className="w-24 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {Array.from({ length: 10 }, (_, i) => (
-                    <option key={2024 + i} value={2024 + i}>
-                      {2024 + i}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Location</label>
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 border rounded-lg">
-                <input
-                  type="text"
-                  name="location"
-                  value={location}
-                  onChange={handleInputChange}
-                  className="flex-1 border-none p-0 focus:outline-none"
-                  required
-                  placeholder="Enter location"
-                />
-                <button type="button" className="p-2 hover:bg-gray-100 rounded-lg">
-                  <Pencil className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Industry</label>
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 border rounded-lg">
-                <select
-                  name="industry"
-                  value={industry}
-                  onChange={handleInputChange}
-                  className="flex-1 border-none p-0 focus:outline-none"
-                >
-                  <option value="Hotel">Hotel</option>
-                  <option value="Restaurant">Restaurant</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Healthcare">Healthcare</option>
-                </select>
-                <button type="button" className="p-2 hover:bg-gray-100 rounded-lg">
-                  <Pencil className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Shifts Info Section */}
-        <div>
-          <div className="pb-4 border-b mb-6">
-            <div className="flex items-center gap-2 text-blue-500">
-              <Rows2 className="w-5 h-5" />
-              <h2 className="text-xl">Shifts Info</h2>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            {shifts.map((shift, index) => (
-              <div key={shift.id} className="bg-white rounded-2xl border p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-medium">Shift {index + 1}</h3>
-                  {shifts.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => deleteShift(shift.id)}
-                      className="text-red-500 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                {/* Outlet */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Outlet <span className="text-red-500">*</span>
+                  </label>
+                  {formData.useManualOutlet || availableOutlets.length === 0 ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        name="outletAddress"
+                        value={formData.outletAddress}
+                        onChange={handleChange}
+                        placeholder="Enter outlet address"
+                        required={formData.useManualOutlet}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      {selectedEmployer && availableOutlets.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, useManualOutlet: false, outletAddress: "" }))}
+                          className="text-xs text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Or select from existing outlets
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <select
+                        name="outletId"
+                        value={formData.outletId}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Outlet</option>
+                        {availableOutlets.map((outlet) => (
+                          <option key={outlet.id} value={outlet.id}>
+                            {outlet.name || outlet.address}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, useManualOutlet: true, outletId: "" }))}
+                        className="text-xs text-blue-600 hover:text-blue-800 underline"
+                      >
+                        Or enter outlet address manually
+                      </button>
+                    </div>
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Start time</label>
-                    <div className="flex items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <input
-                        type="text"
-                        value={shift.startTime.hours}
-                        onChange={(e) => updateTime(shift.id, "startTime", "hours", e.target.value)}
-                        className="w-12 text-center focus:outline-none"
-                        maxLength={2}
-                      />
-                      <span>:</span>
-                      <input
-                        type="text"
-                        value={shift.startTime.minutes}
-                        onChange={(e) => updateTime(shift.id, "startTime", "minutes", e.target.value)}
-                        className="w-12 text-center focus:outline-none"
-                        maxLength={2}
-                      />
-                      <select
-                        className="ml-6 bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        value={shift.startTime.period}
-                        onChange={(e) => updateTime(shift.id, "startTime", "period", e.target.value)}
-                      >
-                        <option>AM</option>
-                        <option>PM</option>
-                      </select>
+                {/* Job Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Status <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="jobStatus"
+                    value={formData.jobStatus}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Filled">Filled</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Expired">Expired</option>
+                  </select>
+                </div>
+
+                {/* Application Deadline */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Application Deadline <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    name="applicationDeadline"
+                    value={formData.applicationDeadline}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Location Details */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Location Details <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="locationDetails"
+                    value={formData.locationDetails}
+                    onChange={handleChange}
+                    placeholder="Auto-filled from outlet or enter manually"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Job Description */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Description <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    name="jobDescription"
+                    value={formData.jobDescription}
+                    onChange={handleChange}
+                    rows={4}
+                    placeholder="Enter detailed job description, responsibilities, requirements..."
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Job Requirements */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated)</span>
+                  </label>
+                  <textarea
+                    name="jobRequirements"
+                    value={formData.jobRequirements}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Contact Information */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Contact Phone <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="contactPhone"
+                    value={formData.contactPhone}
+                    onChange={handleChange}
+                    placeholder="Auto-filled from employer"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Contact Email <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    name="contactEmail"
+                    value={formData.contactEmail}
+                    onChange={handleChange}
+                    placeholder="Auto-filled from employer"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Food Hygiene Cert Required */}
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="foodHygieneCertRequired"
+                      checked={formData.foodHygieneCertRequired}
+                      onChange={handleChange}
+                      className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Food Hygiene Cert Required (Mandatory)
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      - Workers must upload Food Hygiene Cert to apply for this job
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 2: Shift Information */}
+            <section className="space-y-6 border-t border-gray-200 pt-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  Shift Information
+                </h2>
+                <button
+                  type="button"
+                  onClick={addShift}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Shift
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {shifts.map((shift, index) => (
+                  <div key={shift.id} className="p-6 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium text-gray-900">Shift {index + 1}</h3>
+                      {shifts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeShift(shift.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {/* Shift Timing */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Start Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="time"
+                          value={shift.startTime}
+                          onChange={(e) => updateShift(shift.id, "startTime", e.target.value)}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          End Time <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="time"
+                          value={shift.endTime}
+                          onChange={(e) => updateShift(shift.id, "endTime", e.target.value)}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Shift Timing Display
+                        </label>
+                        <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-700">
+                          {formatTimeDisplay(shift.startTime, shift.endTime)}
+                        </div>
+                      </div>
+
+                      {/* Break Duration */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Break Duration (hours) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.25"
+                          value={shift.breakDuration}
+                          onChange={(e) => updateShift(shift.id, "breakDuration", parseFloat(e.target.value) || 0)}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      {/* Total Working Hours - Auto-calculated */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Total Working Hours
+                        </label>
+                        <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-700 font-medium">
+                          {shift.totalWorkingHours.toFixed(2)} hrs
+                        </div>
+                      </div>
+
+                      {/* Rate Type */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Rate Type <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={shift.rateType}
+                          onChange={(e) => {
+                            const newRateType = e.target.value;
+                            updateShift(shift.id, "rateType", newRateType as "Weekend" | "Weekday" | "Public Holiday");
+                            // Auto-update pay rate if default exists for this rate type
+                            if (defaultPayRates[newRateType]) {
+                              updateShift(shift.id, "payPerHour", defaultPayRates[newRateType]);
+                            }
+                          }}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {rateTypes.length > 0 ? (
+                            rateTypes.map((rateType) => (
+                              <option key={rateType} value={rateType}>{rateType}</option>
+                            ))
+                          ) : (
+                            <>
+                              <option value="Weekday">Weekday</option>
+                              <option value="Weekend">Weekend</option>
+                              <option value="Public Holiday">Public Holiday</option>
+                            </>
+                          )}
+                        </select>
+                      </div>
+
+                      {/* Pay/Hr */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Pay/Hr (SGD) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={shift.payPerHour}
+                          onChange={(e) => updateShift(shift.id, "payPerHour", parseFloat(e.target.value) || 0)}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      {/* Total Wages - Auto-calculated */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Total Wages (SGD)
+                        </label>
+                        <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-semibold">
+                          ${shift.totalWages.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">End time</label>
-                    <div className="flex items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <input
-                        type="text"
-                        value={shift.endTime.hours}
-                        onChange={(e) => updateTime(shift.id, "endTime", "hours", e.target.value)}
-                        className="w-12 text-center focus:outline-none"
-                        maxLength={2}
-                      />
-                      <span>:</span>
-                      <input
-                        type="text"
-                        value={shift.endTime.minutes}
-                        onChange={(e) => updateTime(shift.id, "endTime", "minutes", e.target.value)}
-                        className="w-12 text-center focus:outline-none"
-                        maxLength={2}
-                      />
-                      <select
-                        className="ml-6 bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        value={shift.endTime.period}
-                        onChange={(e) => updateTime(shift.id, "endTime", "period", e.target.value)}
-                      >
-                        <option>AM</option>
-                        <option>PM</option>
-                      </select>
-                    </div>
+              {/* Summary */}
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Total Shifts:</span>
+                    <span className="ml-2 font-semibold text-gray-900">{shifts.length}</span>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Vacancy</label>
-                    <div className="flex justify-between items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <button
-                        type="button"
-                        className="bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        onClick={() => updateShift(shift.id, "vacancy", Math.max(0, shift.vacancy - 1))}
-                      >
-                        −
-                      </button>
-                      <input
-                        type="text"
-                        value={shift.vacancy}
-                        onChange={(e) => updateShift(shift.id, "vacancy", Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-12 text-center focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        className="bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        onClick={() => updateShift(shift.id, "vacancy", shift.vacancy + 1)}
-                      >
-                        +
-                      </button>
-                    </div>
+                  <div>
+                    <span className="text-gray-600">Total Positions:</span>
+                    <span className="ml-2 font-semibold text-gray-900">{formData.totalPositions}</span>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Standby vacancy</label>
-                    <div className="flex justify-between items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <button
-                        type="button"
-                        className="bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        onClick={() => updateShift(shift.id, "standbyVacancy", Math.max(0, shift.standbyVacancy - 1))}
-                      >
-                        −
-                      </button>
-                      <input
-                        type="text"
-                        value={shift.standbyVacancy}
-                        onChange={(e) => updateShift(shift.id, "standbyVacancy", Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-12 text-center focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        className="bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        onClick={() => updateShift(shift.id, "standbyVacancy", shift.standbyVacancy + 1)}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Duration</label>
-                    <div className="flex items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <input
-                        type="text"
-                        value={shift.duration}
-                        onChange={(e) => updateShift(shift.id, "duration", Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-full text-center focus:outline-none"
-                      />
-                      <span className="text-gray-500">Hrs</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Break Hours</label>
-                    <div className="flex justify-between items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <button
-                        type="button"
-                        className="bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        onClick={() => updateShift(shift.id, "breakHours", Math.max(0, shift.breakHours - 1))}
-                      >
-                        −
-                      </button>
-                      <input
-                        type="text"
-                        value={shift.breakHours}
-                        onChange={(e) => updateShift(shift.id, "breakHours", Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-12 text-center focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        className="bg-blue-50 rounded-lg px-2 py-1 focus:outline-none text-sm"
-                        onClick={() => updateShift(shift.id, "breakHours", shift.breakHours + 1)}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Break Type</label>
-                    <select
-                      className="w-full h-12 px-3 border rounded-xl bg-white focus:outline-none"
-                      value={shift.breakType}
-                      onChange={(e) => updateShift(shift.id, "breakType", e.target.value)}
-                    >
-                      <option>Paid</option>
-                      <option>Unpaid</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Rate type</label>
-                    <select
-                      className="w-full h-12 px-3 border rounded-xl bg-white focus:outline-none"
-                      value={shift.rateType}
-                      onChange={(e) => updateShift(shift.id, "rateType", e.target.value)}
-                    >
-                      <option>Flat rate</option>
-                      <option>Hourly rate</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Pay rate/Hr</label>
-                    <div className="flex items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <span className="text-gray-500">$</span>
-                      <input
-                        type="text"
-                        value={shift.payRate}
-                        onChange={(e) => updateShift(shift.id, "payRate", Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-full focus:outline-none"
-                      />
-                      <span className="text-gray-500">/Hr</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Total Wage{" "}
-                      <span className="text-xs text-gray-400">
-                        (Rate x Duration = Total wage)
-                      </span>
-                    </label>
-                    <div className="flex items-center gap-2 p-3 border rounded-xl bg-white h-12">
-                      <span className="text-gray-500">$</span>
-                      <input
-                        type="text"
-                        value={shift.totalWage || 0}
-                        className="w-full focus:outline-none"
-                        readOnly
-                      />
-                    </div>
+                  <div>
+                    <span className="text-gray-600">Total Wages:</span>
+                    <span className="ml-2 font-semibold text-green-700">${totalWages.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </section>
 
-          <button
-            type="button"
-            onClick={addShift}
-            className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Shift
-          </button>
-        </div>
-
-        {/* Requirements Section */}
-        <div>
-          <div className="pb-4 border-b mb-6">
-            <div className="flex items-center gap-2 text-blue-500">
-              <TiDocumentText className="w-5 h-5" />
-              <h2 className="text-xl">Requirements</h2>
+            {/* Submit Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Update Job Posting
+                  </>
+                )}
+              </button>
             </div>
           </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm mb-1">Job Scope Description</label>
-              <div className="border rounded-lg p-2">
-                <textarea
-                  name="jobScopeDescription"
-                  value={jobScopeDescription}
-                  onChange={handleInputChange}
-                  className="w-full min-h-[150px] p-2 border-0 focus:ring-0 focus:outline-none"
-                  placeholder="Type your job description here"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm mb-1">Job Requirements</label>
-              <div className="border rounded-lg p-2">
-                <textarea
-                  name="jobRequirements"
-                  value={jobRequirements}
-                  onChange={handleInputChange}
-                  className="w-full min-h-[150px] p-2 border-0 focus:ring-0 focus:outline-none"
-                  placeholder="Type your job requirements here"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-center gap-4 pt-6">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 h-16 w-64 text-xl border rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 h-16 w-64 bg-blue-500 text-xl text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            disabled={isSubmitting}
-          >
-            {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
-            {isSubmitting ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
-}
+};
+
+export default ModifyJob;

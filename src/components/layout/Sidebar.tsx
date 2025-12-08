@@ -1,128 +1,261 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X } from "lucide-react";
+import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 
 // Define the type for menu items
 interface MenuItem {
-  icon: string;
+  icon: React.ReactNode;
   text: string;
   path: string;
+  description?: string;
 }
 
+// Using Lucide icons for better consistency and scalability
 const menuItems: MenuItem[] = [
-  { icon: "/assets/icons/sidebar_icon1.svg", text: "Dashboard", path: "/" },
-  { icon: "/assets/icons/sidebar_icon2.svg", text: "Job Management", path: "/jobs/job-management" },
-  { icon: "/assets/icons/sidebar_icon3.svg", text: "Hustle Heroes", path: "/hustle-heroes" },
-  { icon: "/assets/icons/sidebar_icon4.svg", text: "Employers", path: "/employers" },
-  { icon: "/assets/icons/sidebar_icon5.svg", text: "Payments & Transactions", path: "/payments" },
-  { icon: "/assets/icons/sidebar_icon6.svg", text: "Support & Feedback", path: "/support" },
-  { icon: "/assets/icons/sidebar_icon6.svg", text: "QR Code Management", path: "/qrCode" },
+  {
+    icon: <LayoutDashboard className="w-5 h-5" />,
+    text: "Dashboard",
+    path: "/",
+    description: "Overview and analytics"
+  },
+  {
+    icon: <Briefcase className="w-5 h-5" />,
+    text: "Job Management",
+    path: "/jobs/job-management",
+    description: "Manage all jobs"
+  },
+  {
+    icon: <Users className="w-5 h-5" />,
+    text: "Hustle Heroes",
+    path: "/hustle-heroes",
+    description: "Worker management"
+  },
+  {
+    icon: <Building2 className="w-5 h-5" />,
+    text: "Employers",
+    path: "/employers",
+    description: "Employer accounts"
+  },
+  {
+    icon: <CreditCard className="w-5 h-5" />,
+    text: "Payments & Transactions",
+    path: "/payments",
+    description: "Financial records"
+  },
+  {
+    icon: <MessageSquare className="w-5 h-5" />,
+    text: "Support & Feedback",
+    path: "/support",
+    description: "Customer support"
+  },
+  {
+    icon: <QrCode className="w-5 h-5" />,
+    text: "QR Code Management",
+    path: "/qrCode",
+    description: "QR code settings"
+  },
 ];
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onToggle?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen: controlledIsOpen, onToggle }) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const [isLargeScreen, setIsLargeScreen] = useState(false);
   const [activePath, setActivePath] = useState<string>("/");
-  const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const { logout } = useAuth();
   const navigate = useNavigate();
 
+  // Use controlled state if provided, otherwise use internal state
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const setIsOpen = onToggle || setInternalIsOpen;
+
   // Update the active state based on the current route
-  React.useEffect(() => {
+  useEffect(() => {
     setActivePath(location.pathname);
   }, [location]);
 
+  // Handle responsive behavior
+  useEffect(() => {
+    const handleResize = () => {
+      const large = window.innerWidth >= 1024;
+      setIsLargeScreen(large);
+
+      // On large screens, sidebar should always be open
+      if (large && controlledIsOpen === undefined) {
+        setInternalIsOpen(true);
+      }
+    };
+
+    handleResize(); // Initial check
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, [controlledIsOpen]);
+
   const toggleSidebar = () => {
-    setIsOpen(!isOpen);
+    if (onToggle) {
+      onToggle();
+    } else {
+      setInternalIsOpen(!internalIsOpen);
+    }
+  };
+
+  const handleNavClick = () => {
+    // Close sidebar on mobile when navigating
+    if (window.innerWidth < 1024) {
+      toggleSidebar();
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
+  // Check if path is active (supports nested routes)
+  const isActive = (path: string) => {
+    if (path === "/") {
+      return location.pathname === "/";
+    }
+    return location.pathname.startsWith(path);
   };
 
   return (
     <>
       {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
-        <button
-          onClick={toggleSidebar}
-          className="p-2 rounded-md bg-white shadow-md"
-        >
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
+      <button
+        onClick={toggleSidebar}
+        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 rounded-lg bg-white shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+        aria-label="Toggle menu"
+      >
+        {isOpen ? (
+          <X className="w-6 h-6 text-gray-700" />
+        ) : (
+          <Menu className="w-6 h-6 text-gray-700" />
+        )}
+      </button>
+
+      {/* Overlay for mobile */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={toggleSidebar}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Sidebar */}
-      <div
-        className={`fixed lg:relative h-screen w-[300px] bg-[#F9FDFF] border-r border-gray-200 flex flex-col transition-all duration-300 ease-in-out z-40
-        ${isOpen ? "left-0" : "-left-full lg:left-0"}`}
+      <motion.aside
+        initial={false}
+        animate={{
+          x: isLargeScreen ? 0 : (isOpen ? 0 : -320),
+        }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="fixed lg:sticky top-0 h-screen w-72 sm:w-80 bg-gradient-to-b from-[#F9FDFF] to-white border-r border-gray-200 flex flex-col shadow-lg lg:shadow-none z-50"
       >
         {/* Logo Section */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-center gap-2">
-            <img
-              src="/assets/logo.png"
-              alt="logo"
-              className="h-14 object-contain"
-            />
+        <div className="p-4 sm:p-6 border-b border-gray-200 bg-white">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img
+                src="/assets/logo.png"
+                alt="WorkLah Logo"
+                className="h-10 sm:h-12 object-contain"
+              />
+              <span className="text-lg sm:text-xl font-bold text-gray-900 hidden sm:block">
+                WorkLah
+              </span>
+            </div>
+            {/* Close button for mobile */}
+            <button
+              onClick={toggleSidebar}
+              className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
           </div>
         </div>
 
         {/* Navigation Menu */}
-        <nav className="flex-1 p-4 overflow-y-auto">
-          <ul className="space-y-2">
-            {menuItems.map((item) => (
-              <li key={item.text}>
-                <NavLink
-                  to={item.path}
-                  onClick={() => {
-                    setActivePath(item.path);
-                    if (window.innerWidth < 1024) {
-                      setIsOpen(false);
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 sm:px-4">
+          <ul className="space-y-1.5">
+            {menuItems.map((item, index) => {
+              const active = isActive(item.path);
+              return (
+                <li key={item.text}>
+                  <NavLink
+                    to={item.path}
+                    onClick={handleNavClick}
+                    className={({ isActive: navIsActive }) =>
+                      `group flex items-center gap-3 px-3 sm:px-4 py-3 rounded-xl transition-all duration-200 relative ${active || navIsActive
+                        ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                        : "text-gray-700 hover:bg-gray-100 hover:text-blue-600"
+                      }`
                     }
-                  }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activePath === item.path
-                    ? "text-blue-600 font-semibold"
-                    : "text-gray-600 hover:text-gray-800"
-                    }`}
-                >
-                  {/* Icon Background */}
-                  <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full p-2 ${activePath === item.path
-                      ? "bg-blue-600 text-gray-600"
-                      : "bg-gray-200 text-gray-600"
-                      }`}
                   >
-                    <img src={item.icon} alt={item.text} className="w-8 h-8 fill-gray-500" />
-                  </div>
-                  {/* Menu Item Text */}
-                  <span>{item.text}</span>
-                </NavLink>
-              </li>
-            ))}
+                    {/* Active indicator */}
+                    {active && (
+                      <motion.div
+                        layoutId="activeIndicator"
+                        className="absolute left-0 top-0 bottom-0 w-1 bg-white rounded-r-full"
+                        transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                      />
+                    )}
+
+                    {/* Icon */}
+                    <div
+                      className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${active
+                          ? "bg-white/20 text-white"
+                          : "bg-gray-100 text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600"
+                        }`}
+                    >
+                      {item.icon}
+                    </div>
+
+                    {/* Menu Item Text */}
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-sm sm:text-base font-medium truncate">
+                        {item.text}
+                      </span>
+                      {item.description && (
+                        <span className={`block text-xs mt-0.5 truncate ${active ? "text-white/80" : "text-gray-500"
+                          }`}>
+                          {item.description}
+                        </span>
+                      )}
+                    </div>
+                  </NavLink>
+                </li>
+              );
+            })}
           </ul>
         </nav>
 
         {/* Logout Section */}
-        <div className="p-4 border-t border-gray-200">
-          <button 
-            onClick={async () => {
-              await logout();
-              navigate('/login');
-            }}
-            className="flex items-center gap-3 text-gray-600 hover:text-gray-900 w-full px-4 py-3 rounded-lg transition-colors hover:bg-gray-100"
+        <div className="p-3 sm:p-4 border-t border-gray-200 bg-white">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-gray-700 hover:bg-red-50 hover:text-red-600 transition-all duration-200 group"
           >
-            <div className="flex items-center justify-center w-8 h-8 rounded-md bg-transparent hover:bg-gray-200">
-              <LogOut size={20} />
+            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 group-hover:bg-red-100 transition-colors">
+              <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
             </div>
-            <span>Logout</span>
+            <span className="font-medium text-sm sm:text-base">Logout</span>
           </button>
         </div>
-      </div>
-
-      {/* Overlay for mobile */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-          onClick={toggleSidebar}
-        ></div>
-      )}
+      </motion.aside>
     </>
   );
 };

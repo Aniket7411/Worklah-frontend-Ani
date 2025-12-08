@@ -1,41 +1,75 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
-import { UploadCloud, Trash2, Plus, Image, Edit, Calendar, ArrowLeft } from "lucide-react";
+import {
+  UploadCloud,
+  Trash2,
+  Plus,
+  X,
+  Building2,
+  Phone,
+  MapPin,
+  User,
+  FileText,
+  Calendar,
+  Eye,
+  EyeOff,
+  Save,
+  ArrowLeft
+} from "lucide-react";
 import { AxiosError } from "axios";
 import toast from "react-hot-toast";
 import Loader from "../../components/Loader";
 
 const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
-const months = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
+interface ContactPerson {
+  name: string;
+  position: string;
+  number: string;
+}
+
+interface Outlet {
+  address: string;
+  managerName?: string;
+  managerContact?: string;
+  _id?: string;
+}
 
 const EditEmployer: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
+    employerId: "",
+    companyLogo: null as File | null,
     companyLegalName: "",
     hqAddress: "",
-    companyNumber: "",
-    companyEmail: "",
     mainContactPersonName: "",
-    mainContactPersonPosition: "",
-    mainContactPersonNumber: "",
+    jobPosition: "",
+    mainContactNumber: "",
+    emailAddress: "",
+    officeNumber: "",
     accountManager: "",
+    acraBizfileCert: null as File | null,
     industry: "",
-    contractStartDate: { day: "1", month: "January", year: "2024" },
-    contractEndDate: { day: "1", month: "January", year: "2024" },
-    contractStatus: "In Discussion",
-    companyLogo: null as File | null,
-    acraCertificate: null as File | null,
-    existingLogo: "",
+    serviceAgreement: "",
+    serviceContract: null as File | null,
+    contractExpiryDate: "",
   });
 
-  const [outlets, setOutlets] = useState<Array<{ name: string; address: string; type: string; image: File | null; _id?: string }>>([]);
+  const [existingFiles, setExistingFiles] = useState({
+    companyLogo: "",
+    acraBizfileCert: "",
+    serviceContract: "",
+  });
+
+  const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
+    { name: "", position: "", number: "" }
+  ]);
+  const [outlets, setOutlets] = useState<Outlet[]>([{ address: "" }]);
+  const [showAccountManager, setShowAccountManager] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -50,45 +84,51 @@ const EditEmployer: React.FC = () => {
       const employer = response?.data?.employer || response?.data;
 
       if (employer) {
-        const startDate = employer?.contractStartDate ? new Date(employer.contractStartDate) : new Date();
-        const endDate = employer?.contractEndDate ? new Date(employer.contractEndDate) : new Date();
-
         setFormData({
-          companyLegalName: employer?.companyLegalName || employer?.companyName || "",
-          hqAddress: employer?.hqAddress || "",
-          companyNumber: employer?.companyNumber || "",
-          companyEmail: employer?.companyEmail || "",
-          mainContactPersonName: employer?.mainContactPersonName || "",
-          mainContactPersonPosition: employer?.mainContactPersonPosition || "",
-          mainContactPersonNumber: employer?.mainContactPersonNumber || "",
-          accountManager: employer?.accountManager || "",
-          industry: employer?.industry || "",
-          contractStartDate: {
-            day: startDate.getDate().toString(),
-            month: months[startDate.getMonth()] || "January",
-            year: startDate.getFullYear().toString(),
-          },
-          contractEndDate: {
-            day: endDate.getDate().toString(),
-            month: months[endDate.getMonth()] || "January",
-            year: endDate.getFullYear().toString(),
-          },
-          contractStatus: employer?.serviceAgreement || employer?.contractStatus || "In Discussion",
+          employerId: employer.employerId || employer._id || "",
+          companyLegalName: employer.companyLegalName || employer.companyName || "",
+          hqAddress: employer.hqAddress || "",
+          mainContactPersonName: employer.mainContactPersonName || "",
+          jobPosition: employer.jobPosition || employer.mainContactPersonPosition || "",
+          mainContactNumber: employer.mainContactNumber || employer.mainContactNumber || "",
+          emailAddress: employer.emailAddress || employer.companyEmail || "",
+          officeNumber: employer.officeNumber || employer.companyNumber || "",
+          accountManager: employer.accountManager || "",
+          industry: employer.industry || "",
+          serviceAgreement: employer.serviceAgreement || employer.contractStatus || "",
+          contractExpiryDate: employer.contractExpiryDate || "",
           companyLogo: null,
-          acraCertificate: null,
-          existingLogo: employer?.companyLogo ? `${IMAGE_BASE_URL}${employer.companyLogo}` : "",
+          acraBizfileCert: null,
+          serviceContract: null,
         });
 
-        if (employer?.outlets && Array.isArray(employer.outlets)) {
+        setExistingFiles({
+          companyLogo: employer.companyLogo ? `${IMAGE_BASE_URL}${employer.companyLogo}` : "",
+          acraBizfileCert: employer.acraBizfileCert ? `${IMAGE_BASE_URL}${employer.acraBizfileCert}` : "",
+          serviceContract: employer.serviceContract ? `${IMAGE_BASE_URL}${employer.serviceContract}` : "",
+        });
+
+        // Handle contact persons
+        if (employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0) {
+          setContactPersons(employer.mainContactPersons);
+        } else if (employer.mainContactPersonName) {
+          setContactPersons([{
+            name: employer.mainContactPersonName,
+            position: employer.jobPosition || "",
+            number: employer.mainContactNumber || ""
+          }]);
+        }
+
+        // Handle outlets
+        if (employer.outlets && Array.isArray(employer.outlets) && employer.outlets.length > 0) {
           setOutlets(employer.outlets.map((outlet: any) => ({
-            name: outlet?.name || "",
-            address: outlet?.address || outlet?.location || "",
-            type: outlet?.type || "",
-            image: null,
-            _id: outlet?._id || outlet?.id,
+            address: outlet.address || outlet.location || "",
+            managerName: outlet.managerName || "",
+            managerContact: outlet.managerContact || "",
+            _id: outlet._id || outlet.id,
           })));
         } else {
-          setOutlets([{ name: "", address: "", type: "", image: null }]);
+          setOutlets([{ address: "" }]);
         }
       }
     } catch (error: any) {
@@ -99,83 +139,129 @@ const EditEmployer: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleDropdownChange = (
-    field: "contractStartDate" | "contractEndDate",
-    key: "day" | "month" | "year",
-    value: string
-  ) => {
-    setFormData((prevData) => ({
-      ...prevData,
-      [field]: {
-        ...prevData[field],
-        [key]: value,
-      },
-    }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
-    if (e.target.files?.[0]) {
-      setFormData({ ...formData, [field]: e.target.files[0] });
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+
+      // Validate PDF for Service Contract
+      if (field === "serviceContract" && file.type !== "application/pdf") {
+        toast.error("Service Contract must be a PDF file");
+        return;
+      }
+
+      setFormData(prev => ({ ...prev, [field]: file }));
     }
   };
 
-  const handleOutletChange = (index: number, field: string, value: string | File | null) => {
-    const updatedOutlets = [...outlets];
-    (updatedOutlets[index] as any)[field] = value;
-    setOutlets(updatedOutlets);
+  const handleContactPersonChange = (index: number, field: keyof ContactPerson, value: string) => {
+    const updated = [...contactPersons];
+    updated[index] = { ...updated[index], [field]: value };
+    setContactPersons(updated);
+  };
+
+  const addContactPerson = () => {
+    setContactPersons([...contactPersons, { name: "", position: "", number: "" }]);
+  };
+
+  const removeContactPerson = (index: number) => {
+    if (contactPersons.length > 1) {
+      setContactPersons(contactPersons.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleOutletChange = (index: number, field: keyof Outlet, value: string) => {
+    const updated = [...outlets];
+    updated[index] = { ...updated[index], [field]: value };
+    setOutlets(updated);
   };
 
   const addOutlet = () => {
-    setOutlets([...outlets, { name: "", address: "", type: "", image: null }]);
+    setOutlets([...outlets, { address: "" }]);
   };
 
   const removeOutlet = (index: number) => {
-    const updatedOutlets = outlets.filter((_, i) => i !== index);
-    setOutlets(updatedOutlets);
+    if (outlets.length > 1) {
+      setOutlets(outlets.filter((_, i) => i !== index));
+    }
+  };
+
+  const validateEmail = (email: string) => {
+    if (!email) return true;
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  };
+
+  const validateDate = (date: string) => {
+    if (!date) return true;
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    return re.test(date);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    const formDataToSend = {
-      companyLegalName: formData.companyLegalName,
-      hqAddress: formData.hqAddress,
-      companyNumber: formData.companyNumber,
-      companyEmail: formData.companyEmail,
-      mainContactPersonName: formData.mainContactPersonName,
-      mainContactPersonPosition: formData.mainContactPersonPosition,
-      mainContactPersonNumber: formData.mainContactPersonNumber,
-      accountManager: formData.accountManager,
-      industry: formData.industry,
-      contractStartDate: {
-        day: formData.contractStartDate.day,
-        month: formData.contractStartDate.month,
-        year: formData.contractStartDate.year,
-      },
-      contractEndDate: {
-        day: formData.contractEndDate.day,
-        month: formData.contractEndDate.month,
-        year: formData.contractEndDate.year,
-      },
-      contractStatus: formData.contractStatus,
-      outlets: outlets.map((outlet) => ({
-        name: outlet.name,
-        address: outlet.address,
-        type: outlet.type,
-        ...(outlet._id && { _id: outlet._id }),
-      })),
-    };
+    // Validate email
+    if (formData.emailAddress && !validateEmail(formData.emailAddress)) {
+      toast.error("Please enter a valid email address");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate date format
+    if (formData.contractExpiryDate && !validateDate(formData.contractExpiryDate)) {
+      toast.error("Contract Expiry Date must be in YYYY-MM-DD format");
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
-      const response = await axiosInstance.put(`/employers/${id}`, formDataToSend, {
-        headers: { "Content-Type": "application/json" },
+      const formDataToSend = new FormData();
+
+      // Append all form fields (only changed ones)
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value instanceof File) {
+          formDataToSend.append(key, value);
+        } else if (value !== null && value !== undefined && value !== "") {
+          formDataToSend.append(key, String(value));
+        }
       });
 
-      if (response?.status === 200 || response?.status === 201) {
+      // Append contact persons
+      contactPersons.forEach((contact, index) => {
+        if (contact.name || contact.position || contact.number) {
+          formDataToSend.append(`contactPersons[${index}][name]`, contact.name);
+          formDataToSend.append(`contactPersons[${index}][position]`, contact.position);
+          formDataToSend.append(`contactPersons[${index}][number]`, contact.number);
+        }
+      });
+
+      // Append outlets
+      outlets.forEach((outlet, index) => {
+        if (outlet.address) {
+          formDataToSend.append(`outlets[${index}][address]`, outlet.address);
+          if (outlet.managerName) {
+            formDataToSend.append(`outlets[${index}][managerName]`, outlet.managerName);
+          }
+          if (outlet.managerContact) {
+            formDataToSend.append(`outlets[${index}][managerContact]`, outlet.managerContact);
+          }
+          if (outlet._id) {
+            formDataToSend.append(`outlets[${index}][_id]`, outlet._id);
+          }
+        }
+      });
+
+      const response = await axiosInstance.put(`/employers/${id}`, formDataToSend, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      if (response.status === 200 || response.status === 201) {
         toast.success("Employer updated successfully!");
         navigate("/employers");
       }
@@ -185,6 +271,8 @@ const EditEmployer: React.FC = () => {
       } else {
         toast.error("Something went wrong. Please try again.");
       }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -193,260 +281,508 @@ const EditEmployer: React.FC = () => {
   }
 
   return (
-    <div className="p-4 md:p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center gap-4 mb-6">
+    <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6 flex items-center gap-4">
           <button
             onClick={() => navigate("/employers")}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <h2 className="text-3xl font-semibold">Edit Employer</h2>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Edit Employer</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Company Logo Upload */}
-          <div className="col-span-2 flex items-center gap-4">
-            <label className="block text-gray-700 font-medium">Company Logo</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleFileChange(e, "companyLogo")}
-              className="hidden"
-              id="logoInput"
-            />
-            <label htmlFor="logoInput" className="p-3 bg-blue-100 rounded-lg cursor-pointer hover:bg-blue-200 transition-colors">
-              <UploadCloud className="w-6 h-6 text-blue-600" />
-            </label>
-            {formData.companyLogo ? (
-              <img
-                src={URL.createObjectURL(formData.companyLogo)}
-                alt="Logo Preview"
-                className="w-16 h-16 object-cover rounded"
-              />
-            ) : formData.existingLogo ? (
-              <img src={formData.existingLogo} alt="Current Logo" className="w-16 h-16 object-cover rounded" />
-            ) : null}
-          </div>
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:p-8">
+          <div className="space-y-8">
+            {/* Section 1: Basic Information */}
+            <section className="space-y-6">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                Basic Information
+              </h2>
 
-          {/* Text Fields */}
-          {[
-            { name: "companyLegalName", placeholder: "Enter company legal name", label: "Company legal name" },
-            { name: "companyNumber", placeholder: "Enter company number", label: "Company number" },
-            { name: "companyEmail", placeholder: "Enter company email", label: "Company Email" },
-            { name: "mainContactPersonName", placeholder: "Enter MCP name", label: "Main contact person name" },
-            { name: "mainContactPersonPosition", placeholder: "Enter MCP position", label: "Main contact person position" },
-            { name: "mainContactPersonNumber", placeholder: "MCP number", label: "Main contact person number" },
-            { name: "accountManager", placeholder: "Enter account manager name", label: "Account Manager" },
-            { name: "hqAddress", placeholder: "SengKang, Singapore", label: "HQ Address" },
-          ].map(({ name, placeholder, label }) => (
-            <div key={name} className="relative">
-              <label className="block text-gray-700 font-medium mb-1">{label}</label>
-              <input
-                type="text"
-                name={name}
-                placeholder={placeholder}
-                value={(formData as any)[name]}
-                onChange={handleChange}
-                className="input-field w-full bg-gray-100 p-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                required
-              />
-              <Edit className="absolute right-3 top-9 text-gray-500 w-4 h-4" />
-            </div>
-          ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Employer ID - Read Only */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Employer ID <span className="text-gray-400 text-xs">(Auto-generated)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.employerId || "N/A"}
+                    disabled
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed"
+                  />
+                </div>
 
-          {/* Industry */}
-          <div className="relative">
-            <label className="block text-gray-700 font-medium mb-1">Industry</label>
-            <select
-              name="industry"
-              value={formData.industry}
-              onChange={handleChange}
-              className="input-field w-full bg-gray-100 p-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            >
-              <option value="">Select Industry</option>
-              <option value="Retail">Retail</option>
-              <option value="Hospitality">Hospitality</option>
-              <option value="IT">IT</option>
-              <option value="Healthcare">Healthcare</option>
-            </select>
-          </div>
-
-          {/* Contract Start Date */}
-          <div>
-            <label className="block text-gray-700 font-medium mb-1">Contract Start Date</label>
-            <div className="flex gap-2">
-              <select
-                value={formData.contractStartDate.day}
-                onChange={(e) => handleDropdownChange("contractStartDate", "day", e.target.value)}
-                className="p-2 rounded bg-gray-100 border border-gray-300"
-              >
-                {Array.from({ length: 31 }, (_, i) => (i + 1).toString()).map((day) => (
-                  <option key={day} value={day}>
-                    {day}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={formData.contractStartDate.month}
-                onChange={(e) => handleDropdownChange("contractStartDate", "month", e.target.value)}
-                className="p-2 rounded bg-gray-100 border border-gray-300"
-              >
-                {months.map((month) => (
-                  <option key={month} value={month}>
-                    {month}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={formData.contractStartDate.year}
-                onChange={(e) => handleDropdownChange("contractStartDate", "year", e.target.value)}
-                className="p-2 rounded bg-gray-100 border border-gray-300"
-              >
-                {Array.from({ length: 10 }, (_, i) => (2024 + i).toString()).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-              <Calendar className="text-gray-500 w-5 h-5 mt-2" />
-            </div>
-          </div>
-
-          {/* Contract End Date */}
-          <div>
-            <label className="block text-gray-700 font-medium mb-1">Contract End Date</label>
-            <div className="flex gap-2">
-              <select
-                value={formData.contractEndDate.day}
-                onChange={(e) => handleDropdownChange("contractEndDate", "day", e.target.value)}
-                className="p-2 rounded bg-gray-100 border border-gray-300"
-              >
-                {Array.from({ length: 31 }, (_, i) => (i + 1).toString()).map((day) => (
-                  <option key={day} value={day}>
-                    {day}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={formData.contractEndDate.month}
-                onChange={(e) => handleDropdownChange("contractEndDate", "month", e.target.value)}
-                className="p-2 rounded bg-gray-100 border border-gray-300"
-              >
-                {months.map((month) => (
-                  <option key={month} value={month}>
-                    {month}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={formData.contractEndDate.year}
-                onChange={(e) => handleDropdownChange("contractEndDate", "year", e.target.value)}
-                className="p-2 rounded bg-gray-100 border border-gray-300"
-              >
-                {Array.from({ length: 10 }, (_, i) => (2024 + i).toString()).map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-              <Calendar className="text-gray-500 w-5 h-5 mt-2" />
-            </div>
-          </div>
-
-          {/* Contract Status */}
-          <div>
-            <label className="block text-gray-700 font-medium mb-1">Contract Status</label>
-            <select
-              name="contractStatus"
-              value={formData.contractStatus}
-              onChange={handleChange}
-              className="input-field w-full bg-gray-100 p-3 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            >
-              <option value="In Discussion">In Discussion</option>
-              <option value="Active">Active</option>
-              <option value="Expired">Expired</option>
-            </select>
-          </div>
-
-          {/* Outlets Section */}
-          <div className="col-span-2">
-            <h3 className="text-lg font-bold mb-4">Outlets</h3>
-            {outlets.map((outlet, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 p-4 border rounded-lg">
-                <div className="flex flex-col gap-2">
-                  <label className="font-medium">Outlet Name</label>
-                  <div className="relative">
+                {/* Company Logo */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Company Logo <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <div className="flex items-center gap-4">
                     <input
-                      type="text"
-                      placeholder="Enter Outlet name"
-                      value={outlet.name}
-                      onChange={(e) => handleOutletChange(index, "name", e.target.value)}
-                      className="w-full p-2 border rounded-lg"
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleFileChange(e, "companyLogo")}
+                      className="hidden"
+                      id="companyLogo"
                     />
-                    <Edit className="absolute top-3 right-3 text-gray-400" size={16} />
-                  </div>
-                  <label className="font-medium">Outlet Type</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Enter Outlet type"
-                      value={outlet.type}
-                      onChange={(e) => handleOutletChange(index, "type", e.target.value)}
-                      className="w-full p-2 border rounded-lg"
-                    />
-                    <Edit className="absolute top-3 right-3 text-gray-400" size={16} />
+                    <label
+                      htmlFor="companyLogo"
+                      className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
+                    >
+                      <UploadCloud className="w-5 h-5 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-600">Upload Logo</span>
+                    </label>
+                    {formData.companyLogo ? (
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={URL.createObjectURL(formData.companyLogo)}
+                          alt="Logo preview"
+                          className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, companyLogo: null }))}
+                          className="p-1 text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : existingFiles.companyLogo ? (
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={existingFiles.companyLogo}
+                          alt="Current logo"
+                          className="w-16 h-16 object-cover rounded-lg border border-gray-300"
+                        />
+                        <span className="text-sm text-gray-600">Current logo</span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <label className="font-medium">Outlet Address</label>
-                  <div className="relative">
-                    <textarea
-                      placeholder="Enter Outlet Address"
-                      value={outlet.address}
-                      onChange={(e) => handleOutletChange(index, "address", e.target.value)}
-                      className="w-full p-2 border rounded-lg h-16"
-                    />
-                    <Edit className="absolute top-3 right-3 text-gray-400" size={16} />
-                  </div>
+
+                {/* Company Legal Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Company Legal Name <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="companyLegalName"
+                    value={formData.companyLegalName}
+                    onChange={handleChange}
+                    placeholder="Enter company legal name"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
                 </div>
-                <div className="col-span-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => removeOutlet(index)}
-                    className="text-red-600 flex items-center gap-2 hover:text-red-700"
+
+                {/* Industry */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Industry <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <select
+                    name="industry"
+                    value={formData.industry}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
-                    <Trash2 size={18} />
-                    <span>Remove Outlet</span>
-                  </button>
+                    <option value="">Select Industry</option>
+                    <option value="F&B">F&B (Food & Beverage)</option>
+                    <option value="Hotel">Hotel</option>
+                    <option value="Retail">Retail</option>
+                    <option value="Logistics">Logistics</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+
+                {/* HQ Address */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    HQ Address <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <textarea
+                    name="hqAddress"
+                    value={formData.hqAddress}
+                    onChange={handleChange}
+                    placeholder="Enter headquarters address"
+                    rows={3}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                  />
                 </div>
               </div>
-            ))}
-            <button
-              type="button"
-              onClick={addOutlet}
-              className="mt-2 flex items-center gap-2 bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600"
-            >
-              <Plus className="w-4 h-4" /> Add Outlet
-            </button>
-          </div>
+            </section>
 
-          {/* Cancel & Save Buttons */}
-          <div className="col-span-2 flex justify-between mt-6">
-            <button
-              type="button"
-              onClick={() => navigate("/employers")}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Update Employer
-            </button>
+            {/* Section 2: Contact Information */}
+            <section className="space-y-6 border-t border-gray-200 pt-8">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <Phone className="w-5 h-5 text-blue-600" />
+                Contact Information
+              </h2>
+
+              {/* Main Contact Person Name - Multiple */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Main Contact Person(s) <span className="text-gray-400 text-xs">(Optional - Multiple allowed)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addContactPerson}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Contact
+                  </button>
+                </div>
+
+                {contactPersons.map((contact, index) => (
+                  <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
+                      <input
+                        type="text"
+                        value={contact.name}
+                        onChange={(e) => handleContactPersonChange(index, "name", e.target.value)}
+                        placeholder="Contact name"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Position</label>
+                      <input
+                        type="text"
+                        value={contact.position}
+                        onChange={(e) => handleContactPersonChange(index, "position", e.target.value)}
+                        placeholder="Job position"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Number</label>
+                        <input
+                          type="tel"
+                          value={contact.number}
+                          onChange={(e) => handleContactPersonChange(index, "number", e.target.value)}
+                          placeholder="Contact number"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      {contactPersons.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeContactPerson(index)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Main Contact Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Main Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="mainContactNumber"
+                    value={formData.mainContactNumber}
+                    onChange={handleChange}
+                    placeholder="Enter main contact number"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Email Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    name="emailAddress"
+                    value={formData.emailAddress}
+                    onChange={handleChange}
+                    placeholder="Enter email address"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Office Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Office Number <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="officeNumber"
+                    value={formData.officeNumber}
+                    onChange={handleChange}
+                    placeholder="Enter office number"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Job Position */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Job Position <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="jobPosition"
+                    value={formData.jobPosition}
+                    onChange={handleChange}
+                    placeholder="Enter job position"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Section 3: Account & Service Details */}
+            <section className="space-y-6 border-t border-gray-200 pt-8">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-blue-600" />
+                Account & Service Details
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Account Manager - Read Only, Masked */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Manager <span className="text-gray-400 text-xs">(Assigned by Admin)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showAccountManager ? "text" : "password"}
+                      value={formData.accountManager || "Not assigned"}
+                      disabled
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountManager(!showAccountManager)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      {showAccountManager ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Service Agreement */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Service Agreement <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <select
+                    name="serviceAgreement"
+                    value={formData.serviceAgreement}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">Select Status</option>
+                    <option value="In Discussion">In Discussion</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Expired">Expired</option>
+                  </select>
+                </div>
+
+                {/* Contract Expiry Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Contract Expiry Date <span className="text-gray-400 text-xs">(Optional - YYYY-MM-DD)</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="contractExpiryDate"
+                    value={formData.contractExpiryDate}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* ACRA Bizfile Cert */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ACRA Bizfile Cert <span className="text-gray-400 text-xs">(Optional)</span>
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => handleFileChange(e, "acraBizfileCert")}
+                    className="hidden"
+                    id="acraBizfileCert"
+                  />
+                  <label
+                    htmlFor="acraBizfileCert"
+                    className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <FileText className="w-5 h-5 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">Upload ACRA Certificate</span>
+                  </label>
+                  {formData.acraBizfileCert ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700">{formData.acraBizfileCert.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, acraBizfileCert: null }))}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : existingFiles.acraBizfileCert ? (
+                    <span className="text-sm text-gray-600">Current file exists</span>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Service Contract - PDF Only */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Service Contract <span className="text-gray-400 text-xs">(Optional - PDF only)</span>
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => handleFileChange(e, "serviceContract")}
+                    className="hidden"
+                    id="serviceContract"
+                  />
+                  <label
+                    htmlFor="serviceContract"
+                    className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                  >
+                    <FileText className="w-5 h-5 text-gray-600" />
+                    <span className="text-sm font-medium text-gray-700">Upload Service Contract (PDF)</span>
+                  </label>
+                  {formData.serviceContract ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-700">{formData.serviceContract.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, serviceContract: null }))}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : existingFiles.serviceContract ? (
+                    <span className="text-sm text-gray-600">Current file exists</span>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+
+            {/* Section 4: Outlets */}
+            <section className="space-y-6 border-t border-gray-200 pt-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                  Outlets <span className="text-gray-400 text-xs font-normal">(Optional - Multiple allowed)</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={addOutlet}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Outlet
+                </button>
+              </div>
+
+              {outlets.map((outlet, index) => (
+                <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-gray-700">Outlet {index + 1}</h3>
+                    {outlets.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeOutlet(index)}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Outlet Address</label>
+                      <textarea
+                        value={outlet.address}
+                        onChange={(e) => handleOutletChange(index, "address", e.target.value)}
+                        placeholder="Enter outlet address"
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Manager Name (Optional)</label>
+                      <input
+                        type="text"
+                        value={outlet.managerName || ""}
+                        onChange={(e) => handleOutletChange(index, "managerName", e.target.value)}
+                        placeholder="Outlet manager name"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Manager Contact (Optional)</label>
+                      <input
+                        type="tel"
+                        value={outlet.managerContact || ""}
+                        onChange={(e) => handleOutletChange(index, "managerContact", e.target.value)}
+                        placeholder="Manager contact number"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+
+            {/* Submit Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => navigate("/employers")}
+                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Update Employer
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -455,4 +791,3 @@ const EditEmployer: React.FC = () => {
 };
 
 export default EditEmployer;
-
