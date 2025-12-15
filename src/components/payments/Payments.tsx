@@ -157,6 +157,12 @@ export default function Payments({ data }: PaymentsProps) {
         rejectionReason: rejectionReasons[paymentId] || "",
       });
 
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to update payment status");
+        return;
+      }
+
       if (response.status === 200 || response.status === 201) {
         toast.success(`Payment ${newStatus.toLowerCase()} successfully`);
         setStatusUpdates((prev) => ({ ...prev, [paymentId]: newStatus }));

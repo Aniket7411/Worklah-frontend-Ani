@@ -2,13 +2,18 @@ import {
   ArrowLeft,
   ArrowRight,
   Ban,
+  Briefcase,
+  CalendarDays,
+  Clock,
   Edit,
   FileX2,
   MapPin,
   Minus,
   MoreVertical,
+  PhoneCall,
   Plus,
   Settings,
+  UserCheck,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { FaCaretDown } from "react-icons/fa";
@@ -22,18 +27,31 @@ import { convertIdToFourDigits, formatDate } from "../../lib/utils";
 import OutletFilter from "../../components/Filter/OutletFilter";
 
 const JobDetailsPage = () => {
-
+  const companyImage = "https://worklah.onrender.com";
   const maxStandby = 1;
   const maxVacancy = 3;
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  // const scrollContainerRef = React.useRef<HTMLDivElement>(null);
-  const [jobsData, setJobsData] = useState({});
-  const [shifts, setShifts] = useState([]);
+  const [jobsData, setJobsData] = useState<any>({});
+  const [shifts, setShifts] = useState<any[]>([]);
   const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const [outlet, setOutet] = useState(null);
+  const [penalties, setPenalties] = useState<any[]>([]);
+  const [usingDefaultPenalties, setUsingDefaultPenalties] = useState(true);
+  
+  // Default penalties fallback (should ideally come from API)
+  const defaultPenalties = [
+    { condition: "5 minutes after applying", penalty: "No Penalty" },
+    { condition: "48 Hours", penalty: "No Penalty" },
+    { condition: "24 Hours (1st Time)", penalty: "$5 Penalty" },
+    { condition: "24 Hours (2nd Time)", penalty: "$10 Penalty" },
+    { condition: "24 Hours (3rd Time)", penalty: "$15 Penalty" },
+    { condition: "No Show - During Shift", penalty: "$50 Penalty" },
+  ];
 
 
   useEffect(() => {
@@ -59,33 +77,67 @@ const JobDetailsPage = () => {
 
   const fetchJobDetails = async () => {
     try {
-      const response = await axiosInstance.get(`/admin/jobs/${jobId}`);
+      setLoading(true);
+      setError(null);
+      const response = await axiosInstance.get(`/jobs/${jobId}`);
 
-      if (response?.data?.success) {
-        const job = response?.data?.job;
-        const outletId = job?.outlet?._id;
+      // Check for success field according to API spec
+      if (response?.data?.success === false) {
+        setError(response.data?.message || "Failed to fetch job details");
+        return;
+      }
+
+      if (response?.data?.success !== false) {
+        const job = response?.data?.job || response?.data;
+        const outletId = job?.outlet?._id || job?.outlet?.id || job?.outletId;
         if (outletId) {
           setOutet(outletId);
         }
         setJobsData(job);
-        setShifts(job?.shifts || []);
+        // Handle both old and new API structures
+        setShifts(job?.shifts || (job?.shiftTiming ? [job] : []));
+        
+        // Fetch penalties from API if available in job data
+        if (job?.penalties && Array.isArray(job.penalties) && job.penalties.length > 0) {
+          // If API provides penalties in the job data
+          setPenalties(job.penalties);
+          setUsingDefaultPenalties(false);
+        } else {
+          // Try to fetch from configuration endpoint if job doesn't have penalties
+          await fetchPenaltyConfiguration();
+        }
       }
-    } catch (error) {
-      // Error handling
+    } catch (error: any) {
+      console.error("Error fetching job details:", error);
+      setError(error?.response?.data?.message || "Failed to load job details");
+    } finally {
+      setLoading(false);
     }
   };
+  // Fetch penalty configuration from API (if available)
+  const fetchPenaltyConfiguration = async () => {
+    try {
+      // Try to fetch from admin configuration endpoint
+      const response = await axiosInstance.get('/admin/penalty-configuration');
+      if (response.data?.success && response.data?.penalties) {
+        setPenalties(response.data.penalties);
+        setUsingDefaultPenalties(false);
+      } else {
+        // If API doesn't provide penalties, use defaults
+        setPenalties(defaultPenalties);
+        setUsingDefaultPenalties(true);
+      }
+    } catch (error) {
+      // If endpoint doesn't exist, that's okay - we'll use defaults
+      console.log("Penalty configuration endpoint not available, using defaults");
+      setPenalties(defaultPenalties);
+      setUsingDefaultPenalties(true);
+    }
+  };
+
   useEffect(() => {
     fetchJobDetails();
   }, [jobId]);
-
-  const penalties = [
-    { condition: "5 minutes after applying", penalty: "No Penalty" },
-    { condition: "48 Hours", penalty: "No Penalty" },
-    { condition: "24 Hours (1st Time)", penalty: "$5 Penalty" },
-    { condition: "24 Hours (2nd Time)", penalty: "$10 Penalty" },
-    { condition: "24 Hours (3rd Time)", penalty: "$15 Penalty" },
-    { condition: "No Show - During Shift", penalty: "$50 Penalty" },
-  ];
 
   const handleIncrease = (id, key, maxValue) => {
     setShifts((prevShifts) =>
@@ -121,491 +173,608 @@ const JobDetailsPage = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
-        return "bg-[#E5FFF6] text-green-600";
+        return "bg-[#E5FFF6] text-green-700 border border-green-200";
       case "Ongoing":
-        return "bg-[#FFF4E8] text-[#D37700]";
+        return "bg-[#FFF4E8] text-[#D37700] border border-orange-200";
+      case "Upcoming":
+        return "bg-blue-50 text-blue-700 border border-blue-200";
+      case "Pending":
+        return "bg-[#FFF4E8] text-[#D37700] border border-orange-200";
       case "Cancelled":
-        return "bg-[#FFF0ED] text-[#E34E30]";
+        return "bg-[#FFF0ED] text-[#E34E30] border border-red-200";
       case "Completed":
-        return "bg-[#E0F0FF] text-[#0099FF]";
+        return "bg-[#E0F0FF] text-[#0099FF] border border-blue-200";
+      case "Deactivated":
+        return "bg-gray-200 text-gray-600 border border-gray-300";
       default:
-        return "bg-gray-100 text-gray-600";
+        return "bg-gray-100 text-gray-600 border border-gray-300";
     }
   };
 
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-600">Loading job details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-700 font-semibold mb-2">Error</p>
+          <p className="text-red-600">{error}</p>
+          <button
+            onClick={() => navigate(-1)}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6 ">
+    <div className="p-4 sm:p-6 min-h-screen bg-gray-50">
       {/* Header Section */}
-      <div className="p-4">
-        <div className="flex justify-between items-center">
-          <div className="flex flex-col gap-4">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
+        <div className="flex flex-col lg:flex-row justify-between gap-6">
+          <div className="flex flex-col gap-4 flex-1">
             <div className="flex items-center gap-3">
-              <button className="p-2 rounded-full shadow-custom bg-white" onClick={() => navigate(-1)}>
-                <ArrowLeft className="w-7 h-7 " color="#000000" />
+              <button 
+                className="p-2 rounded-full shadow-md bg-white hover:bg-gray-50 transition-colors" 
+                onClick={() => navigate(-1)}
+              >
+                <ArrowLeft className="w-6 h-6 text-gray-700" />
               </button>
-              <div className="flex items-center gap-3">
-                <div>
-                  <img
-                    src="/assets/tray-logo.png"
-                    alt="tray logo"
-                    className="w-12 h-12 mr-4"
-                  />
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                    {jobsData.jobTitle || jobsData.jobName || "Job Details"}
+                  </h1>
+                  {jobsData.jobStatus && (
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(jobsData.jobStatus)}`}>
+                      {jobsData.jobStatus}
+                    </span>
+                  )}
                 </div>
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold">{jobsData.jobName}</h1>
-                    <p className={`font-medium py-1 px-2 rounded-full ${getStatusColor(jobsData.status)}`}>
-                      {jobsData.status}
-                    </p>
-                  </div>
-                  <div className="bg-[#ECF8FF] p-2 rounded-xl flex items-center gap-3">
-                    <div>
-                      <div className="flex items-center justify-end gap-4">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsLimitPopupOpen(!isLimitPopupOpen);
-                          }}
-                        >
-                          <FaCaretDown className="w-7 h-7 " />
-
-
-                        </button>
-                        <div className="flex flex-col gap3">
-                          <img
-                            src="/assets/dominos-logo.svg"
-                            alt="tray logo"
-                            className="w-24 h-8 mr-4"
-                          />
-                          <p>{jobsData.location}</p>
-                        </div>
-
-                        {isLimitPopupOpen && (
-                          <div
-                            ref={popupRef}
-                            className="absolute right-[35%] top-[12%] mt-2 bg-white border rounded-[20px] shadow-lg z-50"
-                          >
-                            <OutletFilter />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                {jobsData.jobRoles && (
+                  <p className="text-gray-600 font-medium">{jobsData.jobRoles}</p>
+                )}
               </div>
             </div>
-            <div className="text-left flex flex-col gap-6">
-              <div className="flex items-center gap-4">
-                <p className="text-[#4C4C4C] text-[16px] leading-[20px] font-semibold">
-                  Employer : {jobsData.employer?.name}
-                </p>
-                <div className="flex w-max gap-1 items-center align-middle">
-                  {jobsData.employer?.logo ? (
-                    <img
-                      src={jobsData.employer.logo}
-                      alt="Company Logo"
-                      className="w-9 h-9 mx-auto shadow-md rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 mx-auto shadow-md rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
-                      {jobsData.employer?.name?.charAt(0)?.toUpperCase() || "?"}
-                    </div>
-                  )}
-                  <div className=" flex flex-col text-left">
-                    <p>{jobsData.company?.name}</p>
+
+            {/* Company/Employer Info */}
+            <div className="flex items-start gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl border border-blue-200">
+              <div className="flex-shrink-0">
+                {jobsData.employer?.companyLogo ? (
+                  <img
+                    src={jobsData.employer.companyLogo.startsWith("http") 
+                      ? jobsData.employer.companyLogo 
+                      : `${companyImage}${jobsData.employer.companyLogo}`}
+                    alt="Company Logo"
+                    className="w-16 h-16 rounded-lg object-cover border-2 border-white shadow-md"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : jobsData.employer?.logo ? (
+                  <img
+                    src={jobsData.employer.logo.startsWith("http")
+                      ? jobsData.employer.logo
+                      : `${companyImage}${jobsData.employer.logo}`}
+                    alt="Company Logo"
+                    className="w-16 h-16 rounded-lg object-cover border-2 border-white shadow-md"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-200 to-blue-300 flex items-center justify-center text-xl font-bold text-blue-700 border-2 border-white shadow-md">
+                    {jobsData.employer?.name?.charAt(0)?.toUpperCase() || 
+                     jobsData.employerName?.charAt(0)?.toUpperCase() || 
+                     (jobsData.postedBy === "admin" ? "A" : "?")}
                   </div>
-                </div>
+                )}
               </div>
-              <p className="text-[#4C4C4C] text-[16px] leading-[20px] font-semibold">
-                Total Vacancy Candidate:{" "}
-                <span className="font-semibold text-[#000000] text-[20px] leading-[25px]">
-                  {jobsData.vacancyUsers}
-                </span>
-              </p>
-              <p className="text-[#4C4C4C] text-[16px] leading-[20px] font-semibold">
-                Total Standby :{" "}
-                <span className="font-semibold text-[#000000] text-[20px] leading-[25px]">
-                  {jobsData.standbyUsers}
-                </span>
-              </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2">
+                  <Briefcase className="w-5 h-5 text-blue-600" />
+                  <p className="text-lg font-semibold text-gray-900">
+                    {jobsData.employer?.name || jobsData.employer?.companyLegalName || jobsData.employerName || "N/A"}
+                  </p>
+                  {jobsData.postedBy && (
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      jobsData.postedBy === "admin" 
+                        ? "bg-blue-100 text-blue-700 border border-blue-200" 
+                        : "bg-green-100 text-green-700 border border-green-200"
+                    }`}>
+                      {jobsData.postedBy === "admin" ? "Admin Post" : "Employer Post"}
+                    </span>
+                  )}
+                </div>
+                {jobsData.outlet?.name && (
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <MapPin className="w-4 h-4" />
+                    <span className="text-sm">{jobsData.outlet.name}</span>
+                  </div>
+                )}
+                {(jobsData.outlet?.address || jobsData.outletAddress || jobsData.locationDetails) && (
+                  <div className="flex items-start gap-2 text-gray-600 mt-1">
+                    <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span className="text-sm">
+                      {jobsData.outlet?.address || jobsData.outletAddress || jobsData.locationDetails}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Key Info Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Job ID</p>
+                <p className="text-sm font-bold text-gray-900">
+                  {jobsData.jobId ? `#${jobsData.jobId.slice(-4)}` : (jobsData._id ? `#${convertIdToFourDigits(jobsData._id)}` : "N/A")}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Job Date</p>
+                <p className="text-sm font-bold text-gray-900">
+                  {jobsData.jobDate ? formatDate(jobsData.jobDate) : (jobsData.date ? formatDate(jobsData.date) : "N/A")}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Vacancy</p>
+                <p className="text-sm font-bold text-blue-600">
+                  {jobsData.currentFulfilment?.display || `${jobsData.currentFulfilment?.filled || 0}/${jobsData.currentFulfilment?.total || jobsData.totalPositions || 0}` || jobsData.vacancyUsers || "0"}
+                </p>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Total Wage</p>
+                <p className="text-sm font-bold text-green-600">
+                  ${jobsData.totalWages ? parseFloat(jobsData.totalWages.toString()).toFixed(2) : (jobsData.totalWage || "0.00")}
+                </p>
+              </div>
             </div>
           </div>
-          <div className="flex flex-col items-end py-4">
-            <button className="p-2 rounded-full bg-white mb-4 relative">
-              <Settings
-                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                className="w-7 h-7"
-              />
-            </button>
-            {isSettingsOpen && (
-              <div className="absolute right-24 mt-2 w-36 top-20 bg-white border border-gray-300 rounded-lg shadow-lg z-50">
-                <ul className="py-2">
-                  {/* Edit Candidate */}
-                  <li>
-                    <Link to={`/jobs/${jobId}/modify`}>
-                      <button className="flex items-center w-full px-4 py-2 text-sm text-[#000000] hover:bg-gray-100">
-                        <FiEdit3 className="w-4 h-4 mr-2 text-gray-500" />
-                        Modify
-                      </button>
-                    </Link>
-                  </li>
-                  <li>
-                    <button className="flex items-center w-full px-4 py-2 text-sm text-[#941F15] hover:bg-red-100">
-                      <FileX2
-                        className="w-4 h-4 mr-2"
-                        size={16}
-                        color="#E34E30"
-                      />
-                      Deactivate
-                    </button>
-                  </li>
-                  {/* Block Candidate */}
-                  <li>
-                    <button
-                      className="flex items-center w-full px-4 py-2 text-sm text-[#941F15] hover:bg-red-100"
-                      onClick={async () => {
-                        try {
-                          await axiosInstance.delete(`/admin/jobs/${jobId}`);
-                          navigate(-1); // Go back one page after successful cancellation
-                        } catch (error) {
-                          console.error("Error cancelling job:", error);
-                          // Optionally, show toast or alert here
-                        }
-                      }}
-                    >
-                      <Ban className="w-4 h-4 mr-2 text-red-500" />
-                      Cancel Job
-                    </button>
-                  </li>
-
-                </ul>
-              </div>
-            )}
-
-            <div className="text-right flex flex-col gap-4">
-              <p className="text-[#4C4C4C] text-[16px] leading-[20px] font-semibold">
-                Job ID:{" "}
-                <span className="font-normal text-[#000000] text-[16px] leading-[20px]">
-                  #{convertIdToFourDigits(jobsData.jobId)}
-                </span>
-              </p>
-              <p className="text-[#4C4C4C] text-[16px] leading-[20px] font-semibold">
-                Date:{" "}
-                <span className="font-normal text-[#000000] text-[16px] leading-[20px]">
-                  {jobsData.date}
-                  {/* {formatDate(`${jobsData?.dates[0]}`)} */}
-                </span>
-              </p>
-              <div className="flex flex-col ">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-6 h-6 " />
-                  <p className="font-normal text-[#000000] text-[16px] leading-[20px]">
-                    {jobsData.shortAddress}
-                  </p>
-                </div>
-                {/* <p className="text-[12px] text-[#0099FF] leading-[18px] font-normal underline">
-                  View on map
-                </p> */}
+          <div className="flex flex-col items-end lg:items-start gap-4">
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3">
+              <Link to={`/jobs/${jobId}/candidates`}>
+                <button className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-semibold shadow-md transition-colors">
+                  <UserCheck className="w-5 h-5" />
+                  View Candidates
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </Link>
+              {outlet && (
+                <Link to={`/jobs/${outlet}/outlate-attendnce`}>
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-semibold shadow-md transition-colors">
+                    <Clock className="w-5 h-5" />
+                    Attendance Rate
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                </Link>
+              )}
+              <div className="relative">
+                <button 
+                  className="p-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
+                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                >
+                  <Settings className="w-5 h-5 text-gray-700" />
+                </button>
+                {isSettingsOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                    <ul className="py-1">
+                      <li>
+                        <Link to={`/jobs/${jobId}/modify`}>
+                          <button className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors">
+                            <Edit className="w-4 h-4 mr-2 text-blue-600" />
+                            Edit Job
+                          </button>
+                        </Link>
+                      </li>
+                      <li className="border-t border-gray-100">
+                        <button 
+                          className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          onClick={async () => {
+                            try {
+                              const response = await axiosInstance.delete(`/jobs/${jobId}`);
+                              if (response.data?.success === false) {
+                                alert(response.data?.message || "Failed to cancel job");
+                                return;
+                              }
+                              navigate(-1);
+                            } catch (error: any) {
+                              console.error("Error cancelling job:", error);
+                              alert(error?.response?.data?.message || "Failed to cancel job");
+                            }
+                          }}
+                        >
+                          <Ban className="w-4 h-4 mr-2" />
+                          Cancel Job
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
-            <div className="mt-4 flex gap-4">
-              <Link to={`/jobs/${jobId}/candidates`}>
-                <button className="bg-purple-500 text-white px-4 py-2 rounded-xl flex items-center gap-2">
-                  View Candidates
-                  <ArrowRight className="w-7 h-7" />
-                </button>
-              </Link>
-              <Link to={`/jobs/${outlet}/outlate-attendnce`}>
-                <button className="bg-blue-500 text-white px-4 py-2 rounded-xl flex items-center gap-2">
-                  Outlet Attendance Rate
-                  <ArrowRight className="w-7 h-7" />
-                </button>
-              </Link>
+
+            {/* Additional Info */}
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 w-full lg:w-auto lg:min-w-[200px]">
+              <div className="space-y-3">
+                {jobsData.totalWorkingHours && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Working Hours</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {parseFloat(jobsData.totalWorkingHours.toString()).toFixed(2)} hrs
+                    </p>
+                  </div>
+                )}
+                {jobsData.shiftTiming?.display && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Shift Timing</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {jobsData.shiftTiming.display}
+                    </p>
+                  </div>
+                )}
+                {jobsData.applicationDeadline && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Application Deadline</p>
+                    <p className="text-sm font-semibold text-orange-600">
+                      {new Date(jobsData.applicationDeadline).toLocaleDateString('en-GB', { 
+                        day: 'numeric', 
+                        month: 'short', 
+                        year: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                )}
+                {jobsData.rateType && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Rate Type</p>
+                    <p className="text-sm font-semibold text-gray-900">{jobsData.rateType}</p>
+                  </div>
+                )}
+                {jobsData.payPerHour && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Pay Rate</p>
+                    <p className="text-sm font-semibold text-green-600">
+                      ${parseFloat(jobsData.payPerHour.toString()).toFixed(2)}/hr
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Shifts Table */}
-      {/* <div
-        className="w-full overflow-x-auto no-scrollbar pt-8 pb-4"
-        ref={scrollContainerRef}
-      >
-        <table className="table-auto w-full border-collapse relative"> */}
-      <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse relative">
+      {shifts.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF]">
+            <h2 className="text-lg font-semibold text-gray-900">Shift Details</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
 
-          <thead className="p-4">
-            <tr className="bg-[#EDF8FF]">
-              <th className="p-4 text-center whitespace-nowrap rounded-l-full "></th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-r border-[#C6C6C6] whitespace-nowrap ">
-                Shift Start Time
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Shift End time
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Shift ID
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Vacancy Filled
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Standby Filled
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Total Duration
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Rate Type
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Break Included
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Break Type
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Rate
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Total Wage
-              </th>
-              <th className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-[#4C4C4C] border-x border-[#C6C6C6] whitespace-nowrap">
-                Job Status
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {shifts.map((shift, index) => (
-              <tr key={index} className="border-b border-[#C6C6C6] relative">
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium text-gray-500 border-l border-[#C6C6C6]">
-                  <button className="p-4 hover:bg-gray-100 rounded-full">
-                    <MoreVertical
-                      className="h-6 w-6"
-                      color="#000000"
-                      onClick={() => handlePopupToggle(index)}
-                    />
-                  </button>
-                  {isPopupOpen === index && (
-                    <div className="absolute top-[80%] left-8 mt-1 w-32 bg-white shadow-md border border-gray-300 rounded-md z-10">
-                      <button
-                        className="flex items-center gap-2 p-2 w-full text-left text-gray-700 hover:bg-gray-100"
-                        onClick={() => handleActionClick("Edit Shift", index)}
-                      >
-                        <Edit size={16} />
-                        Edit Shift
-                      </button>
-                    </div>
-                  )}
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-r border-[#C6C6C6]">
-                  <span className="bg-[#048BE1] text-white px-3 py-2 text-center rounded-full">
-                    {/* {shift.startTime}:{shift.startTime.minutes}{" "}
-                  {shift.startTime.period} */}
-                    {shift.startTime}
-                  </span>
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  <span className="bg-[#048BE1] text-white px-3 py-2 text-center rounded-full">
-                    {/* {shift.endTime.hours}:{shift.endTime.minutes}{" "}
-                  {shift.endTime.period} */}
-                    {shift.endTime}
-                  </span>
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  {convertIdToFourDigits(shift.shiftId)}
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  <div className="flex items-center gap-4">
-                    <button
-                      className="px-2 py-2 bg-[#F1F1F1] rounded-full hover:bg-gray-300"
-                      onClick={() => handleDecrease(shift.id, "vacancyFilled")}
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <p>
-                      {shift.vacancy > 0 ? shift.vacancy : "_"}/
-                      {maxVacancy}
-                    </p>
-
-                    <button
-                      className="px-2 py-2 bg-[#F1F1F1] rounded-full hover:bg-gray-300"
-                      onClick={() =>
-                        handleIncrease(shift.id, "vacancyFilled", 3)
-                      }
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  <div className="flex items-center gap-4">
-                    <button
-                      className="px-2 py-2 bg-[#F1F1F1] rounded-full hover:bg-gray-300"
-                      onClick={() => handleDecrease(shift.id, "standbyFilled")}
-                    >
-                      <Minus className="w-5 h-5" />
-                    </button>
-                    <p>
-                      {shift.standbyVacancy > 0 ? shift.standbyVacancy : "_"}/
-                      {maxStandby}
-                    </p>
-
-                    <button
-                      className="px-2 py-2 bg-[#F1F1F1] rounded-full hover:bg-gray-300"
-                      onClick={() =>
-                        handleIncrease(shift.shiftId, "standbyFilled", 1)
-                      }
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
-                  </div>
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  {shift.totalDuration}
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  <p className="px-2 py-1 rounded-full bg-[#EDEDED]">
-                    {shift.rateType}
-                  </p>
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  {shift.breakIncluded}
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  <p
-                    className={`${shift.breakType === "Paid"
-                      ? "text-[#049609]"
-                      : "text-[#E34E30]"
-                      }`}
-                  >
-                    {shift.breakType}
-                  </p>
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  {shift.payRate}
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  {shift.totalWage}
-                </td>
-                <td className="p-4 text-center text-[16px] leading-[20px] truncate font-medium  border-x border-[#C6C6C6]">
-                  <p
-                    className={`px-2 py-1 rounded-full ${getStatusColor(jobsData.jobStatus)
-                      } `}
-                  >
-                    {jobsData.jobStatus}
-                  </p>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              <thead>
+                <tr className="bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF]">
+                  <th className="p-4 text-center whitespace-nowrap"></th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-r border-gray-200">
+                    Start Time
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    End Time
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Shift ID
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Vacancy
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Standby
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Duration
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Rate Type
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Break
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Break Type
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Rate/hr
+                  </th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-x border-gray-200">
+                    Total Wage
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {shifts.map((shift: any, index: number) => (
+                  <tr key={shift.shiftId || shift.id || index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors relative">
+                    <td className="p-4 text-center border-l border-gray-200">
+                      <div className="relative">
+                        <button 
+                          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                          onClick={() => handlePopupToggle(index)}
+                        >
+                          <MoreVertical className="h-5 w-5 text-gray-600" />
+                        </button>
+                        {isPopupOpen === index && (
+                          <div className="absolute left-0 top-full mt-1 w-36 bg-white shadow-xl border border-gray-200 rounded-lg z-10 overflow-hidden">
+                            <button
+                              className="flex items-center gap-2 px-4 py-2 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors"
+                              onClick={() => handleActionClick("Edit Shift", shift.shiftId || shift.id || index)}
+                            >
+                              <Edit size={16} className="text-blue-600" />
+                              Edit Shift
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4 text-center border-r border-gray-200">
+                      {shift.startTime || shift.shiftTiming?.startTime ? (
+                        <span className="bg-gradient-to-r from-[#048BE1] to-[#0066CC] text-white px-3 py-1.5 rounded-lg font-semibold text-sm">
+                          {shift.startTime || shift.shiftTiming.startTime}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">N/A</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      {shift.endTime || shift.shiftTiming?.endTime ? (
+                        <span className="bg-gradient-to-r from-[#048BE1] to-[#0066CC] text-white px-3 py-1.5 rounded-lg font-semibold text-sm">
+                          {shift.endTime || shift.shiftTiming.endTime}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">N/A</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <span className="text-sm font-medium text-gray-700">
+                        {shift.shiftId ? `#${shift.shiftId.slice(-4)}` : (shift.id ? convertIdToFourDigits(shift.id.toString()) : "N/A")}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                          onClick={() => handleDecrease(shift.id || shift.shiftId, "vacancyFilled")}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-semibold min-w-[40px]">
+                          {shift.vacancy || shift.vacancyFilled || 0}/{maxVacancy}
+                        </span>
+                        <button
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                          onClick={() => handleIncrease(shift.id || shift.shiftId, "vacancyFilled", maxVacancy)}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                          onClick={() => handleDecrease(shift.id || shift.shiftId, "standbyFilled")}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-semibold min-w-[40px]">
+                          {shift.standbyVacancy || shift.standbyFilled || 0}/{maxStandby}
+                        </span>
+                        <button
+                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                          onClick={() => handleIncrease(shift.id || shift.shiftId, "standbyFilled", maxStandby)}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <span className="text-sm font-medium text-gray-700">
+                        {shift.totalDuration || shift.totalWorkingHours ? `${parseFloat((shift.totalDuration || shift.totalWorkingHours).toString()).toFixed(2)} hrs` : "N/A"}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      {shift.rateType ? (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-md text-sm font-medium">
+                          {shift.rateType}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">N/A</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <span className="text-sm text-gray-700">
+                        {shift.breakIncluded || shift.breakDuration ? `${parseFloat((shift.breakIncluded || shift.breakDuration).toString()).toFixed(2)} hrs` : "N/A"}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      {shift.breakType ? (
+                        <span className={`text-sm font-semibold ${shift.breakType === "Paid" ? "text-green-600" : "text-red-600"}`}>
+                          {shift.breakType}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">N/A</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <span className="text-sm font-semibold text-gray-700">
+                        ${shift.payRate || shift.payPerHour ? parseFloat((shift.payRate || shift.payPerHour).toString()).toFixed(2) : "0.00"}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center border-x border-gray-200">
+                      <span className="text-sm font-bold text-green-600">
+                        ${shift.totalWage || shift.totalWages ? parseFloat((shift.totalWage || shift.totalWages).toString()).toFixed(2) : "0.00"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      
+      {shifts.length === 0 && jobsData.shiftTiming && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Shift Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <p className="text-sm text-gray-600 mb-1">Shift Timing</p>
+              <p className="text-lg font-bold text-blue-700">{jobsData.shiftTiming.display}</p>
+            </div>
+            {jobsData.totalWorkingHours && (
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600 mb-1">Total Hours</p>
+                <p className="text-lg font-bold text-gray-900">{parseFloat(jobsData.totalWorkingHours.toString()).toFixed(2)} hrs</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
 
       {/* <CustomScrollbar scrollContainerRef={scrollContainerRef} totalSteps={3} /> */}
 
-      {/* Job Scope and Requirements */}
-      <div className="mt-8 p-4">
-        <div>
-          <div className="flex items-center gap-2 py-3 text-[16px] leading-[20px] font-medium">
-            <RiFocus3Line className="w-6 h-6" />
-            <h2>Job Scope</h2>
+      {/* Job Description, Scope and Requirements */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        {jobsData.jobDescription && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <FileX2 className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
+            </div>
+            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {jobsData.jobDescription}
+            </p>
           </div>
-          <ul className="list-disc pl-6 mt-2 space-y-1 text-[16px] leading-[22px]">
-            <li>Station at tray collection section</li>
-            <li>Clearing & Cleaning of table and tray</li>
-            <li>Maintain floor cleanliness (Sweep/Mop)</li>
-            <li>Push trolley to the dishwashing area</li>
-          </ul>
-        </div>
+        )}
 
-        <div className="py-4">
-          <div className="flex items-center gap-2 py-3 text-[16px] leading-[20px] font-medium ">
-            <AiOutlineFileDone className="w-6 h-6" />
-            <h2>Job Requirements</h2>
+        {jobsData.jobRequirements && Array.isArray(jobsData.jobRequirements) && jobsData.jobRequirements.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <AiOutlineFileDone className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Job Requirements & Skills</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {jobsData.jobRequirements.map((requirement: string, index: number) => (
+                <span
+                  key={index}
+                  className="px-3 py-1.5 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium border border-blue-200"
+                >
+                  {requirement}
+                </span>
+              ))}
+            </div>
           </div>
-          <ul className="list-disc pl-6 mt-2 space-y-1 text-[16px] leading-[22px]">
-            <li>Black T-shirt</li>
-            <li>Dark colored long pants / Jeans</li>
-            <li>Covered Shoes</li>
-            <li>
-              Must arrive at least 15 mins before job start time for briefing
-            </li>
-            <li>Smoking is strictly not allowed</li>
-            <li>Do not turn up without prior notice</li>
-            <li>Adhere to safety protocols and company policies</li>
-          </ul>
-        </div>
+        )}
+
+        {jobsData.requirements && Array.isArray(jobsData.requirements) && jobsData.requirements.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <RiFocus3Line className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Additional Requirements</h2>
+            </div>
+            <ul className="list-disc pl-6 space-y-2 text-gray-700">
+              {jobsData.requirements.map((req: string, index: number) => (
+                <li key={index}>{req}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Penalties Section */}
-      <div className="mt-6 ">
-        <h2 className="text-[16px] leading-[19px] font-medium text-[#9F120E]">
-          Shift Cancellation Penalties
-        </h2>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Ban className="w-5 h-5 text-red-600" />
+          <h2 className="text-lg font-semibold text-gray-900">
+            Shift Cancellation Penalties
+          </h2>
+        </div>
 
-        <div className="">
-          {[
-            {
-              frame: "5 Times after applying",
-              penalty: "No Penalty",
-            },
-            {
-              frame: "> 48 Hours",
-              penalty: "No Penalty",
-            },
-            {
-              frame: "> 24 Hours (1st Time)",
-              penalty: "$5 Penalty",
-            },
-            {
-              frame: "> 24 Hours (2nd Time)",
-              penalty: "$10 Penalty",
-            },
-            {
-              frame: "> 24 Hours (3rd Time)",
-              penalty: "$15 Penalty",
-            },
-            {
-              frame: "No Show - During Shift",
-              penalty: "$50 Penalty",
-            },
-          ].map((item, index) => {
-            const penaltyValue = parseInt(
-              item.penalty.replace("$", "").replace(" Penalty", "")
-            );
+        <div className="space-y-3">
+          {penalties.length === 0 ? (
+            <p className="text-gray-500 text-sm py-4 text-center">
+              No penalty information available
+            </p>
+          ) : (
+            penalties.map((item: any, index: number) => {
+              // Handle different API response formats
+              const penaltyText = item.penalty || item.penaltyAmount || item.amount || "No Penalty";
+              const conditionText = item.condition || item.timeFrame || item.frame || item.description || "";
+              const penaltyValue = typeof penaltyText === 'string' 
+                ? parseInt(penaltyText.replace("$", "").replace(" Penalty", "").replace("No Penalty", "0"))
+                : (typeof penaltyText === 'number' ? penaltyText : 0);
 
             // Determine penalty text color
             const penaltyColor =
               penaltyValue >= 50
-                ? "text-[#941F15]" // Darkest red for $50 or more
+                ? "text-red-800 bg-red-50 border-red-200"
                 : penaltyValue >= 15
-                  ? "text-[#941F15]" // Dark red for $15 or more
+                  ? "text-red-700 bg-red-50 border-red-200"
                   : penaltyValue >= 10
-                    ? "text-[#BB2F23]" // Bold red for $10
+                    ? "text-red-600 bg-orange-50 border-orange-200"
                     : penaltyValue >= 5
-                      ? "text-[#D14236]" // Light red for $5
-                      : "text-[#797979]";
+                      ? "text-orange-600 bg-orange-50 border-orange-200"
+                      : "text-gray-600 bg-gray-50 border-gray-200";
 
-            return (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-16">
-                  <p className="text-[16px] leading-[22px] font-normal text-[#000000]">
-                    {item.frame}
+              // Format penalty display
+              const penaltyDisplay = typeof penaltyText === 'number' 
+                ? (penaltyText === 0 ? "No Penalty" : `$${penaltyText} Penalty`)
+                : penaltyText;
+
+              return (
+                <div 
+                  key={index} 
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                >
+                  <p className="text-sm font-medium text-gray-900">
+                    {conditionText}
+                  </p>
+                  <p
+                    className={`py-1.5 px-4 rounded-lg text-sm font-semibold border ${penaltyColor}`}
+                  >
+                    {penaltyDisplay}
                   </p>
                 </div>
-                <p
-                  className={`py-3 px-6 text-[16px] leading-[19px] font-medium ${penaltyColor}`}
-                >
-                  {item.penalty}
-                </p>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
+        
+        {/* Note for backend team - remove this after API is implemented */}
+        {usingDefaultPenalties && penalties.length > 0 && (
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-xs text-yellow-800">
+              <strong>Note:</strong> Currently using default penalty values. 
+              Please implement <code className="bg-yellow-100 px-1 rounded">GET /admin/penalty-configuration</code> endpoint 
+              or include <code className="bg-yellow-100 px-1 rounded">penalties</code> array in job response.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

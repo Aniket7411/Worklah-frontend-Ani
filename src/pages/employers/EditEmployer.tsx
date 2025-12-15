@@ -81,6 +81,12 @@ const EditEmployer: React.FC = () => {
     try {
       setLoading(true);
       const response = await axiosInstance.get(`/employers/${id}`);
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || "Failed to fetch employer data");
+      }
+      
       const employer = response?.data?.employer || response?.data;
 
       if (employer) {
@@ -260,6 +266,12 @@ const EditEmployer: React.FC = () => {
       const response = await axiosInstance.put(`/employers/${id}`, formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to update employer");
+        return;
+      }
 
       if (response.status === 200 || response.status === 201) {
         toast.success("Employer updated successfully!");

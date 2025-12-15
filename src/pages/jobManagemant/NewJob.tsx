@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
+import { useAuth } from "../../context/AuthContext";
 import {
   ArrowLeft,
   Briefcase,
@@ -14,6 +15,8 @@ import toast from "react-hot-toast";
 interface Employer {
   id: string;
   name: string;
+  companyLegalName?: string;
+  companyLogo?: string;
   outlets?: Array<{ id: string; address: string; name?: string }>;
 }
 
@@ -30,10 +33,12 @@ interface Shift {
 
 const NewJob: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [employers, setEmployers] = useState<Employer[]>([]);
   const [selectedEmployer, setSelectedEmployer] = useState<string>("");
   const [availableOutlets, setAvailableOutlets] = useState<Array<{ id: string; address: string; name?: string }>>([]);
+  const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
   const [formData, setFormData] = useState({
     jobDate: new Date().toISOString().split("T")[0],
@@ -282,16 +287,17 @@ const NewJob: React.FC = () => {
       toast.error("Job roles is required");
       return false;
     }
-    if (!formData.employerId && !formData.employerName.trim()) {
-      toast.error("Please select an employer or enter employer name");
+    // Employer is now optional - admin can post directly
+    // if (!formData.employerId && !formData.employerName.trim()) {
+    //   toast.error("Please select an employer or enter employer name");
+    //   return false;
+    // }
+    if (!formData.useManualOutlet && !formData.outletId && selectedEmployer !== "admin") {
+      toast.error("Please select an outlet or post as Admin");
       return false;
     }
-    if (!formData.useManualOutlet && !formData.outletId) {
-      toast.error("Please select an outlet");
-      return false;
-    }
-    if (formData.useManualOutlet && !formData.outletAddress.trim()) {
-      toast.error("Please enter outlet address");
+    if (formData.useManualOutlet && !formData.outletAddress.trim() && selectedEmployer !== "admin") {
+      toast.error("Please enter outlet address or post as Admin");
       return false;
     }
     if (!formData.locationDetails.trim()) {
@@ -311,22 +317,35 @@ const NewJob: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // Determine postedBy based on user role
+      const userRole = user?.role || "ADMIN";
+      const isAdmin = userRole === "ADMIN";
+      const isEmployer = userRole === "EMPLOYER";
+
+      // If user is employer, auto-set their employerId
+      const finalEmployerId = isEmployer && user?.employerId
+        ? user.employerId
+        : (selectedEmployer === "admin" ? null : (formData.employerId || null));
+
+      const finalPostedBy = isAdmin ? "admin" : "employer";
+
       const jobData = {
         jobDate: formData.jobDate,
         jobTitle: formData.jobTitle,
         jobDescription: formData.jobDescription,
         jobRoles: formData.jobRoles,
-        employerId: formData.employerId || null,
-        employerName: formData.employerName || null, // For manual entry
+        employerId: finalEmployerId,
+        employerName: selectedEmployer === "admin" ? "Admin/System" : (formData.employerName || null), // For admin or manual entry
+        postedBy: finalPostedBy, // REQUIRED: Set based on user role
         outletId: formData.useManualOutlet ? null : formData.outletId,
-        outletAddress: formData.useManualOutlet ? formData.outletAddress : null, // For manual entry
+        outletAddress: formData.useManualOutlet ? (formData.outletAddress || formData.locationDetails) : null, // For manual entry
         totalPositions: formData.totalPositions,
         foodHygieneCertRequired: formData.foodHygieneCertRequired,
         jobStatus: formData.jobStatus,
         applicationDeadline: formData.applicationDeadline || null,
         jobRequirements: formData.jobRequirements
-          ? formData.jobRequirements.split(",").map((r) => r.trim()).filter((r) => r)
-          : [],
+          ? formData.jobRequirements.split(",").map((r) => r.trim()).filter((r) => r) // Ensure array format
+          : [], // Always send as array, never null or string
         locationDetails: formData.locationDetails,
         contactInfo: {
           phone: formData.contactPhone,
@@ -345,18 +364,86 @@ const NewJob: React.FC = () => {
 
       const response = await axiosInstance.post("/jobs/create", jobData);
 
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || "Failed to create job");
+      }
+
       if (response.status === 201 || response.status === 200) {
         toast.success("Job posting created successfully!");
         navigate("/jobs/job-management");
       }
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Failed to create job posting");
+      // Enhanced error handling with detailed messages
+      const errorResponse = error?.response?.data;
+      const errorMessage = errorResponse?.message || "Failed to create job posting";
+      const errorDetails = errorResponse?.error || "";
+      const statusCode = error?.response?.status;
+
+      // Detailed error messages based on status code and error type
+      let displayMessage = errorMessage;
+
+      if (statusCode === 400) {
+        // Validation errors
+        if (errorMessage.includes("date") || errorMessage.includes("Date")) {
+          displayMessage = `Date Validation Error: ${errorMessage}. Please select a valid date (today or future).`;
+        } else if (errorMessage.includes("jobRequirements") || errorMessage.includes("array") || errorMessage.includes("skills")) {
+          displayMessage = `Data Format Error: ${errorMessage}. Skills/Requirements must be provided as an array.`;
+        } else if (errorMessage.includes("required") || errorMessage.includes("missing")) {
+          displayMessage = `Missing Required Field: ${errorMessage}. Please fill in all required fields.`;
+        } else if (errorMessage.includes("employer")) {
+          displayMessage = `Employer Error: ${errorMessage}. Please select a valid employer or post as Admin.`;
+        } else {
+          displayMessage = `Validation Error: ${errorMessage}`;
+        }
+      } else if (statusCode === 401) {
+        displayMessage = "Authentication Error: Please log in again to continue.";
+      } else if (statusCode === 403) {
+        displayMessage = "Permission Denied: You don't have permission to create jobs.";
+      } else if (statusCode === 404) {
+        displayMessage = "Resource Not Found: The requested resource doesn't exist.";
+      } else if (statusCode === 500) {
+        displayMessage = "Server Error: Something went wrong on the server. Please try again later or contact support.";
+      } else if (errorDetails && errorDetails.includes("not a valid enum value")) {
+        displayMessage = "Configuration Error: There's an issue with the employer data. Please contact support or try selecting a different employer.";
+      } else if (!error?.response) {
+        displayMessage = "Network Error: Unable to connect to the server. Please check your internet connection.";
+      }
+
+      // Show error with longer duration for important errors
+      toast.error(displayMessage, {
+        duration: statusCode === 400 || statusCode === 500 ? 6000 : 4000
+      });
+
+      // Log detailed error for debugging
+      console.error("Job creation error:", {
+        statusCode,
+        message: errorMessage,
+        details: errorDetails,
+        fullError: error
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const totalWages = shifts.reduce((sum, shift) => sum + shift.totalWages, 0);
+
+  // Get today's date in YYYY-MM-DD format for min date validation
+  const getTodayDateString = () => {
+    const today = new Date();
+    return today.toISOString().split("T")[0];
+  };
+
+  // Get minimum date for application deadline (should be >= job date or today)
+  const getMinDeadlineDate = () => {
+    if (formData.jobDate) {
+      const jobDate = new Date(formData.jobDate);
+      const today = new Date();
+      return jobDate >= today ? formData.jobDate : getTodayDateString();
+    }
+    return getTodayDateString();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
@@ -392,6 +479,7 @@ const NewJob: React.FC = () => {
                     name="jobDate"
                     value={formData.jobDate}
                     onChange={handleChange}
+                    min={getTodayDateString()}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
@@ -448,9 +536,9 @@ const NewJob: React.FC = () => {
                 {/* Employer */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer <span className="text-red-500">*</span>
+                    Employer <span className="text-gray-400 text-xs">(Optional - Admin can post directly)</span>
                   </label>
-                  {employers.length > 0 ? (
+                  <div className="space-y-2">
                     <select
                       name="employerId"
                       value={selectedEmployer}
@@ -458,58 +546,89 @@ const NewJob: React.FC = () => {
                         setSelectedEmployer(e.target.value);
                         setFormData((prev) => ({
                           ...prev,
-                          employerId: e.target.value,
-                          employerName: "",
+                          employerId: e.target.value === "admin" ? "" : e.target.value,
+                          employerName: e.target.value === "admin" ? "Admin/System" : "",
                           outletId: "",
-                          useManualOutlet: false
+                          useManualOutlet: e.target.value === "admin"
                         }));
                       }}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="">Select Employer</option>
+                      <option value="">Select Employer (Optional)</option>
+                      <option value="admin">Admin/System (Post as Admin)</option>
                       {employers.map((employer) => (
                         <option key={employer.id} value={employer.id}>
                           {(employer as any).name || (employer as any).companyLegalName || `Employer ${employer.id}`}
                         </option>
                       ))}
                     </select>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-xs text-gray-500 mb-2">No employers found. Enter manually:</p>
-                      <input
-                        type="text"
-                        name="employerName"
-                        value={formData.employerName}
-                        onChange={handleChange}
-                        placeholder="Enter employer name"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  )}
-                  {employers.length > 0 && !selectedEmployer && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmployer("");
-                          setFormData((prev) => ({ ...prev, employerId: "", employerName: "" }));
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 underline"
-                      >
-                        Or enter employer name manually
-                      </button>
-                      {!selectedEmployer && (
-                        <input
-                          type="text"
-                          name="employerName"
-                          value={formData.employerName}
-                          onChange={handleChange}
-                          placeholder="Enter employer name manually"
-                          className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      )}
-                    </div>
-                  )}
+
+                    {/* Display Company Logo and Name when employer is selected */}
+                    {selectedEmployer && selectedEmployer !== "admin" && (() => {
+                      const selectedEmployerData = employers.find((e) => e.id === selectedEmployer);
+                      const companyName = (selectedEmployerData as any)?.name || (selectedEmployerData as any)?.companyLegalName || formData.employerName;
+                      const companyLogo = (selectedEmployerData as any)?.companyLogo;
+                      return (
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-3">
+                          {companyLogo && (
+                            <img
+                              src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
+                              alt="Company Logo"
+                              className="w-12 h-12 rounded-lg object-cover border border-gray-300"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          )}
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
+                            {companyLogo && (
+                              <p className="text-xs text-gray-500 mt-1">Company logo displayed</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {selectedEmployer !== "admin" && (
+                      <div className="mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEmployer("admin");
+                            setFormData((prev) => ({
+                              ...prev,
+                              employerId: "",
+                              employerName: "Admin/System",
+                              outletId: "",
+                              useManualOutlet: true
+                            }));
+                          }}
+                          className="text-xs text-blue-600 hover:text-blue-800 underline"
+                        >
+                          Or post as Admin/System
+                        </button>
+                        {!selectedEmployer && (
+                          <input
+                            type="text"
+                            name="employerName"
+                            value={formData.employerName}
+                            onChange={handleChange}
+                            placeholder="Or enter employer name manually"
+                            className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        )}
+                      </div>
+                    )}
+                    {selectedEmployer === "admin" && (
+                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-700">
+                          <strong>Posting as Admin:</strong> This job will be posted by the admin/system.
+                          No company logo will be displayed as this is an admin post. You can enter outlet details manually below.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Outlet */}
@@ -593,8 +712,12 @@ const NewJob: React.FC = () => {
                     name="applicationDeadline"
                     value={formData.applicationDeadline}
                     onChange={handleChange}
+                    min={`${getMinDeadlineDate()}T00:00`}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Deadline must be on or after {getMinDeadlineDate()}
+                  </p>
                 </div>
 
                 {/* Location Details */}
@@ -629,19 +752,22 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Job Requirements */}
+                {/* Job Requirements / Skills */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated)</span>
+                    Skills / Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated, will be saved as array)</span>
                   </label>
                   <textarea
                     name="jobRequirements"
                     value={formData.jobRequirements}
                     onChange={handleChange}
                     rows={3}
-                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness"
+                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness (Enter comma-separated values)"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Note: These will be converted to an array format when saved. Example: "Skill1, Skill2" → ["Skill1", "Skill2"]
+                  </p>
                 </div>
 
                 {/* Contact Information */}

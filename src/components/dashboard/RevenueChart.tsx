@@ -27,8 +27,22 @@ const RevenueChart = () => {
         // Fetch revenue data from backend
         const revenueResponse = await axiosInstance.get("/dashboard/revenue");
         
+        // Check for success field according to API spec
+        if (revenueResponse.data?.success === false) {
+          console.error("Failed to fetch revenue data:", revenueResponse.data?.message);
+          setRevenueData([]);
+          setTotalRevenue(0);
+          return;
+        }
+        
         // Backend should return complete data structure
-        const revenueChartData = revenueResponse?.data?.monthlyData || [];
+        // Also check for new revenueChart format
+        const revenueChartData = revenueResponse?.data?.revenueChart?.data
+          ? revenueResponse.data.revenueChart.labels.map((label: string, index: number) => ({
+              name: label,
+              uv: revenueResponse.data.revenueChart.data[index] || 0,
+            }))
+          : (revenueResponse?.data?.monthlyData || []);
 
         if (!Array.isArray(revenueChartData) || revenueChartData.length === 0) {
           setRevenueData([]);
@@ -42,11 +56,24 @@ const RevenueChart = () => {
           const total = revenueChartData.reduce((sum: number, item: any) => sum + (item.uv || item.amount || 0), 0);
           setTotalRevenue(total);
         }
+        
+        // Also set revenue stats if available
+        if (revenueResponse?.data?.revenue) {
+          const revenueStats = revenueResponse.data.revenue;
+          setTotalRevenue(revenueStats.total || 0);
+        }
 
         // Fetch new applications from backend
         const applicationsResponse = await axiosInstance.get(
           "/dashboard/recent-applications?limit=4"
         );
+        
+        // Check for success field according to API spec
+        if (applicationsResponse.data?.success === false) {
+          console.error("Failed to fetch applications:", applicationsResponse.data?.message);
+          setApplicants([]);
+          return;
+        }
         const applications = applicationsResponse?.data?.applications || [];
 
         if (!Array.isArray(applications) || applications.length === 0) {

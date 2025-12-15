@@ -66,8 +66,22 @@ const JobPostChart = () => {
         // Fetch monthly job post data from backend
         const chartResponse = await axiosInstance.get("/dashboard/job-posts");
         
+        // Check for success field according to API spec
+        if (chartResponse.data?.success === false) {
+          console.error("Failed to fetch job post data:", chartResponse.data?.message);
+          setJobPostData([]);
+          setTotalJobsPosted(0);
+          return;
+        }
+        
         // Backend should return complete data structure with all months
-        const chartData = chartResponse?.data?.monthlyData || [];
+        // Also check for new jobPostingChart format
+        const chartData = chartResponse?.data?.jobPostingChart?.data 
+          ? chartResponse.data.jobPostingChart.labels.map((label: string, index: number) => ({
+              month: label,
+              jobsPosted: chartResponse.data.jobPostingChart.data[index] || 0,
+            }))
+          : (chartResponse?.data?.monthlyData || []);
         
         if (!Array.isArray(chartData) || chartData.length === 0) {
           setJobPostData([]);
@@ -83,7 +97,15 @@ const JobPostChart = () => {
         }
 
         // Fetch recent posted jobs from backend
-        const jobsResponse = await axiosInstance.get("/admin/jobs?limit=3&sortOrder=desc");
+        const jobsResponse = await axiosInstance.get("/jobs?limit=3&sortOrder=desc");
+        
+        // Check for success field according to API spec
+        if (jobsResponse.data?.success === false) {
+          console.error("Failed to fetch jobs:", jobsResponse.data?.message);
+          setRecentJobs([]);
+          return;
+        }
+        
         const jobs = jobsResponse?.data?.jobs || [];
         
         if (!Array.isArray(jobs) || jobs.length === 0) {

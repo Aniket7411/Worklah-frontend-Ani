@@ -59,6 +59,14 @@ const AddEmployer: React.FC = () => {
   const [outlets, setOutlets] = useState<Outlet[]>([{ address: "" }]);
   const [showAccountManager, setShowAccountManager] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [generateCredentials, setGenerateCredentials] = useState(true);
+  const [employerCredentials, setEmployerCredentials] = useState<{
+    email: string;
+    password: string;
+    emailSent?: boolean;
+    error?: string;
+  } | null>(null);
+  const [showCredentials, setShowCredentials] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -175,13 +183,44 @@ const AddEmployer: React.FC = () => {
         }
       });
 
+      // Add credential generation flag
+      formDataToSend.append("generateCredentials", String(generateCredentials));
+
       const response = await axiosInstance.post("/employers/create", formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to add employer");
+        return;
+      }
+
       if (response.status === 201 || response.status === 200) {
-        toast.success("Employer added successfully!");
-        navigate("/employers");
+        // If credentials were generated, show them
+        if (generateCredentials && response.data?.credentials) {
+          const credentials = response.data.credentials;
+          setEmployerCredentials({
+            email: credentials.email || formData.emailAddress || "",
+            password: credentials.password || "",
+            emailSent: credentials.emailSent !== false && credentials.sentToEmail !== false,
+            error: credentials.error || undefined,
+          });
+          setShowCredentials(true);
+          
+          // Show warning if email failed to send
+          if (credentials.emailSent === false || credentials.sentToEmail === false) {
+            toast.error(
+              credentials.error || "Employer created successfully, but email could not be sent. Please share credentials manually.",
+              { duration: 6000 }
+            );
+          } else {
+            toast.success("Employer added successfully! Credentials generated and sent via email.");
+          }
+        } else {
+          toast.success("Employer added successfully!");
+          navigate("/employers");
+        }
       }
     } catch (error: unknown) {
       if (error instanceof AxiosError) {
@@ -587,6 +626,27 @@ const AddEmployer: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Generate Login Credentials */}
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={generateCredentials}
+                    onChange={(e) => setGenerateCredentials(e.target.checked)}
+                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">
+                      Generate Login Credentials for Employer
+                    </span>
+                    <p className="text-xs text-gray-500 mt-1">
+                      If checked, system will generate email and password for employer login. 
+                      {formData.emailAddress && " Email will be sent to: " + formData.emailAddress}
+                    </p>
+                  </div>
+                </label>
+              </div>
             </section>
 
             {/* Section 4: Outlets */}
@@ -686,6 +746,126 @@ const AddEmployer: React.FC = () => {
             </div>
           </div>
         </form>
+
+        {/* Credentials Modal */}
+        {showCredentials && employerCredentials && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-gray-900">Employer Login Credentials</h3>
+                <button
+                  onClick={() => {
+                    setShowCredentials(false);
+                    navigate("/employers");
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {employerCredentials?.emailSent === false ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-sm text-red-800 font-medium mb-2">
+                    ⚠️ Email Delivery Failed
+                  </p>
+                  <p className="text-xs text-red-700">
+                    {employerCredentials.error || "The credentials could not be sent via email. Please share these credentials with the employer manually."}
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                  <p className="text-sm text-yellow-800 font-medium mb-2">
+                    ⚠️ Important: Save these credentials securely
+                  </p>
+                  <p className="text-xs text-yellow-700">
+                    These credentials have been sent to the employer's email address. 
+                    Please share them with the employer if needed.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={employerCredentials.email}
+                      readOnly
+                      className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(employerCredentials.email);
+                        toast.success("Email copied to clipboard!");
+                      }}
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type={showAccountManager ? "text" : "password"}
+                      value={employerCredentials.password}
+                      readOnly
+                      className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(employerCredentials.password);
+                        toast.success("Password copied to clipboard!");
+                      }}
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountManager(!showAccountManager)}
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                    >
+                      {showAccountManager ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setShowCredentials(false);
+                    navigate("/employers");
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    const text = `Email: ${employerCredentials.email}\nPassword: ${employerCredentials.password}`;
+                    navigator.clipboard.writeText(text);
+                    toast.success("Credentials copied to clipboard!");
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Copy All
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

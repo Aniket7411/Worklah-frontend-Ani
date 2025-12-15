@@ -98,8 +98,14 @@ const EditCandidateProfile: React.FC = () => {
     try {
       setLoading(true);
       const response = await axiosInstance.get(`/admin/candidates/${id}`);
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || "Failed to fetch candidate data");
+      }
+      
       const data = response.data;
-      const candidate = data.candidateProfile || data;
+      const candidate = data.candidate || data.candidateProfile || data;
 
       // Determine registration type
       let registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)" = "Singaporean/PR";
@@ -271,6 +277,12 @@ const EditCandidateProfile: React.FC = () => {
       const response = await axiosInstance.put(`/admin/candidates/${id}`, formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to update employee profile");
+        return;
+      }
 
       if (response.status === 200 || response.status === 201) {
         toast.success("Employee profile updated successfully!");

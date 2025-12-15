@@ -1,8 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-export default function PaymentFilters() {
+interface PaymentFiltersProps {
+  onApply?: (filters: any) => void
+  onClose?: () => void
+}
+
+export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps) {
+  const navigate = useNavigate()
   const [isStatusOpen, setIsStatusOpen] = useState(true)
   const [isDateRangeOpen, setIsDateRangeOpen] = useState(true)
   const [isRateTypeOpen, setIsRateTypeOpen] = useState(true)
@@ -160,11 +167,99 @@ export default function PaymentFilters() {
         )}
       </div>
 
-      <button
-        className="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
-      >
-        Search
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            // Build query params
+            const params = new URLSearchParams()
+            
+            // Add status filters
+            const selectedStatuses = Object.entries(filters.status)
+              .filter(([_, checked]) => checked)
+              .map(([key, _]) => key.charAt(0).toUpperCase() + key.slice(1))
+            if (selectedStatuses.length > 0) {
+              params.append('status', selectedStatuses.join(','))
+            }
+            
+            // Add date range
+            if (filters.dateRange.startDate) {
+              params.append('dateFrom', filters.dateRange.startDate)
+            }
+            if (filters.dateRange.endDate) {
+              params.append('dateTo', filters.dateRange.endDate)
+            }
+            
+            // Add rate type filters
+            const selectedRateTypes = Object.entries(filters.rateType)
+              .filter(([_, checked]) => checked)
+              .map(([key, _]) => {
+                const mapping: { [key: string]: string } = {
+                  flatRate: 'Flat Rate',
+                  weekdayRate: 'Weekday',
+                  weekendRate: 'Weekend',
+                  publicHolidayRate: 'Public Holiday'
+                }
+                return mapping[key] || key
+              })
+            if (selectedRateTypes.length > 0) {
+              params.append('rateType', selectedRateTypes.join(','))
+            }
+            
+            // Apply filters
+            if (onApply) {
+              onApply({
+                status: selectedStatuses,
+                dateRange: filters.dateRange,
+                rateType: selectedRateTypes
+              })
+            }
+            
+            // Update URL
+            const queryString = params.toString()
+            if (queryString) {
+              navigate(`/payments?${queryString}`)
+            } else {
+              navigate('/payments')
+            }
+            
+            if (onClose) {
+              onClose()
+            }
+          }}
+          className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors"
+        >
+          Apply Filters
+        </button>
+        <button
+          onClick={() => {
+            // Reset filters
+            setFilters({
+              status: {
+                rejected: false,
+                pending: false,
+                approved: false
+              },
+              dateRange: {
+                startDate: '',
+                endDate: ''
+              },
+              rateType: {
+                flatRate: false,
+                weekdayRate: false,
+                weekendRate: false,
+                publicHolidayRate: false
+              }
+            })
+            navigate('/payments')
+            if (onClose) {
+              onClose()
+            }
+          }}
+          className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+        >
+          Clear
+        </button>
+      </div>
     </div>
   )
 }

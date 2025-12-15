@@ -1,6 +1,8 @@
 import {
   Ban,
+  Briefcase,
   CalendarDays,
+  Clock,
   Edit,
   Eye,
   FileX2,
@@ -87,6 +89,19 @@ const JobManagement = () => {
     }
   };
 
+  // Helper function to get dynamic date range that includes future dates
+  const getDefaultDateRange = () => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    // Include current year and next year (to cover jobs posted in 2025, 2026, etc.)
+    return {
+      start: new Date(`${currentYear - 1}-01-01`), // 1 year ago
+      end: new Date(`${currentYear + 1}-12-31`),   // 1 year from now
+    };
+  };
+
+  const defaultDateRange = getDefaultDateRange();
+
   const [queryParams, setQueryParams] = useState({
     search: "",
     status: "",
@@ -95,14 +110,15 @@ const JobManagement = () => {
     page: 1,
     limit: 5,
     sortOrder: "desc",
-    startDate: new Date("2024-01-01").toISOString().split("T")[0],
-    endDate: new Date("2024-12-31").toISOString().split("T")[0],
+    // ✅ Removed hardcoded dates - date filters are now optional
+    // startDate and endDate will only be added when user explicitly selects dates
   });
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [jobsData, setJobsData] = useState<any[]>([]);
   const [totalData, setTotalData] = useState<any>({});
-  const [startDate, setStartDate] = useState(new Date("2024-01-01"));
-  const [endDate, setEndDate] = useState(new Date("2024-12-31"));
+  // ✅ Initialize with dynamic date range (for UI display only, not applied by default)
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
   const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -191,19 +207,25 @@ const JobManagement = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
-        return "bg-[#E5FFF6] text-green-600";
+        return "bg-[#E5FFF6] text-green-700 border border-green-200";
       case "Pending":
-        return "bg-[#FFF4E8] text-[#D37700]";
+        return "bg-[#FFF4E8] text-[#D37700] border border-orange-200";
       case "Ongoing":
-        return "bg-[#FFF4E8] text-[#D37700]";
+        return "bg-[#FFF4E8] text-[#D37700] border border-orange-200";
+      case "Upcoming":
+        return "bg-blue-50 text-blue-700 border border-blue-200";
       case "Cancelled":
-        return "bg-[#FFF0ED] text-[#E34E30]";
+        return "bg-[#FFF0ED] text-[#E34E30] border border-red-200";
       case "Completed":
-        return "bg-[#E0F0FF] text-[#0099FF]";
+        return "bg-[#E0F0FF] text-[#0099FF] border border-blue-200";
+      case "Filled":
+        return "bg-purple-50 text-purple-700 border border-purple-200";
+      case "Expired":
+        return "bg-gray-100 text-gray-600 border border-gray-300";
       case "Deactivated":
-        return "bg-gray-200 text-gray-600";
+        return "bg-gray-200 text-gray-600 border border-gray-300";
       default:
-        return "bg-gray-100 text-gray-600";
+        return "bg-gray-100 text-gray-600 border border-gray-300";
     }
   };
 
@@ -261,6 +283,13 @@ const JobManagement = () => {
         ...params,
       };
 
+      // Add new filter parameters
+      if (params.search) updatedParams.search = params.search;
+      if (params.date) updatedParams.date = params.date;
+      if (params.location) updatedParams.location = params.location;
+      if (params.rateType) updatedParams.rateType = params.rateType;
+      if (params.postedBy) updatedParams.postedBy = params.postedBy;
+
       // If outlets are selected, prefer outlet filtering
       if (selectedOutletIds.length > 0) {
         // If backend supports multiple outlet IDs, send them
@@ -287,6 +316,22 @@ const JobManagement = () => {
         delete updatedParams.statuses;
       }
 
+      // ✅ Only add date filters if they are explicitly set (not empty)
+      // If startDate or endDate are in params but empty/null, remove them
+      if (updatedParams.startDate === "" || updatedParams.startDate === null || updatedParams.startDate === undefined) {
+        delete updatedParams.startDate;
+      }
+      if (updatedParams.endDate === "" || updatedParams.endDate === null || updatedParams.endDate === undefined) {
+        delete updatedParams.endDate;
+      }
+      // Only apply date range if both dates are provided
+      if (updatedParams.startDate && !updatedParams.endDate) {
+        delete updatedParams.startDate;
+      }
+      if (updatedParams.endDate && !updatedParams.startDate) {
+        delete updatedParams.endDate;
+      }
+
       // Remove empty values
       Object.keys(updatedParams).forEach(key => {
         if (updatedParams[key] === "" || updatedParams[key] === null || updatedParams[key] === undefined || (Array.isArray(updatedParams[key]) && updatedParams[key].length === 0)) {
@@ -304,7 +349,12 @@ const JobManagement = () => {
         }
       });
 
-      const response = await axiosInstance.get(`/admin/jobs?${queryParams.toString()}`);
+      const response = await axiosInstance.get(`/jobs?${queryParams.toString()}`);
+
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || 'Failed to fetch jobs');
+      }
 
       if (response.data?.jobs) {
         setJobsData(response.data.jobs);
@@ -331,13 +381,19 @@ const JobManagement = () => {
     }));
   };
 
-  const totalPages = Math.ceil(
-    (totalData?.totalCount || 0) / queryParams.limit
+  // Handle pagination according to API spec structure
+  const pagination = totalData?.pagination || {};
+  const totalPages = pagination.totalPages || Math.ceil(
+    (pagination.totalItems || totalData?.totalCount || 0) / queryParams.limit
   );
 
   const updateJobStatus = async (jobId, status) => {
     try {
-      await axiosInstance.put(`/jobs/${jobId}`, { status });
+      const response = await axiosInstance.put(`/jobs/${jobId}`, { status });
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || 'Failed to update job status');
+      }
       // console.log(`Job ${jobId} status updated to ${status}`);
     } catch (error) {
       console.error(`Failed to update job ${jobId} status:`, error);
@@ -369,6 +425,18 @@ const JobManagement = () => {
     setCurrentPage(queryParams.page);
   }, [queryParams, selectedEmployers]);
 
+  // ✅ Sync date pickers with queryParams (e.g., when switching tabs)
+  useEffect(() => {
+    if (queryParams.startDate && queryParams.endDate) {
+      setStartDate(new Date(queryParams.startDate));
+      setEndDate(new Date(queryParams.endDate));
+    } else {
+      // Clear date pickers if no date filters in queryParams
+      setStartDate(null);
+      setEndDate(null);
+    }
+  }, [queryParams.startDate, queryParams.endDate]);
+
   const handlePopupToggle = (index: number) => {
     setIsPopupOpen(isPopupOpen === index ? null : index);
   };
@@ -383,13 +451,17 @@ const JobManagement = () => {
     }
     if (action === "Cancel Job") {
       axiosInstance
-        .put(`/admin/jobs/cancel/${id}`)
-        .then(() => {
-          fetchJobDetails(queryParams);
-          // Assign the jobs array or an empty array
+        .put(`/jobs/${id}`, { status: 'Cancelled' })
+        .then((response) => {
+          // Check for success field according to API spec
+          if (response.data?.success !== false) {
+            fetchJobDetails(queryParams);
+          } else {
+            console.error("Failed to cancel job:", response.data?.message);
+          }
         })
         .catch((error) => {
-          console.error("Error fetching job details:", error);
+          console.error("Error cancelling job:", error);
         });
     }
     setIsPopupOpen(null);
@@ -455,20 +527,50 @@ const JobManagement = () => {
             </div>
             <button
               onClick={() => {
-                const formattedStart = startDate.toISOString().split("T")[0];
-                const formattedEnd = endDate.toISOString().split("T")[0];
+                // ✅ Only apply date filters if both dates are selected
+                if (startDate && endDate) {
+                  const formattedStart = startDate.toISOString().split("T")[0];
+                  const formattedEnd = endDate.toISOString().split("T")[0];
 
-                setQueryParams((prev) => ({
-                  ...prev,
-                  startDate: formattedStart,
-                  endDate: formattedEnd,
-                  page: 1,
-                }));
+                  setQueryParams((prev) => ({
+                    ...prev,
+                    startDate: formattedStart,
+                    endDate: formattedEnd,
+                    page: 1,
+                  }));
+                } else {
+                  // ✅ Clear date filters if dates are not selected
+                  setQueryParams((prev) => {
+                    const newParams = { ...prev, page: 1 };
+                    delete newParams.startDate;
+                    delete newParams.endDate;
+                    return newParams;
+                  });
+                }
               }}
-              className="btn-primary text-xs sm:text-sm whitespace-nowrap"
+              disabled={!startDate || !endDate}
+              className="btn-primary text-xs sm:text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Apply Filter
             </button>
+            {/* ✅ Add Clear Filter button when dates are set */}
+            {(queryParams.startDate || queryParams.endDate) && (
+              <button
+                onClick={() => {
+                  setStartDate(null);
+                  setEndDate(null);
+                  setQueryParams((prev) => {
+                    const newParams = { ...prev, page: 1 };
+                    delete newParams.startDate;
+                    delete newParams.endDate;
+                    return newParams;
+                  });
+                }}
+                className="btn-secondary text-xs sm:text-sm whitespace-nowrap"
+              >
+                Clear Dates
+              </button>
+            )}
 
             <Link to="/jobs/create-job">
               <button className="p-3 sm:p-[14px] rounded-full shadow-md bg-white hover:bg-gray-50 transition-all duration-200 border border-gray-200">
@@ -498,7 +600,11 @@ const JobManagement = () => {
                         ...prev,
                         status: "", // Clear single status when using filter
                         statuses: newFilters.status || [], // Use array of statuses from filter
-                        location: newFilters.city?.[0] || "",
+                        location: newFilters.location || newFilters.city?.[0] || "",
+                        search: newFilters.search || "",
+                        date: newFilters.date || "",
+                        rateType: newFilters.rateType || "",
+                        postedBy: newFilters.postedBy || "",
                         page: 1,
                       }));
                       setActiveTab("All Jobs"); // Reset tab when filter is applied
@@ -601,15 +707,10 @@ const JobManagement = () => {
                 if (tab === "All Jobs") {
                   newStatus = "";
                   newStatuses = [];
-                  // Reset to default date range
-                  const defaultStart = new Date("2024-01-01");
-                  const defaultEnd = new Date("2024-12-31");
-                  setStartDate(defaultStart);
-                  setEndDate(defaultEnd);
-                  dateParams = {
-                    startDate: defaultStart.toISOString().split("T")[0],
-                    endDate: defaultEnd.toISOString().split("T")[0],
-                  };
+                  // ✅ For "All Jobs", don't apply date filters - show all jobs
+                  setStartDate(null);
+                  setEndDate(null);
+                  dateParams = {}; // No date filters - shows all jobs
                 } else if (tab === "Jobs-Today") {
                   newStatus = "";
                   newStatuses = [];
@@ -664,52 +765,101 @@ const JobManagement = () => {
         </div>
 
 
+        {/* Active Filters Indicator */}
+        {(queryParams.startDate || queryParams.endDate || queryParams.status || queryParams.search || queryParams.location) && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium text-blue-900">Active Filters:</span>
+              {queryParams.startDate && queryParams.endDate && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                  Date: {new Date(queryParams.startDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - {new Date(queryParams.endDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                </span>
+              )}
+              {queryParams.status && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                  Status: {queryParams.status}
+                </span>
+              )}
+              {queryParams.search && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                  Search: {queryParams.search}
+                </span>
+              )}
+              {queryParams.location && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                  Location: {queryParams.location}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setStartDate(null);
+                setEndDate(null);
+                setQueryParams({
+                  search: "",
+                  status: "",
+                  statuses: [],
+                  location: "",
+                  page: 1,
+                  limit: 5,
+                  sortOrder: "desc",
+                });
+                setActiveTab("All Jobs");
+              }}
+              className="text-xs text-blue-700 hover:text-blue-900 font-medium underline"
+            >
+              Clear All Filters
+            </button>
+          </div>
+        )}
+
         {/* Jobs Table */}
-        <div className="table-wrapper rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full border-collapse">
+        <div className="table-wrapper rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
 
             <thead>
-              <tr className="bg-[#EDF8FF]">
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
-                  Job Roles
+              <tr className="bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF]">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  Job Title & Details
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                   Job Date
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                   Shifts
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                   Shift Timings
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden lg:table-cell">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden lg:table-cell">
                   Shift ID
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                   Employer
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden md:table-cell">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden md:table-cell">
                   Outlet
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden lg:table-cell">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden lg:table-cell">
                   Breaks
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden xl:table-cell">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden xl:table-cell">
                   Duration
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                   Vacancy
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden lg:table-cell">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden lg:table-cell">
                   Standby
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap hidden xl:table-cell">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden xl:table-cell">
                   Total Wage
                 </th>
-                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-medium text-gray-700 whitespace-nowrap">
+                <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
                   Status
                 </th>
-                <th className="p-3 md:p-4 text-center sticky right-0 bg-[#EDF8FF]">
+                <th className="p-3 md:p-4 text-center sticky right-0 bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF] z-10">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -739,47 +889,112 @@ const JobManagement = () => {
               ) : jobsData.length > 0 ? (
                 jobsData.map((row: any, index: number) => (
                   <tr
-                    key={row._id || index}
-                    className="border-b border-gray-300"
+                    key={row.jobId || row._id || index}
+                    className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                   >
-                    {/* Job Name & ID */}
+                    {/* Job Title & ID */}
                     <td
-                      className="p-3 md:p-4 text-left border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => handleActionClick("View", row._id)}
+                      className="p-4 md:p-5 text-left border-b border-gray-200 cursor-pointer hover:bg-blue-50/50 transition-colors group"
+                      onClick={() => handleActionClick("View", row._id || row.jobId)}
                     >
-                      <div className={`${getBorderColor(row.jobStatus)} pl-2`}>
-                        <div className="font-medium text-blue-600 hover:underline text-sm sm:text-base">
-                          {row.jobName || "N/A"}
+                      <div className={`${getBorderColor(row.jobStatus || row.status)} pl-3 py-1`}>
+                        <div className="font-bold text-blue-700 hover:text-blue-800 group-hover:underline text-sm sm:text-base mb-1.5 flex items-center gap-2">
+                          {row.jobTitle || row.jobName || "N/A"}
+                          <span className="text-xs font-normal text-gray-400">
+                            {row.jobId ? `#${row.jobId.slice(-4)}` : (row._id ? `#${convertIdToFourDigits(row._id)}` : "")}
+                          </span>
                         </div>
-                        <div className="text-xs sm:text-sm text-gray-500">
-                          ID: #{convertIdToFourDigits(row._id)}
-                        </div>
+                        {row.jobRoles && (
+                          <div className="text-xs text-gray-600 mb-2 font-medium">
+                            {row.jobRoles}
+                          </div>
+                        )}
+                        {/* Skills/Requirements */}
+                        {row.jobRequirements && Array.isArray(row.jobRequirements) && row.jobRequirements.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {row.jobRequirements.slice(0, 2).map((skill: string, idx: number) => (
+                              <span
+                                key={idx}
+                                className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-md font-medium border border-blue-200"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                            {row.jobRequirements.length > 2 && (
+                              <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs rounded-md font-medium border border-gray-200">
+                                +{row.jobRequirements.length - 2} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {row.jobDescription && (
+                          <div className="text-xs text-gray-500 mt-2 line-clamp-2">
+                            {row.jobDescription.substring(0, 80)}{row.jobDescription.length > 80 ? "..." : ""}
+                          </div>
+                        )}
                       </div>
                     </td>
 
                     {/* Job Date */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm">
-                      {row.date ? formatDate(row.date) : "N/A"}
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200">
+                      <div className="flex flex-col gap-1.5">
+                        {row.jobDate ? (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <CalendarDays className="w-4 h-4 text-blue-600" />
+                              <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                                {formatDate(row.jobDate)}
+                              </div>
+                            </div>
+                            {row.applicationDeadline && (
+                              <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-md border border-orange-200">
+                                Deadline: {new Date(row.applicationDeadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </div>
+                            )}
+                          </>
+                        ) : row.date ? (
+                          <div className="flex items-center gap-1.5">
+                            <CalendarDays className="w-4 h-4 text-blue-600" />
+                            <span className="text-xs sm:text-sm font-semibold">{formatDate(row.date)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs sm:text-sm text-gray-400">N/A</span>
+                        )}
+                      </div>
                     </td>
                     {/* Number of Shifts */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm">
-                      {row.shifts?.length || "0"}
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200">
+                      <div className="flex items-center justify-center w-10 h-10 bg-blue-50 rounded-full">
+                        <span className="text-sm font-bold text-blue-700">
+                          {row.shifts?.length || row.shiftTiming ? (row.shifts?.length || 1) : "0"}
+                        </span>
+                      </div>
                     </td>
                     {/* Shift Timings */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200">
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200">
                       <div className="flex flex-col gap-1.5">
-                        {row.shifts?.length > 0
-                          ? row.shifts.slice(0, 2).map((shift, i) => (
-                            <div
-                              key={i}
-                              className="bg-[#048BE1] px-2 py-1 rounded-full font-medium text-white text-xs"
-                            >
-                              {`${shift.startTime} - ${shift.endTime}`}
-                            </div>
-                          ))
-                          : <span className="text-xs sm:text-sm text-gray-500">N/A</span>}
-                        {row.shifts?.length > 2 && (
-                          <span className="text-xs text-gray-500">+{row.shifts.length - 2} more</span>
+                        {row.shiftTiming?.display ? (
+                          <div className="bg-gradient-to-r from-[#048BE1] to-[#0066CC] px-3 py-1.5 rounded-lg font-semibold text-white text-xs shadow-sm">
+                            {row.shiftTiming.display}
+                          </div>
+                        ) : row.shifts?.length > 0 ? (
+                          <>
+                            {row.shifts.slice(0, 2).map((shift: any, i: number) => (
+                              <div
+                                key={i}
+                                className="bg-gradient-to-r from-[#048BE1] to-[#0066CC] px-3 py-1.5 rounded-lg font-semibold text-white text-xs shadow-sm"
+                              >
+                                {shift.startTime && shift.endTime 
+                                  ? `${shift.startTime} - ${shift.endTime}`
+                                  : shift.shiftTiming?.display || "N/A"}
+                              </div>
+                            ))}
+                            {row.shifts.length > 2 && (
+                              <span className="text-xs text-gray-500 font-medium">+{row.shifts.length - 2} more shifts</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs sm:text-sm text-gray-400 italic">No shifts</span>
                         )}
                       </div>
                     </td>
@@ -795,124 +1010,236 @@ const JobManagement = () => {
                     </td>
 
                     {/* Employer */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200">
-                      <div className="flex items-center gap-2">
-                        {row.employer?.logo ? (
-                          <img
-                            className="w-6 h-6 sm:w-8 sm:h-8 rounded object-cover"
-                            src={`${companyImage}${row.employer.logo}`}
-                            alt="Company Logo"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
-                            {row.employer?.name?.charAt(0)?.toUpperCase() || "?"}
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2.5">
+                          {row.employer?.companyLogo ? (
+                            <img
+                              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border-2 border-gray-200 shadow-sm"
+                              src={row.employer.companyLogo.startsWith("http") 
+                                ? row.employer.companyLogo 
+                                : `${companyImage}${row.employer.companyLogo}`}
+                              alt="Company Logo"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : row.employer?.logo ? (
+                            <img
+                              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border-2 border-gray-200 shadow-sm"
+                              src={`${companyImage}${row.employer.logo}`}
+                              alt="Company Logo"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-sm font-bold text-blue-700 border-2 border-blue-200 shadow-sm">
+                              {row.employer?.name?.charAt(0)?.toUpperCase() || 
+                               row.employerName?.charAt(0)?.toUpperCase() || 
+                               (row.postedBy === "admin" ? "A" : "?")}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs sm:text-sm font-semibold text-gray-900 truncate mb-1">
+                              {row.employer?.name || row.employer?.companyLegalName || row.employerName || "N/A"}
+                            </div>
+                            {row.postedBy && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full inline-block font-semibold ${
+                                row.postedBy === "admin" 
+                                  ? "bg-blue-100 text-blue-700 border border-blue-200" 
+                                  : "bg-green-100 text-green-700 border border-green-200"
+                              }`}>
+                                {row.postedBy === "admin" ? "Admin Post" : "Employer Post"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {row.contactInfo && (row.contactInfo.phone !== "N/A" || row.contactInfo.email !== "N/A") && (
+                          <div className="text-xs text-gray-500 space-y-0.5">
+                            {row.contactInfo.phone && row.contactInfo.phone !== "N/A" && (
+                              <div className="flex items-center gap-1">
+                                <PhoneCall className="w-3 h-3" />
+                                <span>{row.contactInfo.phone}</span>
+                              </div>
+                            )}
+                            {row.contactInfo.email && row.contactInfo.email !== "N/A" && (
+                              <div className="truncate">{row.contactInfo.email}</div>
+                            )}
                           </div>
                         )}
-                        <span className="text-xs sm:text-sm truncate">{row.employer?.name || "N/A"}</span>
                       </div>
                     </td>
                     {/* Outlet */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 hidden md:table-cell">
-                      <div className="flex items-center gap-2">
-                        {row.outlet?.logo ? (
-                          <img
-                            className="w-6 h-6 sm:w-8 sm:h-8 rounded object-cover"
-                            src={`${companyImage}${row.outlet.logo}`}
-                            alt="Outlet Logo"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
-                            {row.outlet?.name?.charAt(0)?.toUpperCase() || "?"}
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200 hidden md:table-cell">
+                      <div className="flex flex-col gap-1.5">
+                        <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                          {row.outlet?.name || row.outlet?.id || "N/A"}
+                        </div>
+                        <div className="text-xs text-gray-600 truncate max-w-[150px] flex items-start gap-1">
+                          <span className="text-gray-400">📍</span>
+                          <span>{row.outlet?.address || row.outletAddress || row.locationDetails || "N/A"}</span>
+                        </div>
+                        {row.locationDetails && row.outlet?.address && row.outlet.address !== row.locationDetails && (
+                          <div className="text-xs text-gray-500 truncate max-w-[150px]">
+                            {row.locationDetails}
                           </div>
                         )}
-                        <div>
-                          <div className="text-xs sm:text-sm font-medium">{row.outlet?.name || "N/A"}</div>
-                          <div className="text-xs text-gray-500 truncate max-w-[120px]">
-                            {row.outlet?.location || "N/A"}
-                          </div>
-                        </div>
                       </div>
                     </td>
                     {/* Breaks */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm hidden lg:table-cell">
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200 hidden lg:table-cell">
                       <div className="flex flex-col gap-1.5">
-                        {row.shifts?.length > 0
-                          ? row.shifts.map((shift, i) => {
+                        {row.breakDuration ? (
+                          <div className="text-xs sm:text-sm font-semibold text-gray-700">
+                            {parseFloat(row.breakDuration.toString()).toFixed(2)} hrs
+                          </div>
+                        ) : row.shifts?.length > 0 ? (
+                          row.shifts.map((shift: any, i: number) => {
                             const breakParts = shift.breakIncluded?.split(" ") || [];
                             const breakType = breakParts[2] || "";
 
                             return (
                               <div key={i} className="font-medium">
-                                <span className="text-gray-700">{`${breakParts[0] || ""} ${breakParts[1] || ""} `}</span>
+                                <span className="text-gray-700 text-xs sm:text-sm">{`${breakParts[0] || ""} ${breakParts[1] || ""} `}</span>
                                 <span
-                                  className={
+                                  className={`text-xs sm:text-sm ${
                                     breakType === "Paid"
-                                      ? "text-green-600"
-                                      : "text-red-600"
-                                  }
+                                      ? "text-green-600 font-semibold"
+                                      : "text-red-600 font-semibold"
+                                  }`}
                                 >
                                   {breakType}
                                 </span>
                               </div>
                             );
                           })
-                          : "N/A"}
+                        ) : (
+                          <span className="text-xs sm:text-sm text-gray-400">N/A</span>
+                        )}
                       </div>
                     </td>
 
                     {/* Total Duration */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm hidden xl:table-cell">
-                      {row.shifts?.[0]?.duration || "N/A"}
+                    <td className="p-4 md:p-5 text-left border-b border-gray-200 hidden xl:table-cell">
+                      <div className="flex flex-col gap-1.5">
+                        {row.totalWorkingHours ? (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-4 h-4 text-blue-600" />
+                              <div className="text-xs sm:text-sm font-bold text-gray-900">
+                                {parseFloat(row.totalWorkingHours.toString()).toFixed(2)} hrs
+                              </div>
+                            </div>
+                            {row.breakDuration && parseFloat(row.breakDuration.toString()) > 0 && (
+                              <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
+                                Break: {parseFloat(row.breakDuration.toString()).toFixed(2)} hrs
+                              </div>
+                            )}
+                          </>
+                        ) : row.shifts?.[0]?.duration ? (
+                          <div className="text-xs sm:text-sm font-medium">{row.shifts[0].duration}</div>
+                        ) : (
+                          <div className="text-xs sm:text-sm text-gray-400">N/A</div>
+                        )}
+                      </div>
                     </td>
                     {/* Vacancy Users */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm font-medium">
-                      {row.vacancyUsers || "0"}
+                    <td className="p-3 md:p-4 text-left border-b border-gray-200">
+                      <div className="flex flex-col gap-1">
+                        {row.currentFulfilment ? (
+                          <>
+                            <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                              {row.currentFulfilment.display || `${row.currentFulfilment.filled}/${row.currentFulfilment.total}`}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {row.totalPositions || row.currentFulfilment.total} positions
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs sm:text-sm font-medium">
+                            {row.vacancyUsers || row.totalPositions || "0"}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     {/* Standby Users */}
                     <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm hidden lg:table-cell">
                       {row.standbyUsers || "0"}
                     </td>
                     {/* Total Wage */}
-                    <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm hidden xl:table-cell">
-                      ${row.totalWage || "0"}
+                    <td className="p-3 md:p-4 text-left border-b border-gray-200 hidden xl:table-cell">
+                      <div className="flex flex-col gap-1">
+                        {row.totalWages ? (
+                          <>
+                            <div className="text-xs sm:text-sm font-semibold text-green-700">
+                              ${parseFloat(row.totalWages.toString()).toFixed(2)}
+                            </div>
+                            {row.payPerHour && (
+                              <div className="text-xs text-gray-500">
+                                ${row.payPerHour}/hr
+                              </div>
+                            )}
+                            {row.rateType && (
+                              <div className="text-xs text-gray-500">
+                                {row.rateType}
+                              </div>
+                            )}
+                          </>
+                        ) : row.totalWage ? (
+                          <div className="text-xs sm:text-sm font-semibold text-green-700">
+                            ${parseFloat(row.totalWage.toString()).toFixed(2)}
+                          </div>
+                        ) : (
+                          <div className="text-xs sm:text-sm text-gray-500">$0.00</div>
+                        )}
+                      </div>
                     </td>
                     {/* Job Status */}
                     <td className="p-3 md:p-4 text-left border-b border-gray-200">
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          row.jobStatus
-                        )}`}
-                      >
-                        {row.jobStatus || "N/A"}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block w-fit ${getStatusColor(
+                            row.jobStatus || row.status
+                          )}`}
+                        >
+                          {row.jobStatus || row.status || "N/A"}
+                        </span>
+                        {row.foodHygieneCertRequired && (
+                          <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full inline-block w-fit">
+                            Cert Required
+                          </span>
+                        )}
+                      </div>
                     </td>
                     {/* Actions */}
-                    <td className="p-3 md:p-4 text-center border-b border-gray-200 sticky right-0 bg-white">
+                    <td className="p-3 md:p-4 text-center border-b border-gray-200 sticky right-0 bg-white z-10">
                       <div className="relative">
                         <button
                           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                           onClick={() => handlePopupToggle(index)}
+                          aria-label="Actions"
                         >
-                          <MoreVertical className="h-4 w-4" />
+                          <MoreVertical className="h-4 w-4 text-gray-600" />
                         </button>
                         {isPopupOpen === index && (
-                          <div className="absolute right-0 top-full mt-1 w-36 bg-white shadow-lg border border-gray-200 rounded-lg z-20">
+                          <div className="absolute right-0 top-full mt-1 w-40 bg-white shadow-xl border border-gray-200 rounded-lg z-20 overflow-hidden">
                             <button
-                              className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                              onClick={() => handleActionClick("View", row._id)}
+                              className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors border-b border-gray-100"
+                              onClick={() => handleActionClick("View", row._id || row.jobId)}
                             >
-                              <Eye size={16} /> View
+                              <Eye size={16} className="text-blue-600" /> View Details
                             </button>
                             <button
-                              className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                              onClick={() => handleActionClick("Modify", row._id)}
+                              className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors border-b border-gray-100"
+                              onClick={() => handleActionClick("Modify", row._id || row.jobId)}
                             >
-                              <Edit size={16} /> Modify
+                              <Edit size={16} className="text-blue-600" /> Edit Job
                             </button>
                             <button
-                              className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
+                              className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
                               onClick={() =>
-                                handleActionClick("Cancel Job", row._id)
+                                handleActionClick("Cancel Job", row._id || row.jobId)
                               }
                             >
                               <Ban size={16} color="#E34E30" /> Cancel Job
@@ -925,13 +1252,24 @@ const JobManagement = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="14" className="text-center py-4">
-                    No jobs available
+                  <td colSpan={14} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                        <Briefcase className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <div className="text-gray-500 font-medium">No jobs available</div>
+                      <div className="text-sm text-gray-400">
+                        {queryParams.startDate || queryParams.endDate 
+                          ? "Try adjusting your date filters" 
+                          : "Create a new job posting to get started"}
+                      </div>
+                    </div>
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* <CustomScrollbar

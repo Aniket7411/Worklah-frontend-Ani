@@ -17,6 +17,8 @@ import Loader from "../../components/Loader.jsx";
 interface Employer {
   id: string;
   name: string;
+  companyLegalName?: string;
+  companyLogo?: string;
   outlets?: Array<{ id: string; address: string; name?: string }>;
 }
 
@@ -76,6 +78,16 @@ const ModifyJob: React.FC = () => {
 
   const [rateTypes, setRateTypes] = useState<string[]>([]);
   const [defaultPayRates, setDefaultPayRates] = useState<{ [key: string]: number }>({});
+  const IMAGE_BASE_URL = "https://worklah.onrender.com";
+
+  // Get selected employer data for display
+  const selectedEmployerData = selectedEmployer 
+    ? employers.find((e) => e.id === selectedEmployer) 
+    : null;
+  const companyName = selectedEmployerData 
+    ? ((selectedEmployerData as any)?.name || (selectedEmployerData as any)?.companyLegalName || formData.employerName)
+    : "";
+  const companyLogo = selectedEmployerData ? (selectedEmployerData as any)?.companyLogo : null;
 
   useEffect(() => {
     fetchEmployers();
@@ -386,13 +398,65 @@ const ModifyJob: React.FC = () => {
       };
 
       const response = await axiosInstance.put(`/jobs/${jobId}`, jobData);
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || "Failed to update job");
+      }
 
       if (response.status === 200 || response.status === 201) {
         toast.success("Job posting updated successfully!");
         navigate(`/jobs/${jobId}`);
       }
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Failed to update job posting");
+      // Enhanced error handling with detailed messages
+      const errorResponse = error?.response?.data;
+      const errorMessage = errorResponse?.message || "Failed to update job posting";
+      const errorDetails = errorResponse?.error || "";
+      const statusCode = error?.response?.status;
+
+      // Detailed error messages based on status code and error type
+      let displayMessage = errorMessage;
+
+      if (statusCode === 400) {
+        // Validation errors
+        if (errorMessage.includes("date") || errorMessage.includes("Date")) {
+          displayMessage = `Date Validation Error: ${errorMessage}. Please select a valid date (today or future).`;
+        } else if (errorMessage.includes("jobRequirements") || errorMessage.includes("array") || errorMessage.includes("skills")) {
+          displayMessage = `Data Format Error: ${errorMessage}. Skills/Requirements must be provided as an array.`;
+        } else if (errorMessage.includes("required") || errorMessage.includes("missing")) {
+          displayMessage = `Missing Required Field: ${errorMessage}. Please fill in all required fields.`;
+        } else if (errorMessage.includes("employer")) {
+          displayMessage = `Employer Error: ${errorMessage}. Please select a valid employer or post as Admin.`;
+        } else {
+          displayMessage = `Validation Error: ${errorMessage}`;
+        }
+      } else if (statusCode === 401) {
+        displayMessage = "Authentication Error: Please log in again to continue.";
+      } else if (statusCode === 403) {
+        displayMessage = "Permission Denied: You don't have permission to update jobs.";
+      } else if (statusCode === 404) {
+        displayMessage = "Resource Not Found: The job you're trying to update doesn't exist.";
+      } else if (statusCode === 500) {
+        displayMessage = "Server Error: Something went wrong on the server. Please try again later or contact support.";
+      } else if (errorDetails && errorDetails.includes("not a valid enum value")) {
+        displayMessage = "Configuration Error: There's an issue with the employer data. Please contact support or try selecting a different employer.";
+      } else if (!error?.response) {
+        displayMessage = "Network Error: Unable to connect to the server. Please check your internet connection.";
+      }
+
+      // Show error with longer duration for important errors
+      toast.error(displayMessage, {
+        duration: statusCode === 400 || statusCode === 500 ? 6000 : 4000
+      });
+
+      // Log detailed error for debugging
+      console.error("Job update error:", {
+        statusCode,
+        message: errorMessage,
+        details: errorDetails,
+        fullError: error
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -438,6 +502,7 @@ const ModifyJob: React.FC = () => {
                     name="jobDate"
                     value={formData.jobDate}
                     onChange={handleChange}
+                    min={new Date().toISOString().split("T")[0]}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
@@ -507,28 +572,56 @@ const ModifyJob: React.FC = () => {
                     Employer <span className="text-red-500">*</span>
                   </label>
                   {employers.length > 0 ? (
-                    <select
-                      name="employerId"
-                      value={selectedEmployer}
-                      onChange={(e) => {
-                        setSelectedEmployer(e.target.value);
-                        setFormData((prev) => ({
-                          ...prev,
-                          employerId: e.target.value,
-                          employerName: "",
-                          outletId: "",
-                          useManualOutlet: false
-                        }));
-                      }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select Employer</option>
-                      {employers.map((employer) => (
-                        <option key={employer.id} value={employer.id}>
-                          {(employer as any).name || (employer as any).companyLegalName || `Employer ${employer.id}`}
-                        </option>
-                      ))}
-                    </select>
+                    <>
+                      <select
+                        name="employerId"
+                        value={selectedEmployer}
+                        onChange={(e) => {
+                          setSelectedEmployer(e.target.value);
+                          setFormData((prev) => ({
+                            ...prev,
+                            employerId: e.target.value,
+                            employerName: "",
+                            outletId: "",
+                            useManualOutlet: false
+                          }));
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select Employer</option>
+                        {employers.map((employer) => (
+                          <option key={employer.id} value={employer.id}>
+                            {(employer as any).name || (employer as any).companyLegalName || `Employer ${employer.id}`}
+                          </option>
+                        ))}
+                      </select>
+                      
+                       {/* Display Company Logo and Name when employer is selected */}
+                       {selectedEmployer && selectedEmployerData && (
+                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-3">
+                           {companyLogo ? (
+                             <img
+                               src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
+                               alt="Company Logo"
+                               className="w-12 h-12 rounded-lg object-cover border border-gray-300"
+                               onError={(e) => {
+                                 (e.target as HTMLImageElement).style.display = "none";
+                               }}
+                             />
+                           ) : (
+                             <div className="w-12 h-12 rounded-lg bg-gray-200 border border-gray-300 flex items-center justify-center">
+                               <span className="text-xs text-gray-500">No Logo</span>
+                             </div>
+                           )}
+                           <div>
+                             <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
+                             <p className="text-xs text-gray-500 mt-1">
+                               {companyLogo ? "Company logo displayed (optional)" : "Company logo not available (optional)"}
+                             </p>
+                           </div>
+                         </div>
+                       )}
+                    </>
                   ) : (
                     <div className="space-y-2">
                       <p className="text-xs text-gray-500 mb-2">No employers found. Enter manually:</p>
@@ -649,8 +742,12 @@ const ModifyJob: React.FC = () => {
                     name="applicationDeadline"
                     value={formData.applicationDeadline}
                     onChange={handleChange}
+                    min={`${formData.jobDate || new Date().toISOString().split("T")[0]}T00:00`}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Deadline must be on or after job date ({formData.jobDate || new Date().toISOString().split("T")[0]})
+                  </p>
                 </div>
 
                 {/* Location Details */}
@@ -685,19 +782,22 @@ const ModifyJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Job Requirements */}
+                {/* Job Requirements / Skills */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated)</span>
+                    Skills / Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated, will be saved as array)</span>
                   </label>
                   <textarea
                     name="jobRequirements"
                     value={formData.jobRequirements}
                     onChange={handleChange}
                     rows={3}
-                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness"
+                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness (Enter comma-separated values)"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Note: These will be converted to an array format when saved. Example: "Skill1, Skill2" → ["Skill1", "Skill2"]
+                  </p>
                 </div>
 
                 {/* Contact Information */}

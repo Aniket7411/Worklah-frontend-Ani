@@ -48,6 +48,10 @@ const EmployerTable: React.FC = () => {
     try {
       const response = await axiosInstance.get(`/employers?page=${currentPage}&limit=10`);
 
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || "Failed to fetch employers");
+      }
 
       if (!response.data || !Array.isArray(response.data.employers)) {
         throw new Error("Invalid API response format");
@@ -76,7 +80,9 @@ const EmployerTable: React.FC = () => {
 
 
       setEmployers(employerData);
-      setTotalPages(response.data.totalPages || 1); // Ensure total pages updates correctly
+      // Handle pagination according to API spec structure
+      const pagination = response.data.pagination || {};
+      setTotalPages(pagination.totalPages || response.data.totalPages || 1);
       setErrorMessage(null);
     } catch (error) {
       setErrorMessage("Failed to fetch employers. Please try again later.");
@@ -115,7 +121,13 @@ const EmployerTable: React.FC = () => {
     if (!confirmDelete) return;
 
     try {
-      await axiosInstance.delete(`/employers/${id}`);
+      const response = await axiosInstance.delete(`/employers/${id}`);
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        alert(response.data?.message || "Failed to delete employer");
+        return;
+      }
 
       setEmployers((prevEmployers) => prevEmployers.filter(emp => emp.employerId !== id));
 

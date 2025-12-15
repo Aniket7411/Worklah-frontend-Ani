@@ -1,11 +1,13 @@
 import React, { createContext, useState, useContext, useEffect, PropsWithChildren } from 'react';
 import { axiosInstance } from '../lib/authInstances';
 import Cookies from 'js-cookie';
+import toast from 'react-hot-toast';
 
 interface User {
   email: string;
   fullName: string;
-  role: 'ADMIN' | 'USER';
+  role: 'ADMIN' | 'USER' | 'EMPLOYER';
+  employerId?: string; // For employer users
 }
 
 interface AuthContextType {
@@ -42,11 +44,19 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           return;
         }
 
-        const response = await axiosInstance.get('/user/authenticated/auth', {
+        const response = await axiosInstance.get('/user/me', {
           timeout: 10000,
         });
         
-        const userData = response?.data;
+        // Check for success field according to API spec
+        if (response.data?.success === false) {
+          setIsAuthenticated(false);
+          setUser(null);
+          Cookies.remove('authToken');
+          return;
+        }
+
+        const userData = response?.data?.user || response?.data;
         if (userData) {
           setUser(userData);
           setIsAuthenticated(true);
@@ -74,6 +84,13 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const login = async (email: string, password: string) => {
     try {
       const response = await axiosInstance.post('/user/login', { email, password });
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || 'Login failed. Please check your credentials.');
+        return false;
+      }
+
       const userData = response?.data?.user;
       const token = response?.data?.token;
       
@@ -86,21 +103,36 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       }
       
       setIsAuthenticated(true);
+      toast.success('Login successful!');
       return true;
     } catch (error: any) {
-      console.error('Login failed:', error);
+      const errorMessage = error?.response?.data?.message || error?.message || 'Login failed. Please check your credentials and try again.';
+      toast.error(errorMessage);
       return false;
     }
   };
 
   const signup = async (fullName: string, email: string, password: string) => {
     try {
-      const response = await axiosInstance.post('/user/signup', { fullName, email, password });
-      setUser(response.data.user);
-      setIsAuthenticated(true);
-      return true;
-    } catch (error) {
-      console.error('Signup failed:', error);
+      const response = await axiosInstance.post('/user/register', { fullName, email, password });
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || 'Signup failed. Please try again.');
+        return false;
+      }
+
+      const userData = response?.data?.user;
+      if (userData) {
+        setUser(userData);
+        setIsAuthenticated(true);
+        toast.success('Account created successfully!');
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'Signup failed. Please try again.';
+      toast.error(errorMessage);
       return false;
     }
   };
@@ -108,8 +140,10 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const logout = async () => {
     try {
       await axiosInstance.post('/user/logout', {});
+      toast.success('Logged out successfully');
     } catch (error) {
       // Continue with logout even if API call fails
+      toast.error('Error during logout, but you have been logged out locally');
     } finally {
       setUser(null);
       setIsAuthenticated(false);

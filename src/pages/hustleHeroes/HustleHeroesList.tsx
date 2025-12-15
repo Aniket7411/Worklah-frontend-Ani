@@ -76,6 +76,13 @@ export default function HustleHeroesList() {
     const fetchEmployees = async () => {
       try {
         const response = await axiosInstance.get("/admin/candidates");
+        
+        // Check for success field according to API spec
+        if (response.data?.success === false) {
+          console.error("Failed to fetch candidates:", response.data?.message);
+          return;
+        }
+        
         if (response?.data?.candidates) {
           setAllEmployees(response.data.candidates);
         }
@@ -239,15 +246,21 @@ export default function HustleHeroesList() {
         action: action === "Approve" ? "approve" : "reject",
         rejectionReason: rejectReasons[id] || "",
       })
-      .then(() => {
+      .then((response) => {
+        // Check for success field according to API spec
+        if (response.data?.success === false) {
+          alert(response.data?.message || `Failed to ${action.toLowerCase()} candidate`);
+          return;
+        }
+        
         alert(`Candidate ${action}d`);
         setEmployees((prev) =>
           prev.map((emp) =>
             emp.id === id
               ? {
-                ...emp,
-                workPassStatus: action === "Approve" ? "Verified" : "Rejected",
-              }
+                  ...emp,
+                  workPassStatus: action === "Approve" ? "Verified" : "Rejected",
+                }
               : emp
           )
         );

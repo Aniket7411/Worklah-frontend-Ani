@@ -165,6 +165,12 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
 
       const response = await axiosInstance.post("/withdrawals/create", transactionData);
 
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to create transaction");
+        return;
+      }
+
       if (response.status === 201 || response.status === 200) {
         toast.success("Transaction created successfully!");
         setShowCreateModal(false);

@@ -35,6 +35,7 @@ export default function SignIn() {
       if (success) {
         navigate('/');
       } else {
+        // Error toast is already shown in AuthContext
         setError('Login failed. Please check your credentials and try again.');
       }
     } catch (err) {

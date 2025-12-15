@@ -69,13 +69,31 @@ export default function EmployeePayments() {
 
         let endpoint = activeTab === "payments" ? "/payments" : "/withdrawals";
 
-        // Add filter query parameter if needed
+        // Add filter query parameters from URL
         const params: any = {};
-        if (filter === "pending" && activeTab === "payments") {
+        
+        // Get URL search params
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // Status filter
+        const statusParam = urlParams.get('status');
+        if (statusParam) {
+          params.status = statusParam;
+        } else if (filter === "pending" && activeTab === "payments") {
           params.status = "pending";
         } else if (filter === "outstanding" && activeTab === "payments") {
           params.status = "outstanding";
         }
+        
+        // Date range filters
+        const dateFrom = urlParams.get('dateFrom');
+        const dateTo = urlParams.get('dateTo');
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo) params.dateTo = dateTo;
+        
+        // Rate type filter
+        const rateType = urlParams.get('rateType');
+        if (rateType) params.rateType = rateType;
 
         const queryString = new URLSearchParams(params).toString();
         if (queryString) {
@@ -83,7 +101,21 @@ export default function EmployeePayments() {
         }
 
         const response = await axiosInstance.get(endpoint);
+        
+        // Check for success field according to API spec
+        if (response.data?.success === false) {
+          throw new Error(response.data?.message || 'Failed to fetch data');
+        }
+        
         let responseData = response?.data || null;
+        
+        // Update: Use transactions array instead of withdrawals for withdrawals endpoint
+        if (activeTab === "withdrawals" && responseData && responseData.transactions) {
+          responseData = {
+            ...responseData,
+            transactions: responseData.transactions, // Already in correct format
+          };
+        }
 
         // If filter is applied, filter the data on frontend if backend doesn't support it
         if (responseData && responseData.payments) {
@@ -212,9 +244,15 @@ export default function EmployeePayments() {
             {isLimitPopupOpen && (
               <div
                 ref={popupRef}
-                className="absolute right-0 mt-2 w-64 bg-white border rounded-lg shadow-md z-50"
+                className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-md z-50 max-h-[600px] overflow-y-auto"
               >
-                <PaymentFilters />
+                <PaymentFilters 
+                  onApply={(filters) => {
+                    // Filters are applied via URL navigation in PaymentFilters component
+                    setIsLimitPopupOpen(false)
+                  }}
+                  onClose={() => setIsLimitPopupOpen(false)}
+                />
               </div>
             )}
           </div>
