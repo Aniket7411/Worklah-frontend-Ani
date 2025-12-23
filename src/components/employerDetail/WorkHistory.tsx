@@ -71,11 +71,13 @@ const jobs = [
 ];
 
 const WorkHistory = ({ workHistory }) => {
-  console.log(workHistory)
   const [isJobMenuOpen, setIsJobMenuOpen] = useState<number | null>(null);
 
   const toggleJobMenu = (index: number) =>
     setIsJobMenuOpen((prev) => (prev === index ? null : index));
+
+  // Ensure workHistory is an array
+  const safeWorkHistory = Array.isArray(workHistory) ? workHistory : [];
 
   return (
     <div className="py-4 overflow-x-auto">
@@ -278,7 +280,14 @@ const WorkHistory = ({ workHistory }) => {
               </td>
             </tr>
           ))} */}
-          {workHistory.map((job, index) => (
+          {safeWorkHistory.length === 0 ? (
+            <tr>
+              <td colSpan={16} className="py-8 text-center text-gray-500">
+                No work history available
+              </td>
+            </tr>
+          ) : (
+            safeWorkHistory.map((job, index) => (
   <tr key={index} className="text-sm hover:bg-gray-50 normal-text">
     <td className="py-3 px-4 text-center truncate ">
       <div className="flex items-center gap-4">
@@ -358,7 +367,8 @@ const WorkHistory = ({ workHistory }) => {
       </p>
     </td>
   </tr>
-))}
+))
+          )}
 
         </tbody>
       </table>

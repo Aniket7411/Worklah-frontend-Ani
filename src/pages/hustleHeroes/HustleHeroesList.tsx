@@ -7,11 +7,14 @@ import {
   Filter,
   MoreHorizontal,
   Plus,
+  Trash2,
 } from "lucide-react";
 import { CustomScrollbar } from "../../components/layout/CustomScrollbar";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { convertIdToFourDigits } from "../../lib/utils";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import toast from "react-hot-toast";
 import { MdOutlineAccountBalanceWallet } from "react-icons/md";
 import { CgProfile } from "react-icons/cg";
 import { FaRegIdCard } from "react-icons/fa";
@@ -53,6 +56,12 @@ export default function HustleHeroesList() {
   const [rejectReasons, setRejectReasons] = useState<{ [key: string]: string }>(
     {}
   );
+  const [showDeleteModal, setShowDeleteModal] = useState<{ isOpen: boolean; candidateId: string | null; candidateName: string }>({
+    isOpen: false,
+    candidateId: null,
+    candidateName: "",
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
   // const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -83,8 +92,12 @@ export default function HustleHeroesList() {
           return;
         }
         
-        if (response?.data?.candidates) {
-          setAllEmployees(response.data.candidates);
+        const candidates = response?.data?.candidates || [];
+        if (Array.isArray(candidates)) {
+          setAllEmployees(candidates);
+        } else {
+          console.error('Invalid candidates data format');
+          setAllEmployees([]);
         }
       } catch (error: any) {
         console.error("Error fetching employees:", error);
@@ -212,12 +225,46 @@ export default function HustleHeroesList() {
 
   const handleActionClick = (action: string, id: string) => {
     if (action === "View") {
-      navigate(`/jobs/:jobId/candidates/${id}`);
+      // Fix navigation - need to find a job or use a different route
+      // For now, navigate to edit page which shows profile
+      navigate(`/edit-candidate-profile/${id}`);
     }
     if (action === "Edit") {
       navigate(`/edit-candidate-profile/${id}`);
     }
+    if (action === "Delete") {
+      const candidate = employees.find(emp => emp.id === id);
+      setShowDeleteModal({
+        isOpen: true,
+        candidateId: id,
+        candidateName: candidate?.fullName || "this candidate",
+      });
+    }
     setIsPopupOpen(null);
+  };
+
+  const handleDeleteCandidate = async () => {
+    if (!showDeleteModal.candidateId) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await axiosInstance.delete(`/admin/candidates/${showDeleteModal.candidateId}`);
+      
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to delete candidate");
+        return;
+      }
+
+      toast.success("Candidate deleted successfully");
+      setEmployees((prev) => prev.filter((emp) => emp.id !== showDeleteModal.candidateId));
+      setAllEmployees((prev) => prev.filter((emp) => emp.id !== showDeleteModal.candidateId));
+      setShowDeleteModal({ isOpen: false, candidateId: null, candidateName: "" });
+    } catch (error: any) {
+      console.error("Error deleting candidate:", error);
+      toast.error(error?.response?.data?.message || "Failed to delete candidate. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -366,7 +413,7 @@ export default function HustleHeroesList() {
                       )}
                       <span
                         onClick={() =>
-                          navigate(`/jobs/:jobId/candidates/${employee?.id || ""}`)
+                          navigate(`/edit-candidate-profile/${employee?.id || ""}`)
                         }
                         className="text-blue-600 hover:underline cursor-pointer"
                       >
@@ -498,6 +545,13 @@ export default function HustleHeroesList() {
                             <Ban size={16} color="#E34E30" />
                             Block
                           </button>
+                          <button
+                            className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
+                            onClick={() => handleActionClick("Delete", employee?.id || "")}
+                          >
+                            <Trash2 size={16} color="#E34E30" />
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
@@ -510,6 +564,18 @@ export default function HustleHeroesList() {
       </div>
       {/* <CustomScrollbar scrollContainerRef={scrollContainerRef} totalSteps={3} /> */}
 
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal.isOpen}
+        onClose={() => setShowDeleteModal({ isOpen: false, candidateId: null, candidateName: "" })}
+        onConfirm={handleDeleteCandidate}
+        title="Delete Candidate"
+        message={`Are you sure you want to delete ${showDeleteModal.candidateName}? This action cannot be undone and will permanently remove all candidate data.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isDeleting}
+      />
     </>
   );
 }

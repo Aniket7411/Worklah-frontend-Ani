@@ -81,10 +81,10 @@ const ModifyJob: React.FC = () => {
   const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
   // Get selected employer data for display
-  const selectedEmployerData = selectedEmployer 
-    ? employers.find((e) => e.id === selectedEmployer) 
+  const selectedEmployerData = selectedEmployer
+    ? employers.find((e) => e.id === selectedEmployer)
     : null;
-  const companyName = selectedEmployerData 
+  const companyName = selectedEmployerData
     ? ((selectedEmployerData as any)?.name || (selectedEmployerData as any)?.companyLegalName || formData.employerName)
     : "";
   const companyLogo = selectedEmployerData ? (selectedEmployerData as any)?.companyLogo : null;
@@ -113,7 +113,12 @@ const ModifyJob: React.FC = () => {
     try {
       const response = await axiosInstance.get("/employers?limit=100");
       if (response.data?.employers) {
-        setEmployers(response.data.employers);
+        // Map employers to use employerId (EMP-xxxx) format when available, fallback to _id
+        const mappedEmployers = response.data.employers.map((emp: any) => ({
+          ...emp,
+          id: emp.employerId || emp._id || emp.id, // Prefer EMP-xxxx format for API calls
+        }));
+        setEmployers(mappedEmployers);
       }
     } catch (error) {
       console.error("Error fetching employers:", error);
@@ -122,6 +127,7 @@ const ModifyJob: React.FC = () => {
 
   const fetchEmployerOutlets = async (employerId: string) => {
     try {
+      // API accepts both MongoDB ObjectId and EMP-xxxx format
       const response = await axiosInstance.get(`/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
         setAvailableOutlets(response.data.employer.outlets);
@@ -365,6 +371,11 @@ const ModifyJob: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // Convert skills from comma-separated string to array
+      const skillsArray = formData.skills
+        ? formData.skills.split(",").map((s) => s.trim()).filter((s) => s)
+        : [];
+
       const jobData = {
         jobDate: formData.jobDate,
         jobTitle: formData.jobTitle,
@@ -378,14 +389,9 @@ const ModifyJob: React.FC = () => {
         foodHygieneCertRequired: formData.foodHygieneCertRequired,
         jobStatus: formData.jobStatus,
         applicationDeadline: formData.applicationDeadline || null,
-        jobRequirements: formData.jobRequirements
-          ? formData.jobRequirements.split(",").map((r) => r.trim()).filter((r) => r)
-          : [],
+        dressCode: formData.dressCode || null, // Replaces jobRequirements
+        skills: skillsArray, // Array format - replaces jobRequirements
         locationDetails: formData.locationDetails,
-        contactInfo: {
-          phone: formData.contactPhone,
-          email: formData.contactEmail,
-        },
         shifts: shifts.map((shift) => ({
           startTime: shift.startTime,
           endTime: shift.endTime,
@@ -398,7 +404,7 @@ const ModifyJob: React.FC = () => {
       };
 
       const response = await axiosInstance.put(`/jobs/${jobId}`, jobData);
-      
+
       // Check for success field according to API spec
       if (response.data?.success === false) {
         throw new Error(response.data?.message || "Failed to update job");
@@ -595,32 +601,32 @@ const ModifyJob: React.FC = () => {
                           </option>
                         ))}
                       </select>
-                      
-                       {/* Display Company Logo and Name when employer is selected */}
-                       {selectedEmployer && selectedEmployerData && (
-                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-3">
-                           {companyLogo ? (
-                             <img
-                               src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
-                               alt="Company Logo"
-                               className="w-12 h-12 rounded-lg object-cover border border-gray-300"
-                               onError={(e) => {
-                                 (e.target as HTMLImageElement).style.display = "none";
-                               }}
-                             />
-                           ) : (
-                             <div className="w-12 h-12 rounded-lg bg-gray-200 border border-gray-300 flex items-center justify-center">
-                               <span className="text-xs text-gray-500">No Logo</span>
-                             </div>
-                           )}
-                           <div>
-                             <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
-                             <p className="text-xs text-gray-500 mt-1">
-                               {companyLogo ? "Company logo displayed (optional)" : "Company logo not available (optional)"}
-                             </p>
-                           </div>
-                         </div>
-                       )}
+
+                      {/* Display Company Logo and Name when employer is selected */}
+                      {selectedEmployer && selectedEmployerData && (
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-3">
+                          {companyLogo ? (
+                            <img
+                              src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
+                              alt="Company Logo"
+                              className="w-12 h-12 rounded-lg object-cover border border-gray-300"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = "none";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-gray-200 border border-gray-300 flex items-center justify-center">
+                              <span className="text-xs text-gray-500">No Logo</span>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {companyLogo ? "Company logo displayed (optional)" : "Company logo not available (optional)"}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </>
                   ) : (
                     <div className="space-y-2">

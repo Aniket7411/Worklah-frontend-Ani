@@ -6,9 +6,11 @@ import toast from 'react-hot-toast';
 // const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
 //   (import.meta.env.DEV
 //     ? "http://localhost:3000/api"
-//     : "https://worklah-updated-dec.onrender.com/api");
+//     : "https://worklah-updated-dec.onrender.com/api
 
-    const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
+const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
+
+// const API_BASE_URL = "http://localhost:3000/api"
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,

@@ -4,13 +4,8 @@ import { axiosInstance } from "../../lib/authInstances";
 import {
   ArrowLeft,
   User,
-  Phone,
-  Mail,
-  Calendar,
-  MapPin,
   Camera,
   FileText,
-  GraduationCap,
   Wallet2,
   Save,
   X,
@@ -19,9 +14,12 @@ import {
   EyeOff,
 } from "lucide-react";
 import toast from "react-hot-toast";
+// @ts-ignore - Loader is a JSX file without types
 import Loader from "../../components/Loader";
 import JobHistory from "../../components/employerDetail/JobHistory";
 import WorkHistory from "../../components/employerDetail/WorkHistory";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import { Trash2 } from "lucide-react";
 
 const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
@@ -55,6 +53,8 @@ const EditCandidateProfile: React.FC = () => {
   const [userData, setUserData] = useState<any>(null);
   const [showNRIC, setShowNRIC] = useState(false);
   const [schoolsList, setSchoolsList] = useState<string[]>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [formData, setFormData] = useState<EmployeeFormData>({
     fullName: "",
@@ -97,15 +97,25 @@ const EditCandidateProfile: React.FC = () => {
   const fetchEmployeeData = async () => {
     try {
       setLoading(true);
+      if (!id) {
+        toast.error("Invalid candidate ID");
+        navigate(-1);
+        return;
+      }
+
       const response = await axiosInstance.get(`/admin/candidates/${id}`);
-      
+
       // Check for success field according to API spec
       if (response.data?.success === false) {
         throw new Error(response.data?.message || "Failed to fetch candidate data");
       }
-      
+
       const data = response.data;
       const candidate = data.candidate || data.candidateProfile || data;
+
+      if (!candidate) {
+        throw new Error("Candidate data not found");
+      }
 
       // Determine registration type
       let registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)" = "Singaporean/PR";
@@ -148,8 +158,13 @@ const EditCandidateProfile: React.FC = () => {
 
       setUserData(data);
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Failed to load employee data");
-      navigate(-1);
+      console.error("Error fetching employee data:", error);
+      const errorMessage = error?.response?.data?.message || error?.message || "Failed to load employee data";
+      toast.error(errorMessage);
+      // Don't navigate immediately, let user see the error
+      setTimeout(() => {
+        navigate(-1);
+      }, 2000);
     } finally {
       setLoading(false);
     }
@@ -303,6 +318,29 @@ const EditCandidateProfile: React.FC = () => {
   const isLTVP = formData.registrationType === "LTVP";
   const isStudentPass = formData.registrationType === "Student Pass (Foreigner)";
   const showEmail = !userData?.candidateProfile?.email && !userData?.email;
+
+  const handleDeleteCandidate = async () => {
+    if (!id) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await axiosInstance.delete(`/admin/candidates/${id}`);
+
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to delete candidate");
+        return;
+      }
+
+      toast.success("Candidate deleted successfully");
+      navigate("/hustle-heroes");
+    } catch (error: any) {
+      console.error("Error deleting candidate:", error);
+      toast.error(error?.response?.data?.message || "Failed to delete candidate. Please try again.");
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
@@ -858,14 +896,22 @@ const EditCandidateProfile: React.FC = () => {
             {userData && (
               <section className="space-y-6 border-t border-gray-200 pt-8">
                 <h2 className="text-xl font-semibold text-gray-900">Job History</h2>
-                <JobHistory jobHistory={userData.workHistory || {}} />
+                <JobHistory jobHistory={userData.jobHistory || {}} />
                 <h2 className="text-xl font-semibold text-gray-900 mt-6">Work History</h2>
-                <WorkHistory workHistory={userData.jobHistory || {}} />
+                <WorkHistory workHistory={Array.isArray(userData.workHistory) ? userData.workHistory : []} />
               </section>
             )}
 
             {/* Submit Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-end pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                className="px-6 py-3 border border-red-300 rounded-lg text-red-700 font-medium hover:bg-red-50 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-5 h-5" />
+                Delete Profile
+              </button>
               <button
                 type="button"
                 onClick={() => navigate(-1)}
@@ -894,6 +940,19 @@ const EditCandidateProfile: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteCandidate}
+        title="Delete Candidate"
+        message={`Are you sure you want to delete ${formData.fullName || "this candidate"}? This action cannot be undone and will permanently remove all candidate data.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 };

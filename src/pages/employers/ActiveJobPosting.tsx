@@ -1,22 +1,15 @@
 
-import React, { act, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ArrowLeft,
-  Ban,
   Calendar,
-  ChevronDown,
-  ChevronsDownUp,
-  CircleOff,
   Edit,
   Eye,
-  Hand,
   MapPin,
   MoreVertical,
   Phone,
   Plus,
-  Settings,
-  Trash2,
   User,
 } from "lucide-react";
 import { FaRegAddressCard } from "react-icons/fa6";
@@ -34,29 +27,48 @@ type Tab = {
   value: number;
   label: string;
 };
-const outlets = [
-  {
-    outletName: "/assets/dominos-logo.png",
-    location: "123 Orchard Road, Singapore.",
-    activejobs: "2",
-    contact: "+61 6534532242",
-    operatinghours: "9AM-9PM",
-    workerfeedback: "4.2/5",
-  },
-];
-
 
 const ActiveJobPosting = () => {
   const { id } = useParams<{ id: string }>();
   const [isJobMenuOpen, setIsJobMenuOpen] = useState<number | null>(null);
-  const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
-  const popupRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<string>("jobs");
+  interface Job {
+    _id?: string;
+    jobId?: string;
+    jobName?: string;
+    jobTitle?: string;
+    titleimage?: string;
+    companyimage?: string;
+    address?: string;
+    date?: string;
+    jobDate?: string;
+    availableShifts?: number;
+    vacancy?: number;
+    jobStatus?: string;
+    status?: string;
+    shifts?: Array<{
+      vacancyFilled?: number;
+      standbyFilled?: number;
+      breakHours?: number;
+      duration?: number;
+      payRate?: number;
+      totalWage?: number;
+      rateType?: string;
+    }>;
+  }
+
+  interface Outlet {
+    _id?: string;
+    id?: string;
+    name?: string;
+    address?: string;
+  }
+
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [jobs, setJobs] = useState([]);
-  const [outlets, setOutlets] = useState([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [outlets, setOutlets] = useState<Outlet[]>([]);
 
   const tabs: Tab[] = [
     {
@@ -83,57 +95,96 @@ const ActiveJobPosting = () => {
       try {
         setLoading(true);
         setError(null);
+        // API accepts both MongoDB ObjectId and EMP-xxxx format
+        // The id from URL params can be either format
         const response = await axiosInstance.get(`/employers/${id}`);
-        setData(response?.data);
-        setJobs(response?.data?.jobs || []);
-        setOutlets(response.data.employer.outlets || []);
-      } catch (err) {
-        setError("Failed to fetch data. Please try again.");
+
+        // Check for success field according to API spec
+        if (response.data?.success === false) {
+          throw new Error(response.data?.message || "Failed to fetch employer data");
+        }
+
+        // API response structure: { success: true, employer: {...} }
+        const employerData = response.data?.employer || response.data;
+
+        if (!employerData) {
+          throw new Error("No employer data received");
+        }
+
+        setData({ employer: employerData });
+        setJobs(Array.isArray(employerData.jobs) ? employerData.jobs : []);
+        setOutlets(Array.isArray(employerData.outlets) ? employerData.outlets : []);
+      } catch (err: any) {
+        const errorMessage = err?.response?.data?.message || err?.message || "Failed to fetch data. Please try again.";
+        setError(errorMessage);
         console.error("Error fetching data:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [id, activeTab]); // Added `id` dependency
-
-  // Close the popup when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        popupRef.current &&
-        !popupRef.current.contains(event.target as Node)
-      ) {
-        setIsLimitPopupOpen(false);
-      }
-    };
-
-    if (isLimitPopupOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    } else {
-      document.removeEventListener("mousedown", handleClickOutside);
+    if (id) {
+      fetchData();
     }
+  }, [id, activeTab]);
 
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isLimitPopupOpen]);
 
   const toggleJobMenu = (index: number) =>
     setIsJobMenuOpen((prev) => (prev === index ? null : index));
 
-  const handleActionClick = (action: string, id: number) => {
+  const handleActionClick = (action: string, index: number) => {
+    const job = jobs[index];
+    if (!job) return;
+
+    const jobId = job._id || job.jobId || String(index);
+
     if (action === "View") {
       navigate(`/employers/${id}/outletDetails`);
-    }
-    if (action === "Show Job Details") {
-      navigate(`/jobs/${id}`);
+    } else if (action === "Show Job Details") {
+      navigate(`/jobs/${jobId}`);
+    } else if (action === "Edit") {
+      navigate(`/jobs/${jobId}/modify`);
+    } else if (action === "Duplicate") {
+      // Handle duplicate action
     }
     setIsJobMenuOpen(null);
   };
 
-  if (loading) return <p>Loading...</p>;
-  if (error) return <p>{error}</p>;
-  if (!data || !data.employer) return <p>No data available</p>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-lg text-gray-600">Loading employer data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-lg text-red-600">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data || !data.employer) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-lg text-gray-600">No employer data available</p>
+        </div>
+      </div>
+    );
+  }
 
   const employer = data.employer;
 
@@ -152,56 +203,11 @@ const ActiveJobPosting = () => {
           </div>
           <div>
             <div className="flex items-center justify-end gap-4">
-              <button
-                onClick={() => setIsLimitPopupOpen(!isLimitPopupOpen)}
-                className="p-[14px] rounded-[26px] shadow-lg bg-[#FFFFFF] hover:bg-gray-50"
+              <button 
+                onClick={() => navigate('/jobs/create-job', { state: { employerId: id } })}
+                className="p-[14px] rounded-[26px] shadow-lg bg-[#FFFFFF] hover:bg-gray-50 "
+                title="Create New Job for this Employer"
               >
-                <Settings className="w-[24px] h-[24px]" />
-              </button>
-
-              {/* Set Job Posting Limit Popup */}
-              {isLimitPopupOpen && (
-                <div
-                  ref={popupRef}
-                  className="absolute right-[16%] top-[12%] mt-2 w-52 bg-white border rounded-[20px] shadow-lg p-3"
-                >
-                  {/* Header */}
-                  <div className="flex items-center mb-3 gap-2">
-                    <ChevronsDownUp className="w-4 h-4" />
-                    <h2 className="text-[16px] font-semibold text-gray-800">
-                      Set Job Posting Limit
-                    </h2>
-                  </div>
-
-                  {/* Limit Selector */}
-                  <div className="flex items-center justify-between mb-4 border-b border-[#EBEBEB] py-3">
-                    <button className="px-2 py-1 text-sm font-semibold bg-black text-white rounded-full hover:bg-gray-700">
-                      -10
-                    </button>
-                    <span className="w-12 text-center border border-gray-300 rounded-md text-sm py-1">
-                      50
-                    </span>
-                    <button className="px-2 py-1 text-sm font-semibold bg-black text-white rounded-full hover:bg-gray-700">
-                      +10
-                    </button>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="space-y-2">
-                    <button className="w-full text-[#E34E30] rounded-md flex items-center gap-2 text-sm border-b border-[#EBEBEB] py-3">
-                      <Hand /> <span> Restrict</span>
-                    </button>
-                    <button className="w-full text-[#E34E30] rounded-md flex items-center gap-2 text-sm border-b border-[#EBEBEB] py-3">
-                      <CircleOff /> <span> Block</span>
-                    </button>
-                    <button className="w-full text-[#E34E30] rounded-md flex items-center gap-2 text-sm py-3">
-                      <Trash2 /> <span> Remove</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <button className="p-[14px] rounded-[26px] shadow-lg bg-[#FFFFFF] hover:bg-gray-50 ">
                 <Plus className="w-[24px] h-[24px]" />
               </button>
             </div>
@@ -210,16 +216,26 @@ const ActiveJobPosting = () => {
         <div>
           {/* Company Info */}
           <div className="flex">
-            <img
-              src={`${images}${employer.companyLogo}`}
-              alt="Company Logo"
-              className="w-28 h-28 rounded-lg"
-            />
+            {employer.companyLogo ? (
+              <img
+                src={`${images}${employer.companyLogo.replace(/\\/g, '/')}`}
+                alt="Company Logo"
+                className="w-28 h-28 rounded-lg object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-28 h-28 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-2xl font-semibold text-blue-700">
+                {employer.companyLegalName?.charAt(0)?.toUpperCase() || "?"}
+              </div>
+            )}
             <div className="ml-4 h-28 flex flex-col justify-between">
               <h1 className="text-lg flex items-center gap-2 font-semibold">
                 <span>{employer.companyLegalName}</span>{" "}
                 <span className="px-6  py-1 bg-[#CEFFCF] text-[#049609] text-sm font-medium rounded-full mt-1">
-                  {employer.contractStatus}
+                  {employer.serviceAgreement || employer.contractStatus || "N/A"}
                 </span>
               </h1>
               <div>
@@ -232,7 +248,7 @@ const ActiveJobPosting = () => {
                   <Phone className="w-4 h-4" />
 
                   <span className="py-1 text-[#000] font-medium text-sm rounded-lg mt-1">
-                    {employer.companyNumber}
+                    {employer.mainContactNumber || employer.companyNumber || "N/A"}
                   </span>
                 </h1>
               </div>
@@ -252,30 +268,45 @@ const ActiveJobPosting = () => {
                   <User className="w-4 h-4" />
                   Main Contact Person:
                 </span>{" "}
-                {/* John Snow
-                <i className="font-normal">
-                  {"("}Manager{")"}
-                </i> */}
-                {employer.mainContactPersonName}
-                <i className="font-normal">
-                  {"("}
-                  {employer.mainContactPersonPosition}
-                  {")"}
-                </i>
+                {(() => {
+                  const contactName = employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+                    ? employer.mainContactPersons[0].name
+                    : employer.mainContactPersonName || "N/A";
+                  const contactPosition = employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+                    ? employer.mainContactPersons[0].position
+                    : employer.mainContactPersonPosition || employer.jobPosition || "N/A";
+                  
+                  if (contactName === "N/A" && contactPosition === "N/A") {
+                    return "N/A";
+                  } else if (contactPosition === "N/A") {
+                    return contactName;
+                  } else {
+                    return (
+                      <>
+                        {contactName}
+                        <i className="font-normal">
+                          {" ("}{contactPosition}{")"}
+                        </i>
+                      </>
+                    );
+                  }
+                })()}
               </p>
               <p className="flex gap-1 text-start items-center">
                 <span className="flex gap-1 text-[#048BE1] items-center">
                   <Phone className="w-4 h-4" />
                   Main Contact Number:
                 </span>{" "}
-                {employer.mainContactPersonNumber}
+                {employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+                  ? employer.mainContactPersons[0].number
+                  : employer.mainContactPersonNumber || employer.mainContactNumber || "N/A"}
               </p>
               <p className="flex gap-1 text-start items-center">
                 <span className="flex gap-1 text-[#048BE1] items-center">
                   <FaRegAddressCard className="w-4 h-4" />
                   Employee ID:
                 </span>{" "}
-                #3432
+                {employer.employerId ? `#${employer.employerId.split("-")[1] || employer.employerId.slice(-4)}` : (employer._id ? `#${employer._id.slice(-4)}` : "N/A")}
               </p>
             </div>
             <div className="text-md flex flex-col font-medium justify-start gap-2">
@@ -284,11 +315,9 @@ const ActiveJobPosting = () => {
                   <Calendar className="w-4 h-4" />
                   Contact Start Date:
                 </span>{" "}
-                {
-                  new Date(employer.contractStartDate)
-                    .toISOString()
-                    .split("T")[0]
-                }
+                {employer.contractStartDate
+                  ? new Date(employer.contractStartDate).toISOString().split("T")[0]
+                  : "N/A"}
                 {/* {employer.contractStartDate} */}
               </p>
               <p className="flex gap-1 text-start items-center">
@@ -296,7 +325,9 @@ const ActiveJobPosting = () => {
                   <Calendar className="w-4 h-4" />
                   Contract End Date:
                 </span>{" "}
-                {new Date(employer.contractEndDate).toISOString().split("T")[0]}
+                {employer.contractExpiryDate || employer.contractEndDate
+                  ? new Date(employer.contractExpiryDate || employer.contractEndDate).toISOString().split("T")[0]
+                  : "N/A"}
                 {/* {employer.contractEndDate} */}
               </p>
               <p className="flex gap-1 text-start items-center">
@@ -304,14 +335,14 @@ const ActiveJobPosting = () => {
                   <LiaFileSignatureSolid className="w-4 h-4" />
                   Service Agreement:
                 </span>{" "}
-                Completed
+                {employer.serviceAgreement || "N/A"}
               </p>
               <p className="flex gap-1 text-start items-center">
                 <span className="flex gap-1 text-[#048BE1] items-center">
                   <PiFolderSimpleUserLight className="w-4 h-4" />
                   Account Manager:
                 </span>{" "}
-                {employer.accountManager}
+                {employer.accountManager || "N/A"}
               </p>
             </div>
           </div>
@@ -394,7 +425,7 @@ const ActiveJobPosting = () => {
               </tr>
             </thead>
             <tbody>
-              {jobs.map((job, index) => (
+              {Array.isArray(jobs) && jobs.length > 0 ? jobs.map((job: Job, index: number) => (
                 <tr key={index} className="text-sm border-b-2 ">
                   <td className="py-6 px-8 truncate text-center text-[20px] leading-[25px] font-semibold">
                     <div>
@@ -427,38 +458,38 @@ const ActiveJobPosting = () => {
                     {job?.availableShifts}
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-medium">
-                    {job?.shifts.reduce((total, shift) => total + shift.vacancyFilled, 0)}
+                    {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.vacancyFilled || 0), 0) : 0}
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-medium">
-                    {job?.shifts.reduce((total, shift) => total + shift.standbyFilled, 0)}
+                    {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.standbyFilled || 0), 0) : 0}
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-medium">
-                    {job?.shifts.reduce((total, shift) => total + shift.breakHours, 0)}
+                    {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.breakHours || 0), 0) : 0}
                     <br />
                     <span className="text-[16px] leading-[20px] font-medium text-[#676767]">
                       (Unpaid)
                     </span>
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-medium">
-                    {job?.shifts.reduce((total, shift) => total + shift.duration, 0)}
+                    {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.duration || 0), 0) : 0}
 
                   </td>
                   <td className="py-3 px-4 text-center text-[16px] leading-[20px] font-normal">
                     {job?.vacancy}
                     <br />
                     <span className="text-blue-500 bg-[#FFF1E3] px-3 py-1 rounded-full mt-1">
-                      Standby:{job?.shifts.reduce((total, shift) => shift.rateType, 0)}
+                      Standby:{Array.isArray(job?.shifts) && job.shifts.length > 0 ? job.shifts[0].rateType : "N/A"}
 
                     </span>
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-normal">
-                    {job?.shifts.reduce((total, shift) => total + shift.payRate, 0)}
+                    {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.payRate || 0), 0) : 0}
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-normal">
-                    {job?.jobStatus}
+                    {job?.jobStatus || "N/A"}
                   </td>
                   <td className="py-6 px-8 truncate text-center text-[16px] leading-[20px] font-semibold">
-                    {job?.shifts.reduce((total, shift) => total + shift.totalWage, 0)}
+                    {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.totalWage || 0), 0) : 0}
                     {isJobMenuOpen === index && (
                       <div className="absolute top-[30%] right-12 mt-1 w-fit bg-white shadow-md border border-gray-300 rounded-md z-10">
                         <button
@@ -504,7 +535,13 @@ const ActiveJobPosting = () => {
                     </button>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={13} className="py-8 text-center text-gray-500">
+                    No jobs found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -562,36 +599,53 @@ const ActiveJobPosting = () => {
                   </td>
                 </tr>
               ))} */}
-              {employer.outlets?.map((outlet, index) => (
+              {Array.isArray(employer.outlets) && employer.outlets.length > 0 ? employer.outlets.map((outlet: any, index: number) => (
                 <tr key={index} className="text-sm border-b-2">
-                  <td className="py-6 px-8 truncate text-center flex gap-3">
-                    <div>
-                      <img
-                        className="h-5"
-                        // src={outlet.outletImage}
-                        src={`${images}${outlet.outletImage}`}
-                        alt={outlet.outletImage}
-                      />
+                  <td className="py-6 px-8 truncate text-center">
+                    <div className="flex items-center justify-center gap-3">
+                      {outlet.outletImage ? (
+                        <img
+                          className="h-5"
+                          src={`${images}${outlet.outletImage.replace(/\\/g, '/')}`}
+                          alt={outlet.name || "Outlet"}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      ) : null}
+                      <div>{outlet.name || outlet.outletName || "N/A"}</div>
                     </div>
-                    <div>{outlet.outletName}</div>
                   </td>
                   <td className="py-6 px-8 truncate text-center">
-                    {outlet.outletAddress}
+                    {outlet.address || outlet.outletAddress || "N/A"}
                   </td>
                   <td className="py-6 px-8 truncate text-center">
-                    {outlet.outletType}
+                    {outlet.outletType || "N/A"}
                   </td>
                   <td className="py-6 px-8 truncate text-center">
-                    {employer.mainContactPersonName}
+                    {employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+                      ? employer.mainContactPersons[0].name
+                      : employer.mainContactPersonName || "N/A"}
                   </td>
                   <td className="py-6 px-8 truncate text-center">
-                    {employer.mainContactPersonNumber}
+                    {employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+                      ? employer.mainContactPersons[0].number
+                      : employer.mainContactPersonNumber || employer.mainContactNumber || "N/A"}
                   </td>
                   <td className="py-6 px-8 truncate text-center">
-                    {employer.mainContactPersonPosition}
+                    {employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+                      ? employer.mainContactPersons[0].position
+                      : employer.mainContactPersonPosition || employer.jobPosition || "N/A"}
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                    No outlets available
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

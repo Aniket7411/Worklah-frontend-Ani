@@ -4,6 +4,8 @@ import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
 interface User {
+  _id?: string; // MongoDB ObjectId (primary)
+  id?: string; // Alias for _id (fallback for compatibility)
   email: string;
   fullName: string;
   role: 'ADMIN' | 'USER' | 'EMPLOYER';

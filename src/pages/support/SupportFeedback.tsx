@@ -26,7 +26,21 @@ export default function SupportFeedback() {
     setIsLoading(true);
 
     try {
-      await axiosInstance.post('/support/feedback', formData);
+      // Send only required fields: subject, message, email
+      const feedbackData = {
+        subject: formData.subject,
+        message: formData.message,
+        email: formData.email,
+      };
+      
+      const response = await axiosInstance.post('/support/feedback', feedbackData);
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || 'Failed to send message. Please try again.');
+        return;
+      }
+      
       toast.success('Thank you! Your message has been sent.');
       setFormData({
         name: '',

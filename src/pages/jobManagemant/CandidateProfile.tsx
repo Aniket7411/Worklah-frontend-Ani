@@ -34,6 +34,9 @@ import JobHistory from "../../components/employerDetail/JobHistory";
 import WorkHistory from "../../components/employerDetail/WorkHistory";
 import { axiosInstance } from "../../lib/authInstances";
 import OverViewTable from "./OverViewTable";
+import ConfirmationModal from "../../components/ConfirmationModal";
+import toast from "react-hot-toast";
+import { Trash2 } from "lucide-react";
 
 interface PersonalDetails {
   candidateId: string;
@@ -88,9 +91,10 @@ export default function ProfileDashboard() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const { id } = useParams();
   const [userData, setUserData] = useState<any>(null);
-  console.log("userData", userData);
 
   const [isOpen, setIsOpen] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const toggleMenu = () => setIsOpen(!isOpen);
 
@@ -173,6 +177,7 @@ export default function ProfileDashboard() {
   };
 
   useEffect(() => {
+    if (!id) return;
     // Fetch employees from API
     axiosInstance
       .get(`/admin/candidates/${id}`)
@@ -180,10 +185,12 @@ export default function ProfileDashboard() {
         // console.log("response", response.data)
         setUserData(response.data);
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error("Error fetching employees:", error);
+        toast.error(error?.response?.data?.message || "Failed to load candidate data");
+        navigate("/hustle-heroes");
       });
-  }, []);
+  }, [id, navigate]);
 
   const getIcon = (key: string) => {
     switch (key) {
@@ -551,6 +558,19 @@ export default function ProfileDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeleteCandidate}
+        title="Delete Candidate"
+        message={`Are you sure you want to delete ${userData?.candidateProfile?.fullName || "this candidate"}? This action cannot be undone and will permanently remove all candidate data.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

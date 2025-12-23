@@ -42,8 +42,10 @@ export default function JobFilter({ onApplyFilter, onClose }: JobFilterProps) {
 
   const [sliderValue, setSliderValue] = useState([10, 20])
 
-  const statusOptions = ['Active', 'Pending', 'Cancelled', 'Completed', 'Deactivated']
-  const cityOptions = ['Jurong', 'Yishun', 'Tampines', 'Sengkang']
+  const statusOptions = ['Active', 'Pending', 'Cancelled', 'Completed', 'Deactivated', 'Suspended', 'Upcoming', 'Ongoing']
+  // City options should be fetched dynamically from API or outlets data
+  // For now, keeping as empty array - will be populated from API response
+  const cityOptions: string[] = []
   const postedByOptions = ['admin', 'employer']
   const rateTypeOptions = ['Weekend', 'Weekday', 'Public Holiday']
 

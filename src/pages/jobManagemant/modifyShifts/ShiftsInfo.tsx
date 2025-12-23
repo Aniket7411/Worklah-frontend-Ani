@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Clock, Plus, Trash2 } from 'lucide-react'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
+import { axiosInstance } from '../../../lib/authInstances'
 
 interface Shift {
     id: number
@@ -12,47 +14,55 @@ interface Shift {
     breakType: 'Paid' | 'Unpaid'
     totalWage: number
   }
-  
-  const initialShifts: Shift[] = [
-    {
-      id: 1,
-      startTime: '11:00 AM',
-      endTime: '03:00 PM',
-      availableVacancy: 10,
-      standbyVacancy: 2,
-      totalHours: 4,
-      breakHours: 1,
-      breakType: 'Paid',
-      totalWage: 15,
-    },
-    {
-      id: 2,
-      startTime: '04:00 PM',
-      endTime: '08:00 PM',
-      availableVacancy: 10,
-      standbyVacancy: 2,
-      totalHours: 4,
-      breakHours: 1,
-      breakType: 'Unpaid',
-      totalWage: 15,
-    },
-    {
-      id: 3,
-      startTime: '07:00 PM',
-      endTime: '11:00 PM',
-      availableVacancy: 10,
-      standbyVacancy: 2,
-      totalHours: 4,
-      breakHours: 1,
-      breakType: 'Unpaid',
-      totalWage: 15,
-    },
-  ]
 
 const ShiftsInfo = () => {
-
-  const [shifts, setShifts] = useState<Shift[]>(initialShifts)
+  const { jobId } = useParams<{ jobId: string }>()
+  const [shifts, setShifts] = useState<Shift[]>([])
+  const [loading, setLoading] = useState(true)
   const [selectedShifts, setSelectedShifts] = useState<number[]>([])
+
+  useEffect(() => {
+    const fetchShifts = async () => {
+      if (!jobId) {
+        // If no jobId, start with empty shifts
+        setShifts([])
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        const response = await axiosInstance.get(`/jobs/${jobId}`)
+        const job = response.data?.job || response.data
+
+        if (job?.shifts && Array.isArray(job.shifts) && job.shifts.length > 0) {
+          // Transform API shifts to component format
+          const transformedShifts: Shift[] = job.shifts.map((shift: any, index: number) => ({
+            id: shift.id || Date.now() + index,
+            startTime: shift.startTime || '09:00',
+            endTime: shift.endTime || '17:00',
+            availableVacancy: shift.availableVacancy ?? shift.vacancy ?? 0,
+            standbyVacancy: shift.standbyVacancy ?? shift.standby ?? 0,
+            totalHours: shift.totalHours ?? shift.totalWorkingHours ?? shift.duration ?? 0,
+            breakHours: shift.breakHours ?? shift.breakDuration ?? 0,
+            breakType: shift.breakType === 'Paid' ? 'Paid' : 'Unpaid',
+            totalWage: shift.totalWage ?? shift.totalWages ?? 0,
+          }))
+          setShifts(transformedShifts)
+        } else {
+          // No shifts found, start with empty array
+          setShifts([])
+        }
+      } catch (error) {
+        console.error('Error fetching shifts:', error)
+        setShifts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchShifts()
+  }, [jobId])
 
   const handleIncrement = (id: number, field: keyof Shift) => {
     setShifts(shifts.map(shift => 
@@ -98,6 +108,14 @@ const ShiftsInfo = () => {
       totalWage: 0,
     }
     setShifts([...shifts, newShift])
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-500">Loading shifts...</div>
+      </div>
+    )
   }
 
   return (

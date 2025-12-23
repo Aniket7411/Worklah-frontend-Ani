@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
+import { useAuth } from "../../context/AuthContext";
 import {
   UploadCloud,
   Trash2,
@@ -13,8 +14,6 @@ import {
   User,
   FileText,
   Calendar,
-  Eye,
-  EyeOff,
   Save,
   ArrowLeft
 } from "lucide-react";
@@ -28,6 +27,7 @@ interface ContactPerson {
 }
 
 interface Outlet {
+  name: string; // Outlet name (required)
   address: string;
   managerName?: string;
   managerContact?: string;
@@ -35,19 +35,29 @@ interface Outlet {
 
 const AddEmployer: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  // Check if user is admin
+  useEffect(() => {
+    if (user?.role !== "ADMIN") {
+      toast.error("Only admins can add employers");
+      navigate("/employers");
+    }
+  }, [user, navigate]);
+
   const [formData, setFormData] = useState({
     employerId: "", // Auto-generated, read-only
     companyLogo: null as File | null,
-    companyLegalName: "",
-    hqAddress: "",
+    companyLegalName: "", // Name of employer (required)
+    hqAddress: "", // Address (required)
     mainContactPersonName: "",
     jobPosition: "",
-    mainContactNumber: "",
-    emailAddress: "",
+    mainContactNumber: "", // Contact no. (required)
+    alternateContactNumber: "", // Alternate no. (required)
+    emailAddress: "", // Email (required)
     officeNumber: "",
-    accountManager: "", // Prefilled, masked, read-only
     acraBizfileCert: null as File | null,
-    industry: "",
+    industry: "", // Industry type (required)
     serviceAgreement: "",
     serviceContract: null as File | null,
     contractExpiryDate: "",
@@ -56,8 +66,7 @@ const AddEmployer: React.FC = () => {
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
     { name: "", position: "", number: "" }
   ]);
-  const [outlets, setOutlets] = useState<Outlet[]>([{ address: "" }]);
-  const [showAccountManager, setShowAccountManager] = useState(false);
+  const [outlets, setOutlets] = useState<Outlet[]>([{ name: "", address: "" }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generateCredentials, setGenerateCredentials] = useState(true);
   const [employerCredentials, setEmployerCredentials] = useState<{
@@ -110,7 +119,7 @@ const AddEmployer: React.FC = () => {
   };
 
   const addOutlet = () => {
-    setOutlets([...outlets, { address: "" }]);
+    setOutlets([...outlets, { name: "", address: "" }]);
   };
 
   const removeOutlet = (index: number) => {
@@ -135,8 +144,45 @@ const AddEmployer: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
 
+    // Validate required fields
+    if (!formData.companyLegalName?.trim()) {
+      toast.error("Name of employer is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.industry?.trim()) {
+      toast.error("Industry type is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.hqAddress?.trim()) {
+      toast.error("Address is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.mainContactNumber?.trim()) {
+      toast.error("Contact number is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.alternateContactNumber?.trim()) {
+      toast.error("Alternate contact number is required");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.emailAddress?.trim()) {
+      toast.error("Email address is required");
+      setIsSubmitting(false);
+      return;
+    }
+
     // Validate email
-    if (formData.emailAddress && !validateEmail(formData.emailAddress)) {
+    if (!validateEmail(formData.emailAddress)) {
       toast.error("Please enter a valid email address");
       setIsSubmitting(false);
       return;
@@ -145,6 +191,14 @@ const AddEmployer: React.FC = () => {
     // Validate date format
     if (formData.contractExpiryDate && !validateDate(formData.contractExpiryDate)) {
       toast.error("Contract Expiry Date must be in YYYY-MM-DD format");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Validate outlets - at least one outlet with name and address required
+    const validOutlets = outlets.filter(outlet => outlet.name?.trim() && outlet.address?.trim());
+    if (validOutlets.length === 0) {
+      toast.error("At least one outlet with name and address is required");
       setIsSubmitting(false);
       return;
     }
@@ -172,7 +226,8 @@ const AddEmployer: React.FC = () => {
 
       // Append outlets
       outlets.forEach((outlet, index) => {
-        if (outlet.address) {
+        if (outlet.name && outlet.address) {
+          formDataToSend.append(`outlets[${index}][name]`, outlet.name);
           formDataToSend.append(`outlets[${index}][address]`, outlet.address);
           if (outlet.managerName) {
             formDataToSend.append(`outlets[${index}][managerName]`, outlet.managerName);
@@ -312,14 +367,15 @@ const AddEmployer: React.FC = () => {
                 {/* Company Legal Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Company Legal Name <span className="text-gray-400 text-xs">(Optional)</span>
+                    Name of Employer <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     name="companyLegalName"
-                    value={formData.companyLegalName}
+                    value={formData.companyLegalName ?? ""}
                     onChange={handleChange}
-                    placeholder="Enter company legal name"
+                    placeholder="Enter employer name"
+                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -327,19 +383,25 @@ const AddEmployer: React.FC = () => {
                 {/* Industry */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Industry <span className="text-gray-400 text-xs">(Optional)</span>
+                    Industry Type <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="industry"
-                    value={formData.industry}
+                    value={formData.industry ?? ""}
                     onChange={handleChange}
+                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
                     <option value="">Select Industry</option>
+                    <option value="Hospitality">Hospitality</option>
+                    <option value="IT">IT</option>
                     <option value="F&B">F&B (Food & Beverage)</option>
                     <option value="Hotel">Hotel</option>
                     <option value="Retail">Retail</option>
                     <option value="Logistics">Logistics</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Education">Education</option>
+                    <option value="Construction">Construction</option>
                     <option value="Others">Others</option>
                   </select>
                 </div>
@@ -347,14 +409,15 @@ const AddEmployer: React.FC = () => {
                 {/* HQ Address */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    HQ Address <span className="text-gray-400 text-xs">(Optional)</span>
+                    Address <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     name="hqAddress"
-                    value={formData.hqAddress}
+                    value={formData.hqAddress ?? ""}
                     onChange={handleChange}
-                    placeholder="Enter headquarters address"
+                    placeholder="Enter address"
                     rows={3}
+                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
                   />
                 </div>
@@ -435,14 +498,31 @@ const AddEmployer: React.FC = () => {
                 {/* Main Contact Number */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Main Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
+                    Contact Number <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     name="mainContactNumber"
-                    value={formData.mainContactNumber}
+                    value={formData.mainContactNumber ?? ""}
                     onChange={handleChange}
-                    placeholder="Enter main contact number"
+                    placeholder="Enter contact number"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Alternate Contact Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Alternate Contact Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="alternateContactNumber"
+                    value={formData.alternateContactNumber ?? ""}
+                    onChange={handleChange}
+                    placeholder="Enter alternate contact number"
+                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -450,14 +530,15 @@ const AddEmployer: React.FC = () => {
                 {/* Email Address */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address <span className="text-gray-400 text-xs">(Optional)</span>
+                    Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
                     name="emailAddress"
-                    value={formData.emailAddress}
+                    value={formData.emailAddress ?? ""}
                     onChange={handleChange}
                     placeholder="Enter email address"
+                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -494,36 +575,14 @@ const AddEmployer: React.FC = () => {
               </div>
             </section>
 
-            {/* Section 3: Account & Service Details */}
+            {/* Section 3: Service Details */}
             <section className="space-y-6 border-t border-gray-200 pt-8">
               <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                 <User className="w-5 h-5 text-blue-600" />
-                Account & Service Details
+                Service Details
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Account Manager - Read Only, Masked */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Account Manager <span className="text-gray-400 text-xs">(Assigned by Admin)</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showAccountManager ? "text" : "password"}
-                      value={formData.accountManager || "Not assigned"}
-                      disabled
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowAccountManager(!showAccountManager)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      {showAccountManager ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
                 {/* Service Agreement */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -682,13 +741,29 @@ const AddEmployer: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Outlet Address</label>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Outlet Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={outlet.name ?? ""}
+                        onChange={(e) => handleOutletChange(index, "name", e.target.value)}
+                        placeholder="Enter outlet name"
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Outlet Address <span className="text-red-500">*</span>
+                      </label>
                       <textarea
-                        value={outlet.address}
+                        value={outlet.address ?? ""}
                         onChange={(e) => handleOutletChange(index, "address", e.target.value)}
                         placeholder="Enter outlet address"
                         rows={2}
+                        required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                       />
                     </div>
@@ -816,7 +891,7 @@ const AddEmployer: React.FC = () => {
                   </label>
                   <div className="flex items-center gap-2">
                     <input
-                      type={showAccountManager ? "text" : "password"}
+                      type="password"
                       value={employerCredentials.password}
                       readOnly
                       className="flex-1 px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg font-mono text-sm"
@@ -830,13 +905,6 @@ const AddEmployer: React.FC = () => {
                       className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
                     >
                       Copy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAccountManager(!showAccountManager)}
-                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
-                    >
-                      {showAccountManager ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>

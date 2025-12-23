@@ -25,7 +25,6 @@ const getColor = (value: number): string => {
 const EmployerDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { jobId } = useParams(); // Extract jobId from URL
-  console.log("jobId", jobId);
   const [employerData, setEmployerData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);

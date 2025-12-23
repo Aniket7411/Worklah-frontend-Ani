@@ -28,8 +28,8 @@ import OutletFilter from "../../components/Filter/OutletFilter";
 
 const JobDetailsPage = () => {
   const companyImage = "https://worklah.onrender.com";
-  const maxStandby = 1;
-  const maxVacancy = 3;
+  const [maxStandby, setMaxStandby] = useState<number>(1);
+  const [maxVacancy, setMaxVacancy] = useState<number>(3);
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -40,18 +40,7 @@ const JobDetailsPage = () => {
   const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
   const [outlet, setOutet] = useState(null);
-  const [penalties, setPenalties] = useState<any[]>([]);
-  const [usingDefaultPenalties, setUsingDefaultPenalties] = useState(true);
-  
-  // Default penalties fallback (should ideally come from API)
-  const defaultPenalties = [
-    { condition: "5 minutes after applying", penalty: "No Penalty" },
-    { condition: "48 Hours", penalty: "No Penalty" },
-    { condition: "24 Hours (1st Time)", penalty: "$5 Penalty" },
-    { condition: "24 Hours (2nd Time)", penalty: "$10 Penalty" },
-    { condition: "24 Hours (3rd Time)", penalty: "$15 Penalty" },
-    { condition: "No Show - During Shift", penalty: "$50 Penalty" },
-  ];
+  const [penalties, setPenalties] = useState<Array<{ condition: string; penalty: string }>>([]);
 
 
   useEffect(() => {
@@ -96,16 +85,9 @@ const JobDetailsPage = () => {
         setJobsData(job);
         // Handle both old and new API structures
         setShifts(job?.shifts || (job?.shiftTiming ? [job] : []));
-        
-        // Fetch penalties from API if available in job data
-        if (job?.penalties && Array.isArray(job.penalties) && job.penalties.length > 0) {
-          // If API provides penalties in the job data
-          setPenalties(job.penalties);
-          setUsingDefaultPenalties(false);
-        } else {
-          // Try to fetch from configuration endpoint if job doesn't have penalties
-          await fetchPenaltyConfiguration();
-        }
+        // Set dynamic max values from job data
+        setMaxStandby(job?.maxStandby ?? job?.standbyLimit ?? 1);
+        setMaxVacancy(job?.maxVacancy ?? job?.vacancyLimit ?? job?.totalPositions ?? 3);
       }
     } catch (error: any) {
       console.error("Error fetching job details:", error);
@@ -114,30 +96,39 @@ const JobDetailsPage = () => {
       setLoading(false);
     }
   };
-  // Fetch penalty configuration from API (if available)
-  const fetchPenaltyConfiguration = async () => {
-    try {
-      // Try to fetch from admin configuration endpoint
-      const response = await axiosInstance.get('/admin/penalty-configuration');
-      if (response.data?.success && response.data?.penalties) {
-        setPenalties(response.data.penalties);
-        setUsingDefaultPenalties(false);
-      } else {
-        // If API doesn't provide penalties, use defaults
-        setPenalties(defaultPenalties);
-        setUsingDefaultPenalties(true);
-      }
-    } catch (error) {
-      // If endpoint doesn't exist, that's okay - we'll use defaults
-      console.log("Penalty configuration endpoint not available, using defaults");
-      setPenalties(defaultPenalties);
-      setUsingDefaultPenalties(true);
-    }
-  };
-
   useEffect(() => {
     fetchJobDetails();
   }, [jobId]);
+
+  useEffect(() => {
+    // Fetch penalties from API or use job-specific penalties
+    const fetchPenalties = async () => {
+      try {
+        // Try to fetch penalties from job data first
+        if (jobsData?.penalties && Array.isArray(jobsData.penalties)) {
+          setPenalties(jobsData.penalties);
+          return;
+        }
+        
+        // Try to fetch default penalties from API
+        const response = await axiosInstance.get("/admin/penalties").catch(() => null);
+        if (response?.data?.penalties) {
+          setPenalties(response.data.penalties);
+          return;
+        }
+        
+        // Fallback to empty array if no penalties found
+        setPenalties([]);
+      } catch (error) {
+        console.error("Error fetching penalties:", error);
+        setPenalties([]);
+      }
+    };
+
+    if (jobsData?._id || jobsData?.id) {
+      fetchPenalties();
+    }
+  }, [jobsData]);
 
   const handleIncrease = (id, key, maxValue) => {
     setShifts((prevShifts) =>
@@ -717,17 +708,14 @@ const JobDetailsPage = () => {
 
         <div className="space-y-3">
           {penalties.length === 0 ? (
-            <p className="text-gray-500 text-sm py-4 text-center">
-              No penalty information available
-            </p>
+            <div className="text-center py-8 text-gray-500">
+              No penalties configured for this job.
+            </div>
           ) : (
-            penalties.map((item: any, index: number) => {
-              // Handle different API response formats
-              const penaltyText = item.penalty || item.penaltyAmount || item.amount || "No Penalty";
-              const conditionText = item.condition || item.timeFrame || item.frame || item.description || "";
-              const penaltyValue = typeof penaltyText === 'string' 
-                ? parseInt(penaltyText.replace("$", "").replace(" Penalty", "").replace("No Penalty", "0"))
-                : (typeof penaltyText === 'number' ? penaltyText : 0);
+            penalties.map((item, index) => {
+            const penaltyValue = parseInt(
+              item.penalty.replace("$", "").replace(" Penalty", "").replace("No Penalty", "0")
+            );
 
             // Determine penalty text color
             const penaltyColor =
@@ -741,40 +729,24 @@ const JobDetailsPage = () => {
                       ? "text-orange-600 bg-orange-50 border-orange-200"
                       : "text-gray-600 bg-gray-50 border-gray-200";
 
-              // Format penalty display
-              const penaltyDisplay = typeof penaltyText === 'number' 
-                ? (penaltyText === 0 ? "No Penalty" : `$${penaltyText} Penalty`)
-                : penaltyText;
-
-              return (
-                <div 
-                  key={index} 
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+            return (
+              <div 
+                key={index} 
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+              >
+                <p className="text-sm font-medium text-gray-900">
+                  {item.condition}
+                </p>
+                <p
+                  className={`py-1.5 px-4 rounded-lg text-sm font-semibold border ${penaltyColor}`}
                 >
-                  <p className="text-sm font-medium text-gray-900">
-                    {conditionText}
-                  </p>
-                  <p
-                    className={`py-1.5 px-4 rounded-lg text-sm font-semibold border ${penaltyColor}`}
-                  >
-                    {penaltyDisplay}
-                  </p>
-                </div>
-              );
-            })
-          )}
+                  {item.penalty}
+                </p>
+              </div>
+            );
+          }))
+          }
         </div>
-        
-        {/* Note for backend team - remove this after API is implemented */}
-        {usingDefaultPenalties && penalties.length > 0 && (
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-xs text-yellow-800">
-              <strong>Note:</strong> Currently using default penalty values. 
-              Please implement <code className="bg-yellow-100 px-1 rounded">GET /admin/penalty-configuration</code> endpoint 
-              or include <code className="bg-yellow-100 px-1 rounded">penalties</code> array in job response.
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

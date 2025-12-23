@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -33,6 +33,7 @@ interface Shift {
 
 const NewJob: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [employers, setEmployers] = useState<Employer[]>([]);
@@ -40,24 +41,27 @@ const NewJob: React.FC = () => {
   const [availableOutlets, setAvailableOutlets] = useState<Array<{ id: string; address: string; name?: string }>>([]);
   const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
+  // Get employerId from navigation state if available
+  const employerIdFromState = (location.state as any)?.employerId;
+
   const [formData, setFormData] = useState({
     jobDate: new Date().toISOString().split("T")[0],
     jobTitle: "",
     jobDescription: "",
     jobRoles: "",
     employerId: "",
-    employerName: "", // For manual entry
+    employerName: "", // Auto-filled from employer
+    industry: "", // Auto-filled from employer
     outletId: "",
-    outletAddress: "", // For manual entry
+    outletAddress: "", // Auto-filled from outlet
     useManualOutlet: false, // Toggle between dropdown and manual entry
     totalPositions: 1,
     foodHygieneCertRequired: false,
     jobStatus: "Active",
     applicationDeadline: "",
-    jobRequirements: "",
+    dressCode: "", // Replaces jobRequirements
+    skills: "", // Comma-separated, will be converted to array
     locationDetails: "",
-    contactPhone: "",
-    contactEmail: "",
   });
 
   const [shifts, setShifts] = useState<Shift[]>([
@@ -77,18 +81,53 @@ const NewJob: React.FC = () => {
   const [defaultPayRates, setDefaultPayRates] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
+    // Check if user is admin
+    if (user?.role !== "ADMIN") {
+      toast.error("Only admins can post jobs");
+      navigate("/jobs/job-management");
+      return;
+    }
     fetchEmployers();
     fetchRateConfiguration();
-  }, []);
+  }, [user, navigate]);
+
+  // Pre-select employer if passed from navigation state
+  useEffect(() => {
+    if (employerIdFromState && employers.length > 0) {
+      // Find employer by ID (could be EMP-xxxx format or MongoDB _id)
+      const employer = employers.find(
+        (e) => e.id === employerIdFromState ||
+          (e as any)._id === employerIdFromState ||
+          (e as any).employerId === employerIdFromState
+      );
+      if (employer) {
+        setSelectedEmployer(employer.id);
+      }
+    }
+  }, [employerIdFromState, employers]);
 
   useEffect(() => {
     if (selectedEmployer) {
       const employer = employers.find((e) => e.id === selectedEmployer);
-      if (employer?.outlets && employer.outlets.length > 0) {
-        setAvailableOutlets(employer.outlets);
-        setFormData((prev) => ({ ...prev, employerId: selectedEmployer, useManualOutlet: false }));
-      } else {
-        fetchEmployerOutlets(selectedEmployer);
+      if (employer) {
+        // Auto-fill employer details
+        const employerName = (employer as any)?.name ?? (employer as any)?.companyLegalName ?? "";
+        const industry = (employer as any)?.industry ?? "";
+
+        setFormData((prev) => ({
+          ...prev,
+          employerId: selectedEmployer,
+          employerName: employerName,
+          industry: industry,
+        }));
+
+        // Fetch outlets for this employer
+        if (employer?.outlets && employer.outlets.length > 0) {
+          setAvailableOutlets(employer.outlets);
+          setFormData((prev) => ({ ...prev, useManualOutlet: false }));
+        } else {
+          fetchEmployerOutlets(selectedEmployer);
+        }
       }
     } else {
       setAvailableOutlets([]);
@@ -100,7 +139,12 @@ const NewJob: React.FC = () => {
     try {
       const response = await axiosInstance.get("/employers?limit=100");
       if (response.data?.employers) {
-        setEmployers(response.data.employers);
+        // Map employers to use employerId (EMP-xxxx) format when available, fallback to _id
+        const mappedEmployers = response.data.employers.map((emp: any) => ({
+          ...emp,
+          id: emp.employerId || emp._id || emp.id, // Prefer EMP-xxxx format for API calls
+        }));
+        setEmployers(mappedEmployers);
       }
     } catch (error) {
       console.error("Error fetching employers:", error);
@@ -109,6 +153,7 @@ const NewJob: React.FC = () => {
 
   const fetchEmployerOutlets = async (employerId: string) => {
     try {
+      // API accepts both MongoDB ObjectId and EMP-xxxx format
       const response = await axiosInstance.get(`/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
         setAvailableOutlets(response.data.employer.outlets);
@@ -248,59 +293,51 @@ const NewJob: React.FC = () => {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
 
-    // Auto-fill location details from outlet
+    // Auto-fill location details and outlet address from outlet
     if (name === "outletId" && value) {
       const outlet = availableOutlets.find((o) => o.id === value);
       if (outlet) {
-        setFormData((prev) => ({ ...prev, locationDetails: outlet.address, outletAddress: outlet.address }));
+        const outletAddress = outlet.address ?? "";
+        setFormData((prev) => ({
+          ...prev,
+          locationDetails: outletAddress,
+          outletAddress: outletAddress
+        }));
       }
     }
 
     // Auto-fill location details from manual outlet entry
     if (name === "outletAddress") {
-      setFormData((prev) => ({ ...prev, locationDetails: value }));
-    }
-
-    // Auto-fill contact info from employer
-    if (name === "employerId" && value) {
-      const employer = employers.find((e) => e.id === value);
-      if (employer) {
-        setFormData((prev) => ({
-          ...prev,
-          employerId: value,
-          employerName: (employer as any).name || (employer as any).companyLegalName || ""
-        }));
-      }
+      setFormData((prev) => ({ ...prev, locationDetails: value ?? "" }));
     }
   };
 
   const validateForm = () => {
-    if (!formData.jobTitle.trim()) {
+    if (!formData.jobTitle?.trim()) {
       toast.error("Job title is required");
       return false;
     }
-    if (!formData.jobDescription.trim()) {
+    if (!formData.jobDescription?.trim()) {
       toast.error("Job description is required");
       return false;
     }
-    if (!formData.jobRoles.trim()) {
+    if (!formData.jobRoles?.trim()) {
       toast.error("Job roles is required");
       return false;
     }
-    // Employer is now optional - admin can post directly
-    // if (!formData.employerId && !formData.employerName.trim()) {
-    //   toast.error("Please select an employer or enter employer name");
-    //   return false;
-    // }
-    if (!formData.useManualOutlet && !formData.outletId && selectedEmployer !== "admin") {
-      toast.error("Please select an outlet or post as Admin");
+    if (!selectedEmployer || selectedEmployer === "") {
+      toast.error("Please select an employer");
       return false;
     }
-    if (formData.useManualOutlet && !formData.outletAddress.trim() && selectedEmployer !== "admin") {
-      toast.error("Please enter outlet address or post as Admin");
+    if (!formData.useManualOutlet && !formData.outletId) {
+      toast.error("Please select an outlet");
       return false;
     }
-    if (!formData.locationDetails.trim()) {
+    if (formData.useManualOutlet && !formData.outletAddress?.trim()) {
+      toast.error("Please enter outlet address");
+      return false;
+    }
+    if (!formData.locationDetails?.trim()) {
       toast.error("Location details is required");
       return false;
     }
@@ -329,36 +366,37 @@ const NewJob: React.FC = () => {
 
       const finalPostedBy = isAdmin ? "admin" : "employer";
 
+      // Convert skills from comma-separated string to array
+      const skillsArray = formData.skills
+        ? formData.skills.split(",").map((s) => s.trim()).filter((s) => s)
+        : [];
+
       const jobData = {
-        jobDate: formData.jobDate,
-        jobTitle: formData.jobTitle,
-        jobDescription: formData.jobDescription,
-        jobRoles: formData.jobRoles,
-        employerId: finalEmployerId,
-        employerName: selectedEmployer === "admin" ? "Admin/System" : (formData.employerName || null), // For admin or manual entry
+        jobDate: formData.jobDate ?? "",
+        jobTitle: formData.jobTitle ?? "",
+        jobDescription: formData.jobDescription ?? "",
+        jobRoles: formData.jobRoles ?? "",
+        employerId: finalEmployerId ?? null,
+        employerName: formData.employerName ?? null,
+        industry: formData.industry ?? null, // Auto-filled from employer
         postedBy: finalPostedBy, // REQUIRED: Set based on user role
-        outletId: formData.useManualOutlet ? null : formData.outletId,
-        outletAddress: formData.useManualOutlet ? (formData.outletAddress || formData.locationDetails) : null, // For manual entry
-        totalPositions: formData.totalPositions,
-        foodHygieneCertRequired: formData.foodHygieneCertRequired,
-        jobStatus: formData.jobStatus,
-        applicationDeadline: formData.applicationDeadline || null,
-        jobRequirements: formData.jobRequirements
-          ? formData.jobRequirements.split(",").map((r) => r.trim()).filter((r) => r) // Ensure array format
-          : [], // Always send as array, never null or string
-        locationDetails: formData.locationDetails,
-        contactInfo: {
-          phone: formData.contactPhone,
-          email: formData.contactEmail,
-        },
+        outletId: formData.useManualOutlet ? null : (formData.outletId ?? null),
+        outletAddress: formData.useManualOutlet ? (formData.outletAddress ?? formData.locationDetails ?? null) : null,
+        totalPositions: formData.totalPositions ?? 1,
+        foodHygieneCertRequired: formData.foodHygieneCertRequired ?? false,
+        jobStatus: formData.jobStatus ?? "Active",
+        applicationDeadline: formData.applicationDeadline ?? null,
+        dressCode: formData.dressCode ?? null, // Replaces jobRequirements
+        skills: skillsArray, // Array format
+        locationDetails: formData.locationDetails ?? "",
         shifts: shifts.map((shift) => ({
-          startTime: shift.startTime,
-          endTime: shift.endTime,
-          breakDuration: shift.breakDuration,
-          totalWorkingHours: shift.totalWorkingHours,
-          rateType: shift.rateType,
-          payPerHour: shift.payPerHour,
-          totalWages: shift.totalWages,
+          startTime: shift.startTime ?? "",
+          endTime: shift.endTime ?? "",
+          breakDuration: shift.breakDuration ?? 0,
+          totalWorkingHours: shift.totalWorkingHours ?? 0,
+          rateType: shift.rateType ?? "Weekday",
+          payPerHour: shift.payPerHour ?? 0,
+          totalWages: shift.totalWages ?? 0,
         })),
       };
 
@@ -477,7 +515,7 @@ const NewJob: React.FC = () => {
                   <input
                     type="date"
                     name="jobDate"
-                    value={formData.jobDate}
+                    value={formData.jobDate ?? new Date().toISOString().split("T")[0]}
                     onChange={handleChange}
                     min={getTodayDateString()}
                     required
@@ -509,7 +547,7 @@ const NewJob: React.FC = () => {
                   <input
                     type="text"
                     name="jobRoles"
-                    value={formData.jobRoles}
+                    value={formData.jobRoles ?? ""}
                     onChange={handleChange}
                     placeholder="e.g., Waiter, Cashier, Kitchen Staff"
                     required
@@ -517,15 +555,15 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Total Positions Needed */}
+                {/* Total Vacancies */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Positions Needed <span className="text-red-500">*</span>
+                    Total Vacancies <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
                     name="totalPositions"
-                    value={formData.totalPositions}
+                    value={formData.totalPositions ?? 1}
                     onChange={handleChange}
                     min={1}
                     required
@@ -536,99 +574,79 @@ const NewJob: React.FC = () => {
                 {/* Employer */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer <span className="text-gray-400 text-xs">(Optional - Admin can post directly)</span>
+                    Employer <span className="text-red-500">*</span>
                   </label>
                   <div className="space-y-2">
                     <select
                       name="employerId"
-                      value={selectedEmployer}
+                      value={selectedEmployer ?? ""}
                       onChange={(e) => {
                         setSelectedEmployer(e.target.value);
+                        const selectedEmp = employers.find((emp) => emp.id === e.target.value);
                         setFormData((prev) => ({
                           ...prev,
-                          employerId: e.target.value === "admin" ? "" : e.target.value,
-                          employerName: e.target.value === "admin" ? "Admin/System" : "",
+                          employerId: e.target.value,
+                          employerName: (selectedEmp as any)?.name ?? (selectedEmp as any)?.companyLegalName ?? "",
+                          industry: (selectedEmp as any)?.industry ?? "",
                           outletId: "",
-                          useManualOutlet: e.target.value === "admin"
+                          useManualOutlet: false
                         }));
                       }}
+                      required
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="">Select Employer (Optional)</option>
-                      <option value="admin">Admin/System (Post as Admin)</option>
+                      <option value="">Select Employer</option>
                       {employers.map((employer) => (
                         <option key={employer.id} value={employer.id}>
-                          {(employer as any).name || (employer as any).companyLegalName || `Employer ${employer.id}`}
+                          {(employer as any)?.name ?? (employer as any)?.companyLegalName ?? `Employer ${employer.id}`}
                         </option>
                       ))}
                     </select>
 
-                    {/* Display Company Logo and Name when employer is selected */}
-                    {selectedEmployer && selectedEmployer !== "admin" && (() => {
+                    {/* Display Company Logo, Name, and Industry when employer is selected */}
+                    {selectedEmployer && (() => {
                       const selectedEmployerData = employers.find((e) => e.id === selectedEmployer);
-                      const companyName = (selectedEmployerData as any)?.name || (selectedEmployerData as any)?.companyLegalName || formData.employerName;
+                      const companyName = (selectedEmployerData as any)?.name ?? (selectedEmployerData as any)?.companyLegalName ?? formData.employerName ?? "";
                       const companyLogo = (selectedEmployerData as any)?.companyLogo;
+                      const industry = (selectedEmployerData as any)?.industry ?? formData.industry ?? "";
                       return (
-                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-3">
-                          {companyLogo && (
-                            <img
-                              src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
-                              alt="Company Logo"
-                              className="w-12 h-12 rounded-lg object-cover border border-gray-300"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = "none";
-                              }}
-                            />
-                          )}
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
+                        <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                          <div className="flex items-center gap-3">
                             {companyLogo && (
-                              <p className="text-xs text-gray-500 mt-1">Company logo displayed</p>
+                              <img
+                                src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
+                                alt="Company Logo"
+                                className="w-12 h-12 rounded-lg object-cover border border-gray-300"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = "none";
+                                }}
+                              />
                             )}
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
+                              {industry && (
+                                <p className="text-xs text-gray-600 mt-1">Industry: {industry}</p>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
                     })()}
-
-                    {selectedEmployer !== "admin" && (
-                      <div className="mt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedEmployer("admin");
-                            setFormData((prev) => ({
-                              ...prev,
-                              employerId: "",
-                              employerName: "Admin/System",
-                              outletId: "",
-                              useManualOutlet: true
-                            }));
-                          }}
-                          className="text-xs text-blue-600 hover:text-blue-800 underline"
-                        >
-                          Or post as Admin/System
-                        </button>
-                        {!selectedEmployer && (
-                          <input
-                            type="text"
-                            name="employerName"
-                            value={formData.employerName}
-                            onChange={handleChange}
-                            placeholder="Or enter employer name manually"
-                            className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        )}
-                      </div>
-                    )}
-                    {selectedEmployer === "admin" && (
-                      <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-xs text-blue-700">
-                          <strong>Posting as Admin:</strong> This job will be posted by the admin/system.
-                          No company logo will be displayed as this is an admin post. You can enter outlet details manually below.
-                        </p>
-                      </div>
-                    )}
                   </div>
+                </div>
+
+                {/* Industry (Auto-filled from employer) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Industry <span className="text-gray-400 text-xs">(Auto-filled from employer)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="industry"
+                    value={formData.industry ?? ""}
+                    readOnly
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
+                  />
                 </div>
 
                 {/* Outlet */}
@@ -641,7 +659,7 @@ const NewJob: React.FC = () => {
                       <input
                         type="text"
                         name="outletAddress"
-                        value={formData.outletAddress}
+                        value={formData.outletAddress ?? ""}
                         onChange={handleChange}
                         placeholder="Enter outlet address"
                         required={formData.useManualOutlet}
@@ -661,14 +679,15 @@ const NewJob: React.FC = () => {
                     <div className="space-y-2">
                       <select
                         name="outletId"
-                        value={formData.outletId}
+                        value={formData.outletId ?? ""}
                         onChange={handleChange}
+                        required
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Select Outlet</option>
                         {availableOutlets.map((outlet) => (
                           <option key={outlet.id} value={outlet.id}>
-                            {outlet.name || outlet.address}
+                            {outlet.name ?? outlet.address}
                           </option>
                         ))}
                       </select>
@@ -690,7 +709,7 @@ const NewJob: React.FC = () => {
                   </label>
                   <select
                     name="jobStatus"
-                    value={formData.jobStatus}
+                    value={formData.jobStatus ?? "Active"}
                     onChange={handleChange}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -710,7 +729,7 @@ const NewJob: React.FC = () => {
                   <input
                     type="datetime-local"
                     name="applicationDeadline"
-                    value={formData.applicationDeadline}
+                    value={formData.applicationDeadline ?? ""}
                     onChange={handleChange}
                     min={`${getMinDeadlineDate()}T00:00`}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -728,7 +747,7 @@ const NewJob: React.FC = () => {
                   <input
                     type="text"
                     name="locationDetails"
-                    value={formData.locationDetails}
+                    value={formData.locationDetails ?? ""}
                     onChange={handleChange}
                     placeholder="Auto-filled from outlet or enter manually"
                     required
@@ -743,7 +762,7 @@ const NewJob: React.FC = () => {
                   </label>
                   <textarea
                     name="jobDescription"
-                    value={formData.jobDescription}
+                    value={formData.jobDescription ?? ""}
                     onChange={handleChange}
                     rows={4}
                     placeholder="Enter detailed job description, responsibilities, requirements..."
@@ -752,51 +771,37 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Job Requirements / Skills */}
+                {/* Dress Code */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Skills / Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated, will be saved as array)</span>
+                    Dress Code <span className="text-gray-400 text-xs">(Optional)</span>
                   </label>
                   <textarea
-                    name="jobRequirements"
-                    value={formData.jobRequirements}
+                    name="dressCode"
+                    value={formData.dressCode ?? ""}
                     onChange={handleChange}
                     rows={3}
-                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness (Enter comma-separated values)"
+                    placeholder="e.g., Uniform provided, Black pants and white shirt, Safety shoes required"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  />
+                </div>
+
+                {/* Skills */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Skills <span className="text-gray-400 text-xs">(Optional - comma-separated, will be saved as array)</span>
+                  </label>
+                  <textarea
+                    name="skills"
+                    value={formData.skills ?? ""}
+                    onChange={handleChange}
+                    rows={3}
+                    placeholder="e.g., Customer service, Food handling, Cash handling, Team work (Enter comma-separated values)"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Note: These will be converted to an array format when saved. Example: "Skill1, Skill2" → ["Skill1", "Skill2"]
                   </p>
-                </div>
-
-                {/* Contact Information */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contact Phone <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="contactPhone"
-                    value={formData.contactPhone}
-                    onChange={handleChange}
-                    placeholder="Auto-filled from employer"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contact Email <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="email"
-                    name="contactEmail"
-                    value={formData.contactEmail}
-                    onChange={handleChange}
-                    placeholder="Auto-filled from employer"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
                 </div>
 
                 {/* Food Hygiene Cert Required */}

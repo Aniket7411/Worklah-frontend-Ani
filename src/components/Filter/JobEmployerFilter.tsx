@@ -37,7 +37,19 @@ export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilt
     const fetchEmployers = async () => {
       try {
         const response = await axiosInstance.get('/employers') // Adjust if needed
-        const rawEmployers = response.data.employers
+
+        // Check for success field according to API spec
+        if (response.data?.success === false) {
+          console.error('Failed to fetch employers:', response.data?.message);
+          return;
+        }
+
+        const rawEmployers = response.data?.employers || []
+
+        if (!Array.isArray(rawEmployers)) {
+          console.error('Invalid employers data format');
+          return;
+        }
 
         const formattedEmployers: Employer[] = rawEmployers.map((emp: any) => ({
           id: emp._id,
@@ -117,11 +129,11 @@ export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilt
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold">Employers</h2>
           <button
-  className="text-gray-500 hover:text-gray-700"
-  onClick={onClose}
->
-  ×
-</button>
+            className="text-gray-500 hover:text-gray-700"
+            onClick={onClose}
+          >
+            ×
+          </button>
 
         </div>
 
@@ -168,9 +180,8 @@ export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilt
                     </span>
                     {employer.outlets && employer.outlets.length > 0 && (
                       <svg
-                        className={`ml-auto h-4 w-4 transform transition-transform cursor-pointer ${
-                          employer.isExpanded ? 'rotate-180' : ''
-                        }`}
+                        className={`ml-auto h-4 w-4 transform transition-transform cursor-pointer ${employer.isExpanded ? 'rotate-180' : ''
+                          }`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -220,11 +231,10 @@ export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilt
               {alphabet.map((letter) => (
                 <button
                   key={letter}
-                  className={`w-6 h-6 flex items-center justify-center hover:text-gray-600 ${
-                    selectedLetter === letter
-                      ? 'text-blue-600 font-bold'
-                      : 'text-gray-400'
-                  }`}
+                  className={`w-6 h-6 flex items-center justify-center hover:text-gray-600 ${selectedLetter === letter
+                    ? 'text-blue-600 font-bold'
+                    : 'text-gray-400'
+                    }`}
                   onClick={() => {
                     if (selectedLetter === letter) {
                       setSelectedLetter(null)
@@ -238,24 +248,24 @@ export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilt
               ))}
             </div>
             <div className="mt-4 flex justify-end">
-</div>
+            </div>
 
-  <button
-    className="bg-blue-600 text-white px-4 py-2 rounded-lg ms-16 hover:bg-blue-700"
-    onClick={() => {
-      const selected = employers
-        .filter(emp => emp.isChecked || emp.outlets?.some(o => o.isChecked))
-        .map(emp => ({
-          ...emp,
-          outlets: emp.outlets?.filter(o => o.isChecked)
-        }))
+            <button
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg ms-16 hover:bg-blue-700"
+              onClick={() => {
+                const selected = employers
+                  .filter(emp => emp.isChecked || emp.outlets?.some(o => o.isChecked))
+                  .map(emp => ({
+                    ...emp,
+                    outlets: emp.outlets?.filter(o => o.isChecked)
+                  }))
 
-      onSelect(selected)
-      onClose()
-    }}
-  >
-    Submit
-  </button>
+                onSelect(selected)
+                onClose()
+              }}
+            >
+              Submit
+            </button>
           </div>
         </div>
       </div>

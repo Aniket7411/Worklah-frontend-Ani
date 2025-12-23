@@ -1,7 +1,79 @@
 import { Plus, Trash2 } from "lucide-react";
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import { axiosInstance } from "../../../lib/authInstances";
+
+interface Penalty {
+  frame: string;
+  penalty: string;
+}
 
 const DefaultPenalties = () => {
+  const { jobId } = useParams<{ jobId: string }>();
+  const [penalties, setPenalties] = useState<Penalty[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPenalties = async () => {
+      try {
+        setLoading(true);
+        
+        // Try to fetch penalties from job data first
+        if (jobId) {
+          try {
+            const jobResponse = await axiosInstance.get(`/jobs/${jobId}`);
+            const job = jobResponse.data?.job || jobResponse.data;
+            if (job?.penalties && Array.isArray(job.penalties)) {
+              setPenalties(job.penalties);
+              setLoading(false);
+              return;
+            }
+          } catch (error) {
+            console.error("Error fetching job penalties:", error);
+          }
+        }
+
+        // Try to fetch default penalties from API
+        try {
+          const response = await axiosInstance.get("/admin/penalties");
+          if (response.data?.penalties && Array.isArray(response.data.penalties)) {
+            setPenalties(response.data.penalties);
+            setLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error("Error fetching default penalties:", error);
+        }
+
+        // Fallback to empty array if no penalties found
+        setPenalties([]);
+      } catch (error) {
+        console.error("Error fetching penalties:", error);
+        setPenalties([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPenalties();
+  }, [jobId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center py-10">
+        <div className="text-gray-500">Loading penalties...</div>
+      </div>
+    );
+  }
+
+  if (penalties.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center py-10">
+        <div className="text-gray-500">No penalties configured</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center py-10">
       <div className="max-w-6xl w-full  rounded-lg ">
@@ -24,32 +96,7 @@ const DefaultPenalties = () => {
             <p>Penalties</p>
           </div>
           <div className="">
-            {[
-              {
-                frame: "5 Times after applying",
-                penalty: "No Penalty",
-              },
-              {
-                frame: "> 48 Hours",
-                penalty: "No Penalty",
-              },
-              {
-                frame: "> 24 Hours (1st Time)",
-                penalty: "$5 Penalty",
-              },
-              {
-                frame: "> 24 Hours (2nd Time)",
-                penalty: "$10 Penalty",
-              },
-              {
-                frame: "> 24 Hours (3rd Time)",
-                penalty: "$15 Penalty",
-              },
-              {
-                frame: "No Show - During Shift",
-                penalty: "$50 Penalty",
-              },
-            ].map((item, index) => {
+            {penalties.map((item, index) => {
               const penaltyValue = parseInt(
                 item.penalty.replace("$", "").replace(" Penalty", "")
               );

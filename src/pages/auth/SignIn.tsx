@@ -14,12 +14,6 @@ export default function SignIn() {
     role: 'Admin',
   });
 
-  if (isAuthenticated) {
-    return <Navigate to="/" />;
-  }
-
-  console.log("anna")
-
   const [isLoading, setIsLoading] = useState(false);
   const [user, setUser] = useState<[] | null>([]);
   const [error, setError] = useState<string | null>(null);

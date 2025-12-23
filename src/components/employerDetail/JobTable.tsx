@@ -2,8 +2,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
 
 const JobTable: React.FC<{ summaryData: any; jobData: any }> = ({ summaryData, jobData }) => {
-  console.log("summaryData", summaryData);
-  console.log("jobData", jobData);
 
   const months: string[] = [
     "January",

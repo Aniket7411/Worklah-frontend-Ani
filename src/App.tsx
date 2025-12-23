@@ -15,7 +15,7 @@ import EmployeePayments from "./pages/payments/EmployeePayments";
 import OutletDetail from "./pages/employers/OutletDetail";
 import SignIn from "./pages/auth/SignIn";
 import PrivateRoute from "./components/PrivateRoute"; // Import PrivateRoute
-import { useAuth, AuthProvider } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext";
 import NewJob from "./pages/jobManagemant/NewJob";
 import ModifyJob from "./pages/jobManagemant/ModifyJob";
 import AddEmployer from "./pages/employers/AddEmployer";
@@ -25,8 +25,6 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import SupportFeedback from "./pages/support/SupportFeedback";
 
 const AppContent: React.FC = () => {
-  const { user, isAuthenticated } = useAuth();
-
   return (
     <Routes>
       <Route path="login" element={<SignIn />} />
@@ -51,7 +49,7 @@ const AppContent: React.FC = () => {
           <Route path="employers/add-employer" element={<AddEmployer />} />
           <Route path="employers/:id/edit" element={<EditEmployer />} />
           <Route path="employers/:id/outletDetails" element={<OutletDetail />} />
-          <Route path="employers/:id" element={<ActiveJobPosting id={""} />} />
+          <Route path="employers/:id" element={<ActiveJobPosting />} />
 
           <Route path="hustle-heroes" element={<HustleHeroesList />} />
           <Route path="payments" element={<EmployeePayments />} />

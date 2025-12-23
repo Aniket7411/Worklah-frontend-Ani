@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { FiCheck, FiEdit3, FiChevronDown } from "react-icons/fi";
 import { useNavigate, useParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
+import toast from "react-hot-toast";
 // import Image from "next/image"
 
 interface Candidate {
@@ -38,13 +39,11 @@ export default function CandidateManagement() {
 
   const navigate = useNavigate()
   const { jobId } = useParams()
-  console.log(jobId)
 
   useEffect(() => {
     const fetchCandidates = async () => {
       try {
         const response = await axiosInstance.get(`/admin/jobs/candidates/${jobId}`);
-        console.log("hello", response.data)
         setCandidates(response.data.candidates)
         setData(response.data)
       } catch (error) {
@@ -78,7 +77,10 @@ export default function CandidateManagement() {
   const handleStatusSelection = (userId: string, newStatus: string) => {
     if (newStatus === "Rejected") {
       const reason = prompt("Enter reason for rejection:");
-      if (!reason) return; // Cancel if no reason
+      if (!reason || reason.trim() === "") {
+        toast.error("Rejection reason is required");
+        return; // Cancel if no reason
+      }
       return handleApprovedStatusChange(userId, newStatus, reason);
     }
 
@@ -100,15 +102,17 @@ export default function CandidateManagement() {
         reason, // optional reason
       });
 
-      console.log("Updating application for:", { userId, jobId, status: newStatus, reason });
 
       setCandidates((prev) =>
         prev.map((c) =>
-          c.id === userId ? { ...c, approvedStatus: newStatus } : c
+          c.id === userId ? { ...c, approvedStatus: newStatus, status: newStatus } : c
         )
       );
-    } catch (err) {
+      
+      toast.success(`Status updated to ${newStatus} successfully`);
+    } catch (err: any) {
       console.error("Error updating approved status:", err);
+      toast.error(err?.response?.data?.message || "Failed to update status. Please try again.");
     }
   };
 

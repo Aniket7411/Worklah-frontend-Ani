@@ -75,8 +75,13 @@ const JobPostChart = () => {
         }
         
         // Backend should return complete data structure with all months
-        // Also check for new jobPostingChart format
-        const chartData = chartResponse?.data?.jobPostingChart?.data 
+        // Check for jobPostsChart format (updated API format)
+        const chartData = chartResponse?.data?.jobPostsChart?.data 
+          ? chartResponse.data.jobPostsChart.labels.map((label: string, index: number) => ({
+              month: label,
+              jobsPosted: chartResponse.data.jobPostsChart.data[index] || 0,
+            }))
+          : chartResponse?.data?.jobPostingChart?.data 
           ? chartResponse.data.jobPostingChart.labels.map((label: string, index: number) => ({
               month: label,
               jobsPosted: chartResponse.data.jobPostingChart.data[index] || 0,
@@ -102,7 +107,7 @@ const JobPostChart = () => {
         // Check for success field according to API spec
         if (jobsResponse.data?.success === false) {
           console.error("Failed to fetch jobs:", jobsResponse.data?.message);
-          setRecentJobs([]);
+          setPostedJobs([]);
           return;
         }
         
@@ -113,11 +118,11 @@ const JobPostChart = () => {
         } else {
           // Use data exactly as backend provides it
           const formattedJobs = jobs.map((job: any) => ({
-            id: job._id,
-            title: job.jobName || "",
+            id: job._id || job.id,
+            title: job.jobName || job.jobTitle || "",
             applicants: job.applicantsCount || 0,
-            icon: job.jobLogo || "",
-            postedBy: job.employer?.companyLegalName || "",
+            icon: job.jobLogo || job.employer?.companyLogo || "",
+            postedBy: job.employer?.companyLegalName || job.employerName || "",
           }));
           setPostedJobs(formattedJobs);
         }

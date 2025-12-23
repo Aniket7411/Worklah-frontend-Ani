@@ -80,13 +80,15 @@ const EditEmployer: React.FC = () => {
   const fetchEmployerData = async () => {
     try {
       setLoading(true);
+      // API accepts both MongoDB ObjectId and EMP-xxxx format
+      // The id from URL params can be either format
       const response = await axiosInstance.get(`/employers/${id}`);
-      
+
       // Check for success field according to API spec
       if (response.data?.success === false) {
         throw new Error(response.data?.message || "Failed to fetch employer data");
       }
-      
+
       const employer = response?.data?.employer || response?.data;
 
       if (employer) {
@@ -263,6 +265,8 @@ const EditEmployer: React.FC = () => {
         }
       });
 
+      // API accepts both MongoDB ObjectId and EMP-xxxx format
+      // The id from URL params can be either format
       const response = await axiosInstance.put(`/employers/${id}`, formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
       });
