@@ -3,14 +3,14 @@ import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
 // Support environment-based API URLs
-// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-//   (import.meta.env.DEV
-//     ? "http://localhost:3000/api"
-//     : "https://worklah-updated-dec.onrender.com/api
+// Use environment variable if available, otherwise default to localhost for development
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+//                      import.meta.env.REACT_APP_API_URL || 
+//                      "http://localhost:3000/api"
+// Production URL: https://worklah-updated-dec.onrender.com/api
+// Alternative: https://worklah.onrender.com/api
 
 const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
-
-// const API_BASE_URL = "http://localhost:3000/api"
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -23,7 +23,16 @@ export const axiosInstance = axios.create({
 
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = Cookies.get('authToken'); // Retrieve token from cookies
+    // Try localStorage first, then cookies for token
+    let token = localStorage.getItem('authToken');
+    if (!token) {
+      token = Cookies.get('authToken') || null;
+      // Sync to localStorage if found in cookies
+      if (token) {
+        localStorage.setItem('authToken', token);
+      }
+    }
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`; // Add token to Authorization header
     }
@@ -41,7 +50,7 @@ axiosInstance.interceptors.response.use(
     if (response.data && response.data.success === false) {
       const errorMessage = response.data.message || 'Request failed';
       // Don't show toast for auth endpoints (handled in AuthContext)
-      if (!response.config.url?.includes('/user/login') && !response.config.url?.includes('/user/register')) {
+      if (!response.config.url?.includes('/admin/login') && !response.config.url?.includes('/user/login') && !response.config.url?.includes('/user/register')) {
         toast.error(errorMessage);
       }
       const error = new Error(errorMessage);
@@ -53,6 +62,8 @@ axiosInstance.interceptors.response.use(
   (error) => {
     // Handle 401 Unauthorized - redirect to login
     if (error.response?.status === 401) {
+      // Remove token from both storage locations
+      localStorage.removeItem('authToken');
       Cookies.remove('authToken');
       toast.error('Session expired. Please login again.');
       // Only redirect if not already on login page

@@ -43,7 +43,7 @@ export default function ForgotPassword() {
       <div className="flex flex-col w-full md:w-1/2 p-12 sm:p-20 lg:p-24 justify-center">
         <div className="w-full max-w-lg mx-auto space-y-10">
           {/* Logo */}
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-2">
             <img
               src="/assets/logo.png"
               alt="Work Lah! Logo"

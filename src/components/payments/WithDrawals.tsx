@@ -163,7 +163,8 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
         cashOutMethod: newTransaction.transactionType === "Cash Out" ? newTransaction.cashOutMethod : null,
       };
 
-      const response = await axiosInstance.post("/withdrawals/create", transactionData);
+      // Use admin cashout endpoint for creating withdrawal requests
+      const response = await axiosInstance.post("/admin/cashout", transactionData);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {

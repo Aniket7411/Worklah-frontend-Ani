@@ -1,63 +1,73 @@
-import React, { useEffect, useState } from "react";
-import {
-  MoreVertical,
-  Edit,
-  Trash2,
-  Plus,
-  Filter,
-  Eye,
-  Loader2,
-} from "lucide-react";
-import Pagination from "../../components/Pagination";
+import React, { useEffect, useState, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
-import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toast from "react-hot-toast";
+import {
+  Search,
+  Plus,
+  MoreVertical,
+  Eye,
+  Edit,
+  Trash2,
+  Building2,
+  Phone,
+  Mail,
+  Store,
+  Filter,
+  X,
+  Loader2,
+  User,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 
 interface Employer {
-  employerId: string; // Display format: "#e3d7"
+  employerId: string;
   companyLegalName: string;
-  companyLogo: string;
+  companyLogo: string | null;
   mainContactPerson: string;
   mainContactPersonPosition: string;
   mainContactNumber: string;
   companyEmail: string;
-  companyNumber: string;
-  accountManager: string;
-  industry: string;
   outlets: number;
-  contractStartDate: string;
-  contractEndDate: string;
   serviceAgreement: string;
-  employerOriginalId: string; // MongoDB _id
-  employerIdForAPI: string; // EMP-xxxx format (preferred) or _id (fallback)
+  employerOriginalId: string;
+  employerIdForAPI: string;
 }
 
-const EmployerTable: React.FC = () => {
-  const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+const Employers: React.FC = () => {
   const [employers, setEmployers] = useState<Employer[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [showDeleteModal, setShowDeleteModal] = useState<{ isOpen: boolean; employerId: string | null; employerName: string }>({
+  const [searchQuery, setSearchQuery] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState<{
+    isOpen: boolean;
+    employerId: string | null;
+    employerName: string;
+  }>({
     isOpen: false,
     employerId: null,
     employerName: "",
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const navigate = useNavigate();
   const { user } = useAuth();
   const images = "https://worklah.onrender.com";
   const isAdmin = user?.role === "ADMIN";
+  const itemsPerPage = 10;
 
+  // Fetch employers data
   const fetchData = async () => {
     try {
       setIsLoading(true);
-      const response = await axiosInstance.get(`/employers?page=${currentPage}&limit=10`);
+      const response = await axiosInstance.get(`/admin/employers?page=${currentPage}&limit=${itemsPerPage}`);
 
-      // Check for success field according to API spec
       if (response.data?.success === false) {
         throw new Error(response.data?.message || "Failed to fetch employers");
       }
@@ -66,63 +76,52 @@ const EmployerTable: React.FC = () => {
         throw new Error("Invalid API response format");
       }
 
-      const employerData = response.data.employers.map((employer: any) => {
-        // Get employerId in EMP-xxxx format (preferred) or MongoDB _id (fallback)
-        // According to API spec: prefer employerId format when available
+      const employerData: Employer[] = response.data.employers.map((employer: any) => {
         const employerIdForAPI = employer.employerId || employer._id || employer.id;
         const mongoId = employer._id || employer.id;
 
-        // Display format: "#e3d7" from EMP-xxxx or last 4 chars of _id
         const employerIdDisplay = employerIdForAPI
-          ? (employerIdForAPI.startsWith("EMP-")
-            ? `#${employerIdForAPI.split("-")[1] || employerIdForAPI.slice(-4)}`
-            : `#${employerIdForAPI.slice(-4)}`)
+          ? employerIdForAPI.startsWith("EMP-")
+            ? employerIdForAPI.split("-")[1] || employerIdForAPI.slice(-4)
+            : employerIdForAPI.slice(-4)
           : "N/A";
 
-        // Handle mainContactPersons - API returns array
-        const mainContactPerson = Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
-          ? employer.mainContactPersons[0].name || "N/A"
-          : employer.mainContactPersonName || employer.mainContactPerson?.name || "N/A";
+        const mainContactPerson =
+          Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+            ? employer.mainContactPersons[0].name || "N/A"
+            : employer.mainContactPersonName || employer.mainContactPerson?.name || "N/A";
 
-        const mainContactPersonPosition = Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
-          ? employer.mainContactPersons[0].position || employer.jobPosition || "N/A"
-          : employer.mainContactPersonPosition || employer.mainContactPerson?.position || "N/A";
+        const mainContactPersonPosition =
+          Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+            ? employer.mainContactPersons[0].position || employer.jobPosition || "N/A"
+            : employer.mainContactPersonPosition || employer.mainContactPerson?.position || "N/A";
 
-        // Handle contact number - from mainContactPersons array or mainContactNumber
-        const mainContactNumber = Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
-          ? employer.mainContactPersons[0].number || employer.mainContactNumber || "N/A"
-          : employer.mainContactNumber || employer.mainContactPersonNumber || "N/A";
+        const mainContactNumber =
+          Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
+            ? employer.mainContactPersons[0].number || employer.mainContactNumber || "N/A"
+            : employer.mainContactNumber || employer.mainContactPersonNumber || "N/A";
 
-        // Handle company logo path - normalize backslashes to forward slashes for URLs
-        const companyLogoPath = employer.companyLogo
-          ? employer.companyLogo.replace(/\\/g, '/')
-          : null;
+        const companyLogoPath = employer.companyLogo ? employer.companyLogo.replace(/\\/g, "/") : null;
 
         return {
           employerId: employerIdDisplay,
           companyLogo: companyLogoPath ? `${images}${companyLogoPath}` : null,
           companyLegalName: employer.companyLegalName || employer.companyName || "N/A",
-          hqAddress: employer.hqAddress || "N/A",
-          mainContactPerson: mainContactPerson,
-          mainContactPersonPosition: mainContactPersonPosition,
-          mainContactNumber: mainContactNumber,
+          mainContactPerson,
+          mainContactPersonPosition,
+          mainContactNumber,
           companyEmail: employer.emailAddress || employer.companyEmail || "N/A",
-          companyNumber: employer.officeNumber || employer.companyNumber || "N/A",
-          accountManager: employer.accountManager || "N/A",
-          industry: employer.industry || "N/A",
           outlets: Array.isArray(employer.outlets) ? employer.outlets.length : 0,
-          contractStartDate: employer.contractStartDate?.substring(0, 10) || "N/A",
-          contractEndDate: employer.contractExpiryDate?.substring(0, 10) || employer.contractEndDate?.substring(0, 10) || "N/A",
           serviceAgreement: employer.serviceAgreement || "N/A",
           employerOriginalId: mongoId || "",
-          employerIdForAPI: employerIdForAPI || mongoId || ""
+          employerIdForAPI: employerIdForAPI || mongoId || "",
         };
       });
 
       setEmployers(employerData);
-      // Handle pagination according to API spec structure
       const pagination = response.data.pagination || {};
       setTotalPages(pagination.totalPages || response.data.totalPages || 1);
+      setTotalItems(pagination.totalItems || response.data.totalItems || employerData.length);
     } catch (error: any) {
       console.error("Error fetching employer data:", error);
       toast.error(error?.response?.data?.message || "Failed to fetch employers. Please try again later.");
@@ -134,41 +133,77 @@ const EmployerTable: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
+  // Filter employers based on search query
+  const filteredEmployers = useMemo(() => {
+    if (!searchQuery.trim()) return employers;
 
+    const query = searchQuery.toLowerCase();
+    return employers.filter((employer) => {
+      return (
+        employer.companyLegalName.toLowerCase().includes(query) ||
+        employer.mainContactPerson.toLowerCase().includes(query) ||
+        employer.companyEmail.toLowerCase().includes(query) ||
+        employer.mainContactNumber.includes(query) ||
+        employer.employerId.toLowerCase().includes(query)
+      );
+    });
+  }, [employers, searchQuery]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openMenuId) {
+        const menuElement = menuRefs.current[openMenuId];
+        if (menuElement && !menuElement.contains(event.target as Node)) {
+          setOpenMenuId(null);
+        }
+      }
+    };
+
+    if (openMenuId) {
+      // Use a slight delay to ensure menu button click completes first
+      const timeoutId = setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+      }, 0);
+
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [openMenuId]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const handlePopupToggle = (index: number) => {
-    setIsPopupOpen(isPopupOpen === index ? null : index);
+  const handleView = (id: string) => {
+    const employer = employers.find((emp) => emp.employerOriginalId === id);
+    const apiId = employer?.employerIdForAPI || id;
+    setOpenMenuId(null);
+    navigate(`/employers/${apiId}`);
   };
 
-  const handleActionClick = (action: string, id: string | number) => {
-    // Find employer by original ID (MongoDB _id)
-    const employer = employers.find(emp =>
-      emp.employerOriginalId === id ||
-      emp.employerIdForAPI === id ||
-      emp.employerId === id
-    );
+  const handleEdit = (id: string) => {
+    const employer = employers.find((emp) => emp.employerOriginalId === id);
+    const apiId = employer?.employerIdForAPI || id;
+    setOpenMenuId(null);
+    navigate(`/employers/${apiId}/edit`);
+  };
 
-    // Use employerIdForAPI (EMP-xxxx format preferred) for API calls
-    const apiId = employer?.employerIdForAPI || String(id);
-
-    if (action === "View") {
-      navigate(`/employers/${apiId}`);
-    } else if (action === "Edit") {
-      navigate(`/employers/${apiId}/edit`);
-    } else if (action === "Delete") {
-      setShowDeleteModal({
-        isOpen: true,
-        employerId: apiId,
-        employerName: employer?.companyLegalName || "this employer",
-      });
-    }
-    setIsPopupOpen(null);
+  const handleDeleteClick = (id: string, name: string) => {
+    const employer = employers.find((emp) => emp.employerOriginalId === id);
+    const apiId = employer?.employerIdForAPI || id;
+    setOpenMenuId(null);
+    setShowDeleteModal({
+      isOpen: true,
+      employerId: apiId,
+      employerName: name,
+    });
   };
 
   const handleDelete = async () => {
@@ -176,10 +211,8 @@ const EmployerTable: React.FC = () => {
 
     setIsDeleting(true);
     try {
-      // API accepts both EMP-xxxx format and MongoDB ObjectId
-      const response = await axiosInstance.delete(`/employers/${showDeleteModal.employerId}`);
+      const response = await axiosInstance.delete(`/admin/employers/${showDeleteModal.employerId}`);
 
-      // Check for success field according to API spec
       if (response.data?.success === false) {
         toast.error(response.data?.message || "Failed to delete employer");
         return;
@@ -196,280 +229,507 @@ const EmployerTable: React.FC = () => {
     }
   };
 
-
-  // Close popup when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isPopupOpen !== null) {
-        const target = event.target as HTMLElement;
-        if (!target.closest('.action-menu-container')) {
-          setIsPopupOpen(null);
-        }
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isPopupOpen]);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "Completed":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "In Discussion":
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case "Expired":
+        return "bg-red-50 text-red-700 border-red-200";
+      default:
+        return "bg-gray-50 text-gray-700 border-gray-200";
+    }
+  };
 
   return (
-    <div className="w-full h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0 px-4 sm:px-6 lg:px-8 pt-6 pb-4">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">Employers</h1>
+    <div className="w-full bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header Section */}
+      <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
+        <div className="px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Employers</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {totalItems} {totalItems === 1 ? "employer" : "employers"} registered
+              </p>
+            </div>
 
-          <div className="flex items-center gap-3">
-            {isAdmin && (
-              <Link to="/employers/add-employer">
-                <button className="p-3 sm:p-[14px] rounded-full shadow-md bg-white hover:bg-gray-50 transition-all duration-200 border border-gray-200">
-                  <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
-              </Link>
-            )}
-            <button className="p-3 sm:p-[14px] rounded-full shadow-md bg-dark hover:bg-slate-800 transition-all duration-200">
-              <Filter
-                className="w-5 h-5 sm:w-6 sm:h-6"
-                color="#FFFFFF"
-                fill="#ffffff"
-              />
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1 lg:flex-initial lg:w-80">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search employers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-white"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Button */}
+              <button
+                onClick={() => toast("Filter functionality coming soon", { icon: "ℹ️" })}
+                className="p-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 transition-colors shadow-sm"
+                title="Filter"
+              >
+                <Filter className="w-5 h-5 text-gray-600" />
+              </button>
+
+              {/* Add Employer Button */}
+              {isAdmin && (
+                <Link to="/employers/add-employer">
+                  <button className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium">
+                    <Plus className="w-5 h-5" />
+                    <span className="hidden sm:inline">Add Employer</span>
+                  </button>
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Loading State */}
-      {isLoading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-[#048BE1]" />
-            <p className="text-gray-500 text-sm">Loading employers...</p>
+      {/* Content Section */}
+      <div className="px-4 sm:px-6 lg:px-8 py-8">
+        {isLoading ? (
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+              <p className="text-gray-600 font-medium">Loading employers...</p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex flex-col overflow-hidden px-4 sm:px-6 lg:px-8 pb-6">
-          <div className="flex-1 rounded-lg border border-gray-200 bg-white overflow-hidden shadow-sm flex flex-col">
-            <div className="flex-1 overflow-auto">
-              <table className="w-full border-collapse table-fixed">
-
-                <thead className="bg-[#EDF8FF] sticky top-0 z-20">
-                  <tr>
-                    <th className="w-[80px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700">
-                      ID
-                    </th>
-                    <th className="w-[90px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700">
-                      Logo
-                    </th>
-                    <th className="w-[160px] min-w-[160px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700">
-                      Company Name
-                    </th>
-                    <th className="w-[140px] min-w-[140px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden md:table-cell">
-                      Contact Person
-                    </th>
-                    <th className="w-[120px] min-w-[120px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden lg:table-cell">
-                      Position
-                    </th>
-                    <th className="w-[140px] min-w-[140px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden lg:table-cell">
-                      Contact Number
-                    </th>
-                    <th className="w-[200px] min-w-[200px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden md:table-cell">
-                      Email
-                    </th>
-                    <th className="w-[120px] min-w-[120px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden xl:table-cell">
-                      Company #
-                    </th>
-                    <th className="w-[140px] min-w-[140px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden xl:table-cell">
-                      Account Manager
-                    </th>
-                    <th className="w-[130px] min-w-[130px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden lg:table-cell">
-                      Industry
-                    </th>
-                    <th className="w-[90px] py-5 px-4 border-b border-gray-300 text-center text-sm sm:text-base font-semibold text-gray-700">
-                      Outlets
-                    </th>
-                    <th className="w-[120px] min-w-[120px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden xl:table-cell">
-                      Start Date
-                    </th>
-                    <th className="w-[120px] min-w-[120px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700 hidden xl:table-cell">
-                      End Date
-                    </th>
-                    <th className="w-[140px] min-w-[140px] py-5 px-4 border-b border-gray-300 text-left text-sm sm:text-base font-semibold text-gray-700">
-                      Agreement
-                    </th>
-                    <th className="w-[80px] py-5 px-4 border-b border-gray-300 text-center sticky right-0 bg-[#EDF8FF] z-30">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {employers.length === 0 ? (
+        ) : filteredEmployers.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
+            <Building2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {searchQuery ? "No employers found" : "No employers yet"}
+            </h3>
+            <p className="text-gray-500 mb-6">
+              {searchQuery
+                ? "Try adjusting your search terms"
+                : isAdmin
+                  ? "Get started by adding your first employer"
+                  : "No employers have been registered yet"}
+            </p>
+            {isAdmin && !searchQuery && (
+              <Link to="/employers/add-employer">
+                <button className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors shadow-sm">
+                  <Plus className="w-5 h-5" />
+                  Add Your First Employer
+                </button>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden lg:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <td colSpan={14} className="p-16 text-center">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
-                            <Plus className="w-8 h-8 text-gray-400" />
-                          </div>
-                          <div>
-                            <p className="text-gray-600 font-medium text-sm">No employers found</p>
-                            <p className="text-gray-400 text-xs mt-1">Get started by adding your first employer</p>
-                          </div>
-                          {isAdmin && (
-                            <Link to="/employers/add-employer">
-                              <button className="mt-2 px-4 py-2 bg-[#048BE1] text-white rounded-lg hover:bg-[#0370b8] transition-colors text-sm font-medium">
-                                Add Employer
-                              </button>
-                            </Link>
-                          )}
-                        </div>
-                      </td>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Company
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Contact Person
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Contact
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Outlets
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">
+                        Actions
+                      </th>
                     </tr>
-                  ) : (
-                    employers.map((employer, index) => (
-                      <tr key={index} className="hover:bg-gray-50 transition-colors bg-white">
-                        <td className="py-5 px-4 text-left text-sm sm:text-base font-medium text-gray-700">
-                          {employer.employerId}
-                        </td>
-                        <td className="py-5 px-4 text-left">
-                          {employer.companyLogo ? (
-                            <img
-                              src={employer.companyLogo}
-                              alt="Company Logo"
-                              className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover border border-gray-200"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                if (target.nextElementSibling) {
-                                  (target.nextElementSibling as HTMLElement).style.display = 'flex';
-                                }
-                              }}
-                            />
-                          ) : null}
-                          <div
-                            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-base sm:text-lg font-semibold text-blue-700 border border-blue-200 ${employer.companyLogo ? 'hidden' : ''}`}
-                          >
-                            {employer.companyLegalName?.charAt(0)?.toUpperCase() || "?"}
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-100">
+                    {filteredEmployers.map((employer, index) => (
+                      <tr
+                        key={employer.employerOriginalId || index}
+                        className="hover:bg-gray-50 transition-colors group"
+                      >
+                        {/* Company */}
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <div className="flex items-center gap-4">
+                            <div className="flex-shrink-0">
+                              {employer.companyLogo ? (
+                                <img
+                                  src={employer.companyLogo}
+                                  alt={employer.companyLegalName}
+                                  className="w-12 h-12 rounded-xl object-cover border-2 border-gray-100"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = "none";
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-md">
+                                  {employer.companyLegalName?.charAt(0)?.toUpperCase() || "?"}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-semibold text-gray-900 truncate">
+                                {employer.companyLegalName}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">ID: {employer.employerId}</div>
+                            </div>
                           </div>
                         </td>
-                        <td className="py-5 px-4 text-left">
-                          <div className="font-medium text-gray-900 text-sm sm:text-base truncate" title={employer.companyLegalName}>
-                            {employer.companyLegalName}
-                          </div>
+
+                        {/* Contact Person */}
+                        <td className="px-6 py-5">
+                          <div className="text-sm font-medium text-gray-900">{employer.mainContactPerson}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{employer.mainContactPersonPosition}</div>
                         </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-700 hidden md:table-cell">
-                          <div className="truncate" title={employer.mainContactPerson}>
-                            {employer.mainContactPerson}
-                          </div>
-                        </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-600 hidden lg:table-cell">
-                          <div className="truncate" title={employer.mainContactPersonPosition}>
-                            {employer.mainContactPersonPosition}
-                          </div>
-                        </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-700 hidden lg:table-cell">
-                          <div className="truncate" title={employer.mainContactNumber}>
+
+                        {/* Contact */}
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-gray-900">
+                            <Phone className="w-4 h-4 text-gray-400" />
                             {employer.mainContactNumber}
                           </div>
                         </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-700 hidden md:table-cell">
-                          <div className="truncate" title={employer.companyEmail}>
-                            {employer.companyEmail}
+
+                        {/* Email */}
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 min-w-0">
+                            <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{employer.companyEmail}</span>
                           </div>
                         </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-700 hidden xl:table-cell">
-                          <div className="truncate" title={employer.companyNumber}>
-                            {employer.companyNumber}
+
+                        {/* Outlets */}
+                        <td className="px-6 py-5 text-center whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-lg">
+                            <Store className="w-4 h-4 text-gray-600" />
+                            <span className="text-sm font-medium text-gray-700">{employer.outlets}</span>
                           </div>
                         </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-700 hidden xl:table-cell">
-                          <div className="truncate" title={employer.accountManager}>
-                            {employer.accountManager}
-                          </div>
-                        </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-700 hidden lg:table-cell">
-                          <span className="inline-block px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 text-sm font-medium truncate max-w-full">
-                            {employer.industry}
-                          </span>
-                        </td>
-                        <td className="py-5 px-4 text-center text-sm sm:text-base">
-                          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm">
-                            {employer.outlets}
-                          </span>
-                        </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-600 hidden xl:table-cell">
-                          {employer.contractStartDate !== "N/A" ? employer.contractStartDate : "-"}
-                        </td>
-                        <td className="py-5 px-4 text-left text-sm sm:text-base text-gray-600 hidden xl:table-cell">
-                          {employer.contractEndDate !== "N/A" ? employer.contractEndDate : "-"}
-                        </td>
-                        <td className="py-5 px-4 text-left">
-                          <span className={`inline-block px-3 py-1.5 rounded-full text-sm font-medium ${employer.serviceAgreement === "Completed"
-                            ? "bg-[#DBF1FF] text-[#048BE1]"
-                            : employer.serviceAgreement === "In Discussion"
-                              ? "bg-[#DEFFDF] text-[#049609]"
-                              : employer.serviceAgreement === "Expired"
-                                ? "bg-[#FFECE8] text-[#E34E30]"
-                                : "bg-gray-100 text-gray-700"
-                            }`}>
+
+                        {/* Status */}
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(
+                              employer.serviceAgreement
+                            )}`}
+                          >
                             {employer.serviceAgreement}
                           </span>
                         </td>
 
-                        <td className="py-5 px-4 text-center sticky right-0 bg-white z-30">
-                          <div className="relative action-menu-container">
+                        {/* Actions */}
+                        <td className="px-6 py-5 text-center whitespace-nowrap">
+                          <div
+                            className="relative"
+                            ref={(el) => {
+                              if (el) {
+                                menuRefs.current[employer.employerOriginalId] = el;
+                              }
+                            }}
+                          >
                             <button
-                              className="p-2 text-gray-600 hover:text-gray-900 rounded-full hover:bg-gray-100 transition-colors"
-                              onClick={() => handlePopupToggle(index)}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === employer.employerOriginalId ? null : employer.employerOriginalId);
+                              }}
+                              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                              type="button"
                             >
-                              <MoreVertical size={20} />
+                              <MoreVertical className="w-5 h-5" />
                             </button>
-                            {isPopupOpen === index && (
-                              <div className="absolute right-0 top-full mt-1 w-40 bg-white shadow-xl border border-gray-200 rounded-lg z-50 overflow-hidden">
+                            {openMenuId === employer.employerOriginalId && (
+                              <div
+                                className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 z-50"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <button
-                                  className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-100"
-                                  onClick={() => handleActionClick("View", employers[index]?.employerOriginalId || "")}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleView(employer.employerOriginalId);
+                                  }}
+                                  className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  type="button"
                                 >
-                                  <Eye size={16} />
+                                  <Eye className="w-4 h-4" />
                                   View Details
                                 </button>
                                 <button
-                                  className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors border-b border-gray-100"
-                                  onClick={() =>
-                                    handleActionClick("Edit", employers[index]?.employerOriginalId || "")
-                                  }
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleEdit(employer.employerOriginalId);
+                                  }}
+                                  className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  type="button"
                                 >
-                                  <Edit size={16} />
-                                  Edit
+                                  <Edit className="w-4 h-4" />
+                                  Edit Employer
                                 </button>
-                                <button
-                                  className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
-                                  onClick={() => handleActionClick("Delete", employers[index]?.employerOriginalId || "")}
-                                >
-                                  <Trash2 size={16} color="#E34E30" />
-                                  Delete
-                                </button>
+                                <div className="border-t border-gray-100">
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleDeleteClick(employer.employerOriginalId, employer.companyLegalName);
+                                    }}
+                                    className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                    type="button"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Delete Employer
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex-shrink-0 flex justify-center items-center mt-6">
-              <Pagination
-                totalPages={totalPages}
-                currentPage={currentPage}
-                onPageChange={handlePageChange}
-              />
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="bg-gray-50 border-t border-gray-200 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-700">
+                      Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+                      <span className="font-medium">
+                        {Math.min(currentPage * itemsPerPage, totalItems)}
+                      </span>{" "}
+                      of <span className="font-medium">{totalItems}</span> results
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Previous
+                      </button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => handlePageChange(pageNum)}
+                              className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${currentPage === pageNum
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                                }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Mobile/Tablet Card View */}
+            <div className="lg:hidden space-y-4">
+              {filteredEmployers.map((employer, index) => (
+                <div
+                  key={employer.employerOriginalId || index}
+                  className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      {employer.companyLogo ? (
+                        <img
+                          src={employer.companyLogo}
+                          alt={employer.companyLegalName}
+                          className="w-14 h-14 rounded-xl object-cover border-2 border-gray-100 flex-shrink-0"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md flex-shrink-0">
+                          {employer.companyLegalName?.charAt(0)?.toUpperCase() || "?"}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-semibold text-gray-900 truncate">{employer.companyLegalName}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">ID: {employer.employerId}</p>
+                      </div>
+                    </div>
+                    <div
+                      className="relative flex-shrink-0"
+                      ref={(el) => {
+                        if (el) {
+                          menuRefs.current[employer.employerOriginalId] = el;
+                        }
+                      }}
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setOpenMenuId(openMenuId === employer.employerOriginalId ? null : employer.employerOriginalId);
+                        }}
+                        className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        type="button"
+                      >
+                        <MoreVertical className="w-5 h-5" />
+                      </button>
+                      {openMenuId === employer.employerOriginalId && (
+                        <div
+                          className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 z-50"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleView(employer.employerOriginalId);
+                            }}
+                            className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            type="button"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View Details
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleEdit(employer.employerOriginalId);
+                            }}
+                            className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                            type="button"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit Employer
+                          </button>
+                          <div className="border-t border-gray-100">
+                            <button
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeleteClick(employer.employerOriginalId, employer.companyLegalName);
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              type="button"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete Employer
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <User className="w-4 h-4 text-gray-400" />
+                      <span className="text-gray-600">{employer.mainContactPerson}</span>
+                      <span className="text-gray-400">•</span>
+                      <span className="text-gray-500">{employer.mainContactPersonPosition}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Phone className="w-4 h-4 text-gray-400" />
+                      {employer.mainContactNumber}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 min-w-0">
+                      <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{employer.companyEmail}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Store className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">
+                          {employer.outlets} {employer.outlets === 1 ? "outlet" : "outlets"}
+                        </span>
+                      </div>
+                      <span
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(
+                          employer.serviceAgreement
+                        )}`}
+                      >
+                        {employer.serviceAgreement}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Mobile Pagination */}
+              {totalPages > 1 && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-gray-700">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <span className="text-sm text-gray-500">{totalItems} total</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
@@ -477,8 +737,8 @@ const EmployerTable: React.FC = () => {
         onClose={() => setShowDeleteModal({ isOpen: false, employerId: null, employerName: "" })}
         onConfirm={handleDelete}
         title="Delete Employer"
-        message={`Are you sure you want to delete ${showDeleteModal.employerName}? This action cannot be undone and will permanently remove all employer data, including associated jobs and outlets.`}
-        confirmText="Delete"
+        message={`Are you sure you want to delete ${showDeleteModal.employerName}? This action cannot be undone. All employer data, jobs, and outlets will be permanently removed.`}
+        confirmText={isDeleting ? "Deleting..." : "Delete Employer"}
         cancelText="Cancel"
         type="danger"
         isLoading={isDeleting}
@@ -487,4 +747,4 @@ const EmployerTable: React.FC = () => {
   );
 };
 
-export default EmployerTable;
+export default Employers;

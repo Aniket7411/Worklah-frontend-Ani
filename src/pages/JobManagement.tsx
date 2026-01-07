@@ -321,7 +321,7 @@ const JobManagement = () => {
         }
       });
 
-      const response = await axiosInstance.get(`/jobs?${queryParams.toString()}`);
+      const response = await axiosInstance.get(`/admin/jobs?${queryParams.toString()}`);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {
@@ -443,7 +443,7 @@ const JobManagement = () => {
 
     setIsDeleting(true);
     try {
-      const response = await axiosInstance.delete(`/jobs/${showDeleteModal.jobId}`);
+      const response = await axiosInstance.delete(`/admin/jobs/${showDeleteModal.jobId}`);
 
       if (response.data?.success === false) {
         toast.error(response.data?.message || "Failed to delete job");

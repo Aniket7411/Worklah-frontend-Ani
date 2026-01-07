@@ -111,7 +111,7 @@ const ModifyJob: React.FC = () => {
 
   const fetchEmployers = async () => {
     try {
-      const response = await axiosInstance.get("/employers?limit=100");
+      const response = await axiosInstance.get("/admin/employers?limit=100");
       if (response.data?.employers) {
         // Map employers to use employerId (EMP-xxxx) format when available, fallback to _id
         const mappedEmployers = response.data.employers.map((emp: any) => ({
@@ -128,7 +128,7 @@ const ModifyJob: React.FC = () => {
   const fetchEmployerOutlets = async (employerId: string) => {
     try {
       // API accepts both MongoDB ObjectId and EMP-xxxx format
-      const response = await axiosInstance.get(`/employers/${employerId}`);
+      const response = await axiosInstance.get(`/admin/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
         setAvailableOutlets(response.data.employer.outlets);
         setFormData((prev) => ({ ...prev, useManualOutlet: false }));
@@ -163,7 +163,7 @@ const ModifyJob: React.FC = () => {
   const fetchJobData = async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get(`/jobs/${jobId}`);
+      const response = await axiosInstance.get(`/admin/jobs/${jobId}`);
       const job = response.data?.job || response.data;
 
       if (job) {
@@ -403,7 +403,7 @@ const ModifyJob: React.FC = () => {
         })),
       };
 
-      const response = await axiosInstance.put(`/jobs/${jobId}`, jobData);
+      const response = await axiosInstance.put(`/admin/jobs/${jobId}`, jobData);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {

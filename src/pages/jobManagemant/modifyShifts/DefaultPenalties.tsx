@@ -21,7 +21,7 @@ const DefaultPenalties = () => {
         // Try to fetch penalties from job data first
         if (jobId) {
           try {
-            const jobResponse = await axiosInstance.get(`/jobs/${jobId}`);
+            const jobResponse = await axiosInstance.get(`/admin/jobs/${jobId}`);
             const job = jobResponse.data?.job || jobResponse.data;
             if (job?.penalties && Array.isArray(job.penalties)) {
               setPenalties(job.penalties);

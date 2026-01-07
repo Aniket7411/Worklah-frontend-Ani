@@ -1,76 +1,12 @@
-import { id } from "date-fns/locale";
 import { Eye, MoreVertical, RotateCcw } from "lucide-react";
 import React, { useState } from "react";
 import { FiEdit3 } from "react-icons/fi";
 
-const jobs = [
-  {
-    id: "#12345",
-    outlet: {
-      title: "Cashier",
-      img: "/assets/dominos-logo.png",
-    },
-    date: "11 Sept, 24",
-    employer: "Right Service PTE. LTD",
-    shifts: [
-      {
-        shiftId: "#12345",
-        shiftTiming: "07:00 AM ---- 11:00 AM",
-        clockedIn: "07:06 AM",
-        clockedOut: "11:00 AM",
-        breakIncluded: "1 Hrs",
-        breakType: "Unpaid",
-        fromConfirmed: "Confirmed",
-        rateType: "Flat Rate",
-        totalWage: "$80",
-        wageGenerated: "$75",
-        jobStatus: "Completed",
-        paymentStatus: "Pending",
-      },
-    ],
-  },
-  {
-    id: "#12346",
-    outlet: {
-      title: "Cashier",
-      img: "/assets/dominos-logo.png",
-    },
-    date: "11 Sept, 24",
-    employer: "Right Service PTE. LTD",
-    shifts: [
-      {
-        shiftId: "#12345",
-        shiftTiming: "07:00 AM ---- 11:00 AM",
-        clockedIn: "07:06 AM",
-        clockedOut: "11:00 AM",
-        breakIncluded: "1 Hrs",
-        breakType: "Unpaid",
-        fromConfirmed: "Standby",
-        rateType: "Flat Rate",
-        totalWage: "$80",
-        wageGenerated: "$75",
-        jobStatus: "Completed",
-        paymentStatus: "Pending",
-      },
-      {
-        shiftId: "#12346",
-        shiftTiming: "07:00 PM ---- 11:00 PM",
-        clockedIn: "07:06 AM",
-        clockedOut: "11:00 AM",
-        breakIncluded: "1 Hrs",
-        breakType: "Unpaid",
-        fromConfirmed: "Standby",
-        rateType: "Flat Rate",
-        totalWage: "$80",
-        wageGenerated: "$75",
-        jobStatus: "Completed",
-        paymentStatus: "Pending",
-      },
-    ],
-  },
-];
+interface WorkHistoryProps {
+  workHistory?: any[];
+}
 
-const WorkHistory = ({ workHistory }) => {
+const WorkHistory: React.FC<WorkHistoryProps> = ({ workHistory }) => {
   const [isJobMenuOpen, setIsJobMenuOpen] = useState<number | null>(null);
 
   const toggleJobMenu = (index: number) =>

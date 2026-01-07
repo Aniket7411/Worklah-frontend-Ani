@@ -152,7 +152,11 @@ export default function Payments({ data }: PaymentsProps) {
     }
 
     try {
-      const response = await axiosInstance.put(`/payments/${paymentId}/status`, {
+      // Use admin cashout endpoints - for processing/rejecting transactions
+      const endpoint = newStatus === "completed" 
+        ? `/admin/cashout/${paymentId}/process`
+        : `/admin/cashout/${paymentId}/reject`;
+      const response = await axiosInstance.post(endpoint, {
         status: newStatus,
         rejectionReason: rejectionReasons[paymentId] || "",
       });
@@ -178,7 +182,9 @@ export default function Payments({ data }: PaymentsProps) {
   const handleRegenerate = async (paymentId: string) => {
     const data = regenerateData[paymentId] || {};
     try {
-      const response = await axiosInstance.post(`/payments/${paymentId}/regenerate`, data);
+      // Note: Regenerate endpoint may need to be implemented in backend
+      // For now, using a generic endpoint - backend should implement this
+      const response = await axiosInstance.post(`/admin/transactions/${paymentId}/regenerate`, data);
 
       if (response.status === 200 || response.status === 201) {
         toast.success("Payment regenerated successfully");

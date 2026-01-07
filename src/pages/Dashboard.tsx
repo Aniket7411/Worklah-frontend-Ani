@@ -53,7 +53,8 @@ const Dashboard = () => {
       }
       
       const queryString = params.toString();
-      const endpoint = `/dashboard/overview${queryString ? `?${queryString}` : ''}`;
+      // Use admin dashboard stats endpoint according to documentation
+      const endpoint = `/admin/dashboard/stats${queryString ? `?${queryString}` : ''}`;
       
       const response = await axiosInstance.get(endpoint);
       
@@ -62,18 +63,20 @@ const Dashboard = () => {
         throw new Error(response.data?.message || "Failed to fetch dashboard data");
       }
 
+      // Map response data - documentation shows 'stats' object
+      const stats = response?.data?.stats || response?.data;
       setDashboardData({
-        totalJobs: response?.data?.totalJobs || 0,
-        activatedHeroes: response?.data?.activatedHeroes || 0,
-        vacancies: response?.data?.vacancies || 0,
-        vacanciesFilled: response?.data?.vacanciesFilled || 0,
-        pendingVerifications: response?.data?.pendingVerifications || 0,
-        pendingPayments: response?.data?.pendingPayments || 0,
-        totalAmountPaid: response?.data?.totalAmountPaid || 0,
-        noShows: response?.data?.noShows || 0,
-        verifiedHeroes: response?.data?.verifiedHeroes || 0,
-        revenue: response?.data?.revenue || {
-          total: 0,
+        totalJobs: stats?.totalJobs || stats?.activeJobs || 0,
+        activatedHeroes: stats?.activeUsers || stats?.activatedHeroes || 0,
+        vacancies: stats?.vacancies || 0,
+        vacanciesFilled: stats?.vacanciesFilled || 0,
+        pendingVerifications: stats?.pendingApplications || stats?.pendingVerifications || 0,
+        pendingPayments: stats?.pendingPayments || 0,
+        totalAmountPaid: stats?.totalRevenue || stats?.totalAmountPaid || 0,
+        noShows: stats?.noShows || 0,
+        verifiedHeroes: stats?.verifiedHeroes || 0,
+        revenue: stats?.revenue || response?.data?.revenue || {
+          total: stats?.totalRevenue || 0,
           thisMonth: 0,
           lastMonth: 0,
         },
@@ -89,7 +92,7 @@ const Dashboard = () => {
   const fetchEmployers = async () => {
     if (user?.role !== "ADMIN") return;
     try {
-      const response = await axiosInstance.get("/employers?limit=100");
+      const response = await axiosInstance.get("/admin/employers?limit=100");
       if (response.data?.employers) {
         setEmployers(response.data.employers);
       }

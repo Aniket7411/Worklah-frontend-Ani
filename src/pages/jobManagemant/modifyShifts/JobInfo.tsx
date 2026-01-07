@@ -1,7 +1,61 @@
 import { ArrowDown, ChevronDown, Edit } from "lucide-react";
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import { axiosInstance } from "../../../lib/authInstances";
+import { Loader2 } from "lucide-react";
 
 const JobInfo: React.FC = () => {
+  const { jobId } = useParams<{ jobId: string }>();
+  const [jobData, setJobData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const IMAGE_BASE_URL = "https://worklah.onrender.com";
+
+  useEffect(() => {
+    const fetchJobData = async () => {
+      if (!jobId) {
+        setError("Job ID is required");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await axiosInstance.get(`/admin/jobs/${jobId}`);
+        
+        if (response.data?.success === false) {
+          throw new Error(response.data?.message || "Failed to fetch job data");
+        }
+
+        const job = response.data?.job || response.data;
+        setJobData(job);
+      } catch (err: any) {
+        console.error("Error fetching job data:", err);
+        setError(err?.response?.data?.message || "Failed to load job data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobData();
+  }, [jobId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  if (error || !jobData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-red-500">{error || "No job data found"}</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center min-h-screen ">
       <div className="max-w-6xl w-full rounded-lg ">
@@ -25,7 +79,7 @@ const JobInfo: React.FC = () => {
                     />
                   </button>
                   <p className="text-[16px] font-medium text-[#000000] leading-[24px]">
-                    Tray Collector
+                    {jobData.jobTitle || jobData.jobName || "N/A"}
                   </p>
                 </div>
                 <div>
@@ -55,13 +109,19 @@ const JobInfo: React.FC = () => {
                   />
                 </button>
                 <div className="flex items-center gap-2">
-                  <img
-                    src="./assets/company.png"
-                    alt="outlet"
-                    className="w-8 h-8 rounded-full"
-                  />
+                  {jobData.employer?.companyLogo && (
+                    <img
+                      src={
+                        jobData.employer.companyLogo.startsWith('http')
+                          ? jobData.employer.companyLogo
+                          : `${IMAGE_BASE_URL}${jobData.employer.companyLogo}`
+                      }
+                      alt="Company Logo"
+                      className="w-8 h-8 rounded-full object-contain"
+                    />
+                  )}
                   <p className="text-[16px] font-normal text-[#000000] leading-[24px]">
-                    RIGHT SERVICE PTE. LTD.
+                    {jobData.employer?.companyLegalName || jobData.employerName || "N/A"}
                   </p>
                 </div>
               </div>
@@ -85,13 +145,19 @@ const JobInfo: React.FC = () => {
                     />
                   </button>
                   <div className="flex items-center gap-2">
-                    <img
-                      src="./assets/ecompany.png"
-                      alt="outlet"
-                      className="w-7 h-7 rounded-full"
-                    />
+                    {jobData.outlet?.outletImage && (
+                      <img
+                        src={
+                          jobData.outlet.outletImage.startsWith('http')
+                            ? jobData.outlet.outletImage
+                            : `${IMAGE_BASE_URL}${jobData.outlet.outletImage}`
+                        }
+                        alt="Outlet"
+                        className="w-7 h-7 rounded-full object-contain"
+                      />
+                    )}
                     <p className="text-[16px] font-medium text-[#000000] leading-[19px]">
-                      Dominos
+                      {jobData.outlet?.name || jobData.outletAddress || "N/A"}
                     </p>
                   </div>
                 </div>

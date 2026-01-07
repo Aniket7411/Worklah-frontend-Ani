@@ -70,7 +70,7 @@ const EmployerDetailPage: React.FC = () => {
               alt="Company Logo"
             />
             <h1 className="text-4xl font-bold">
-              {employerData?.outlet?.name || "Dominos"}
+              {employerData?.outlet?.name || "N/A"}
             </h1>
           </div>
         </div>
@@ -89,7 +89,7 @@ const EmployerDetailPage: React.FC = () => {
         <div className="flex gap-2 items-center">
           <MapPin className="w-4 h-4" />
           <p className="text-[16px] leading-[20px] font-normal text-[#000000]">
-            {employerData?.outlet?.address || "123 Orchard Road, Singapore"}
+            {employerData?.outlet?.address || "N/A"}
           </p>
           <a className="text-[12px] text-[#0099FF] leading-[18px] cursor-pointer underline">
             View on map
@@ -98,13 +98,13 @@ const EmployerDetailPage: React.FC = () => {
         <div className="flex gap-2 text-base font-normal items-center">
           <Phone className="w-4 h-4" />
           <p className="text-[14px] leading-[18px] font-normal text-[#000000]">
-            {employerData?.outlet?.contact || "(+65) 123 434 543"}
+            {employerData?.outlet?.contact || "N/A"}
           </p>
         </div>
         <div className="flex gap-2 text-base font-normal items-center">
           <Mail className="w-4 h-4" />
           <p className="text-[14px] leading-[18px] font-normal text-[#000000]">
-            {employerData?.outlet?.email || "dominos@gmail.com"}
+            {employerData?.outlet?.email || "N/A"}
           </p>
         </div>
       </div>
@@ -131,12 +131,22 @@ const EmployerDetailPage: React.FC = () => {
         </div>
         <div className="flex flex-col items-end">
           <h2 className="text-base font-semibold text-left">
-            Employer: {employerData?.outlet?.employer || "Tester"}
+            Employer: {employerData?.outlet?.employer || employerData?.employer?.companyLegalName || "N/A"}
           </h2>
-          <div className="flex gap-1">
-            <img src="/assets/company.png" alt="Company Logo" />
-            <p className="uppercase text-base">Right Service Pte. Ltd</p>
-          </div>
+          {employerData?.employer?.companyLogo && (
+            <div className="flex gap-1 items-center">
+              <img 
+                src={employerData.employer.companyLogo.startsWith('http') 
+                  ? employerData.employer.companyLogo 
+                  : `https://worklah.onrender.com${employerData.employer.companyLogo}`} 
+                alt="Company Logo" 
+                className="w-8 h-8 object-contain"
+              />
+              <p className="uppercase text-base">
+                {employerData?.employer?.companyLegalName || "N/A"}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -189,7 +199,11 @@ const EmployerDetailPage: React.FC = () => {
 
       {/* Attendance Chart */}
       <div className="mt-8">
-        <AttendanceChart />
+        <AttendanceChart 
+          outletId={jobId}
+          averageAttendance={employerData?.attendanceMetrics?.overallAttendanceRate}
+          attendanceData={employerData?.attendanceChartData}
+        />
       </div>
       <div className="mt-2">
       {employerData?.summaryTable && employerData?.attendanceTableData ? (

@@ -38,7 +38,7 @@ export default function SalesReport() {
                     setReports(response.data.reports || response.data.data || []);
                 } else {
                     // Fallback: fetch employers and show empty state or calculate from available data
-                    const employersResponse = await axiosInstance.get("/employers");
+                    const employersResponse = await axiosInstance.get("/admin/employers");
                     const employers = employersResponse.data.employers || [];
 
                     // Transform employers to sales report format

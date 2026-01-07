@@ -1,9 +1,10 @@
-import { ArrowLeft, Eye, MoreVertical, RotateCcw, Settings, View } from "lucide-react";
+import { ArrowLeft, Eye, MoreVertical, RotateCcw, Settings, View, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FiCheck, FiEdit3, FiChevronDown } from "react-icons/fi";
 import { useNavigate, useParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
+import ConfirmationModal from "../../components/ConfirmationModal";
 // import Image from "next/image"
 
 interface Candidate {
@@ -28,37 +29,85 @@ interface Candidate {
 
 export default function CandidateManagement() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<any>(null)
   const [activeTime, setActiveTime] = useState<string | null>(null);
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [isEditTime, setIsEditTime] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"All" | "Confirmed" | "Pending">("All");
+  const [showConfirmModal, setShowConfirmModal] = useState<{ isOpen: boolean; userId: string | null; newStatus: string | null }>({
+    isOpen: false,
+    userId: null,
+    newStatus: null,
+  });
+  const [showRejectionModal, setShowRejectionModal] = useState<{ isOpen: boolean; userId: string | null }>({
+    isOpen: false,
+    userId: null,
+  });
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
 
 
   const navigate = useNavigate()
   const { jobId } = useParams()
 
-  useEffect(() => {
-    const fetchCandidates = async () => {
-      try {
-        const response = await axiosInstance.get(`/admin/jobs/candidates/${jobId}`);
-        setCandidates(response.data.candidates)
-        setData(response.data)
-      } catch (error) {
-        console.error("Error fetching candidates:", error);
-      } finally {
-        setLoading(false);
+  const fetchCandidates = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await axiosInstance.get(`/admin/jobs/candidates/${jobId}`);
+      
+      // Check for success field according to API spec
+      if (response.data?.success === false) {
+        throw new Error(response.data?.message || "Failed to fetch candidates");
       }
-    };
+      
+      setCandidates(response.data?.candidates || []);
+      setData(response.data || {});
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || "Failed to load candidates. Please try again later.";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      setCandidates([]);
+      setData({});
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (jobId) {
       fetchCandidates();
     }
   }, [jobId]);
 
   if (loading) {
-    return <div className="text-center py-10">Loading candidates...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="text-gray-600">Loading candidates...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center max-w-md">
+          <p className="text-red-500 mb-4">{error}</p>
+          <button
+            onClick={fetchCandidates}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
 
@@ -76,18 +125,30 @@ export default function CandidateManagement() {
 
   const handleStatusSelection = (userId: string, newStatus: string) => {
     if (newStatus === "Rejected") {
-      const reason = prompt("Enter reason for rejection:");
-      if (!reason || reason.trim() === "") {
-        toast.error("Rejection reason is required");
-        return; // Cancel if no reason
-      }
-      return handleApprovedStatusChange(userId, newStatus, reason);
+      setShowRejectionModal({ isOpen: true, userId });
+      setRejectionReason("");
+      return;
     }
 
-    const confirmed = window.confirm(`Are you sure you want to set status to ${newStatus}?`);
-    if (confirmed) {
-      handleApprovedStatusChange(userId, newStatus);
+    setShowConfirmModal({ isOpen: true, userId, newStatus });
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!showConfirmModal.userId || !showConfirmModal.newStatus) return;
+    
+    await handleApprovedStatusChange(showConfirmModal.userId, showConfirmModal.newStatus, null);
+    setShowConfirmModal({ isOpen: false, userId: null, newStatus: null });
+  };
+
+  const handleConfirmRejection = async () => {
+    if (!showRejectionModal.userId || !rejectionReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
     }
+
+    await handleApprovedStatusChange(showRejectionModal.userId, "Rejected", rejectionReason.trim());
+    setShowRejectionModal({ isOpen: false, userId: null });
+    setRejectionReason("");
   };
 
   const handleApprovedStatusChange = async (
@@ -95,13 +156,13 @@ export default function CandidateManagement() {
     newStatus: string,
     reason: string | null = null
   ) => {
+    setIsUpdating(true);
     try {
       await axiosInstance.put(`/admin/applications/status/${userId}`, {
         status: newStatus,
         jobId,
         reason, // optional reason
       });
-
 
       setCandidates((prev) =>
         prev.map((c) =>
@@ -111,8 +172,9 @@ export default function CandidateManagement() {
       
       toast.success(`Status updated to ${newStatus} successfully`);
     } catch (err: any) {
-      console.error("Error updating approved status:", err);
       toast.error(err?.response?.data?.message || "Failed to update status. Please try again.");
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -197,7 +259,7 @@ export default function CandidateManagement() {
       statusFilter === "All" ? "bg-black text-white" : "bg-[#F4F4F4]"
     }`}
   >
-    All Candidates ({data.totalCandidates})
+    All Candidates ({data?.totalCandidates || 0})
   </button>
   <button
     onClick={() => setStatusFilter("Confirmed")}
@@ -205,7 +267,7 @@ export default function CandidateManagement() {
       statusFilter === "Confirmed" ? "bg-black text-white" : "bg-[#F4F4F4]"
     }`}
   >
-    Confirmed Candidates ({data.confirmedCount})
+    Confirmed Candidates ({data?.confirmedCount || 0})
   </button>
   <button
     onClick={() => setStatusFilter("Pending")}
@@ -213,7 +275,7 @@ export default function CandidateManagement() {
       statusFilter === "Pending" ? "bg-black text-white" : "bg-[#F4F4F4]"
     }`}
   >
-    Pending Candidates ({data.pendingCount})
+    Pending Candidates ({data?.pendingCount || 0})
   </button>
 </div>
 
@@ -459,6 +521,95 @@ export default function CandidateManagement() {
           </tbody>
         </table>
       </div>
+
+      {filteredCandidates.length === 0 && !loading && !error && (
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <View className="w-8 h-8 text-gray-400" />
+          </div>
+          <p className="text-gray-600 font-medium text-lg">No candidates found</p>
+          <p className="text-gray-400 text-sm mt-1">
+            {statusFilter !== "All" 
+              ? `No ${statusFilter.toLowerCase()} candidates for this filter.`
+              : "No candidates have applied for this job yet."}
+          </p>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Status Change */}
+      <ConfirmationModal
+        isOpen={showConfirmModal.isOpen}
+        onClose={() => setShowConfirmModal({ isOpen: false, userId: null, newStatus: null })}
+        onConfirm={handleConfirmStatusChange}
+        title="Confirm Status Change"
+        message={`Are you sure you want to change the status to ${showConfirmModal.newStatus}?`}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        type="info"
+        isLoading={isUpdating}
+      />
+
+      {/* Rejection Reason Modal */}
+      {showRejectionModal.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-900">Reject Candidate</h3>
+              <button
+                onClick={() => {
+                  setShowRejectionModal({ isOpen: false, userId: null });
+                  setRejectionReason("");
+                }}
+                disabled={isUpdating}
+                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Rejection Reason <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Please provide a reason for rejection..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                rows={4}
+                disabled={isUpdating}
+              />
+            </div>
+
+            <div className="flex gap-3 justify-end pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowRejectionModal({ isOpen: false, userId: null });
+                  setRejectionReason("");
+                }}
+                disabled={isUpdating}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmRejection}
+                disabled={isUpdating || !rejectionReason.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isUpdating ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  "Reject Candidate"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

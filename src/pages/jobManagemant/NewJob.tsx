@@ -9,6 +9,7 @@ import {
   Plus,
   Trash2,
   Save,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -22,12 +23,13 @@ interface Employer {
 
 interface Shift {
   id: number;
+  shiftDate: string; // Shift date for this specific shift
   startTime: string;
   endTime: string;
   breakDuration: number;
   totalWorkingHours: number;
-  rateType: "Weekend" | "Weekday" | "Public Holiday";
-  payPerHour: number;
+  rateType: "Hourly" | "Weekly" | "Monthly"; // Updated rate types
+  rates: number; // Pay rate (can be hourly, weekly, or monthly)
   totalWages: number;
 }
 
@@ -48,7 +50,6 @@ const NewJob: React.FC = () => {
     jobDate: new Date().toISOString().split("T")[0],
     jobTitle: "",
     jobDescription: "",
-    jobRoles: "",
     employerId: "",
     employerName: "", // Auto-filled from employer
     industry: "", // Auto-filled from employer
@@ -60,22 +61,25 @@ const NewJob: React.FC = () => {
     jobStatus: "Active",
     applicationDeadline: "",
     dressCode: "", // Replaces jobRequirements
-    skills: "", // Comma-separated, will be converted to array
+    skills: [] as string[], // Array format - list of skills
     locationDetails: "",
   });
 
   const [shifts, setShifts] = useState<Shift[]>([
     {
       id: Date.now(),
+      shiftDate: new Date().toISOString().split("T")[0], // Default to job posting date
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: 0,
       totalWorkingHours: 8,
-      rateType: "Weekday",
-      payPerHour: 0,
+      rateType: "Hourly",
+      rates: 0,
       totalWages: 0,
     },
   ]);
+  
+  const [skillInput, setSkillInput] = useState<string>(""); // Temporary input for adding skills
 
   const [rateTypes, setRateTypes] = useState<string[]>([]);
   const [defaultPayRates, setDefaultPayRates] = useState<{ [key: string]: number }>({});
@@ -137,7 +141,7 @@ const NewJob: React.FC = () => {
 
   const fetchEmployers = async () => {
     try {
-      const response = await axiosInstance.get("/employers?limit=100");
+      const response = await axiosInstance.get("/admin/employers?limit=100");
       if (response.data?.employers) {
         // Map employers to use employerId (EMP-xxxx) format when available, fallback to _id
         const mappedEmployers = response.data.employers.map((emp: any) => ({
@@ -154,7 +158,7 @@ const NewJob: React.FC = () => {
   const fetchEmployerOutlets = async (employerId: string) => {
     try {
       // API accepts both MongoDB ObjectId and EMP-xxxx format
-      const response = await axiosInstance.get(`/employers/${employerId}`);
+      const response = await axiosInstance.get(`/admin/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
         setAvailableOutlets(response.data.employer.outlets);
         setFormData((prev) => ({ ...prev, useManualOutlet: false }));
@@ -181,17 +185,17 @@ const NewJob: React.FC = () => {
         setDefaultPayRates(response.data.defaultPayRates);
         // Update default shift with first rate type and its default pay rate
         if (response.data.rateTypes && response.data.rateTypes.length > 0) {
-          const firstRateType = response.data.rateTypes[0];
-          const defaultPayRate = response.data.defaultPayRates[firstRateType] || 0;
+          // Set default shift with today's date
           setShifts([{
             id: Date.now(),
+            shiftDate: new Date().toISOString().split("T")[0],
             startTime: "09:00",
             endTime: "17:00",
             breakDuration: 0,
             totalWorkingHours: 8,
-            rateType: firstRateType as "Weekend" | "Weekday" | "Public Holiday",
-            payPerHour: defaultPayRate,
-            totalWages: defaultPayRate * 8,
+            rateType: "Hourly",
+            rates: 0,
+            totalWages: 0,
           }]);
         }
       }
@@ -250,8 +254,14 @@ const NewJob: React.FC = () => {
             );
           }
 
-          // Auto-calculate total wages
-          updated.totalWages = updated.payPerHour * updated.totalWorkingHours;
+          // Auto-calculate total wages based on rate type
+          if (updated.rateType === "Hourly") {
+            updated.totalWages = updated.rates * updated.totalWorkingHours;
+          } else if (updated.rateType === "Weekly") {
+            updated.totalWages = updated.rates; // Weekly rate is fixed
+          } else if (updated.rateType === "Monthly") {
+            updated.totalWages = updated.rates; // Monthly rate is fixed
+          }
 
           return updated;
         }
@@ -261,19 +271,54 @@ const NewJob: React.FC = () => {
   };
 
   const addShift = () => {
-    const defaultRateType = rateTypes.length > 0 ? rateTypes[0] : "Weekday";
-    const defaultPayRate = defaultPayRates[defaultRateType] || 0;
+    // Default to next day if there are existing shifts
+    const defaultDate = shifts.length > 0 && shifts[shifts.length - 1].shiftDate
+      ? (() => {
+          const lastDate = new Date(shifts[shifts.length - 1].shiftDate);
+          lastDate.setDate(lastDate.getDate() + 1);
+          return lastDate.toISOString().split("T")[0];
+        })()
+      : formData.jobDate || new Date().toISOString().split("T")[0];
+    
     const newShift: Shift = {
       id: Date.now(),
+      shiftDate: defaultDate,
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: 0,
       totalWorkingHours: 8,
-      rateType: defaultRateType as "Weekend" | "Weekday" | "Public Holiday",
-      payPerHour: defaultPayRate,
-      totalWages: defaultPayRate * 8,
+      rateType: "Hourly",
+      rates: 0,
+      totalWages: 0,
     };
     setShifts([...shifts, newShift]);
+  };
+  
+  // Add skill to array
+  const addSkill = () => {
+    if (skillInput.trim()) {
+      setFormData(prev => ({
+        ...prev,
+        skills: [...prev.skills, skillInput.trim()]
+      }));
+      setSkillInput("");
+    }
+  };
+  
+  // Remove skill from array
+  const removeSkill = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: prev.skills.filter((_, i) => i !== index)
+    }));
+  };
+  
+  // Handle Enter key for skill input
+  const handleSkillKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addSkill();
+    }
   };
 
   const removeShift = (id: number) => {
@@ -321,10 +366,6 @@ const NewJob: React.FC = () => {
       toast.error("Job description is required");
       return false;
     }
-    if (!formData.jobRoles?.trim()) {
-      toast.error("Job roles is required");
-      return false;
-    }
     if (!selectedEmployer || selectedEmployer === "") {
       toast.error("Please select an employer");
       return false;
@@ -366,16 +407,12 @@ const NewJob: React.FC = () => {
 
       const finalPostedBy = isAdmin ? "admin" : "employer";
 
-      // Convert skills from comma-separated string to array
-      const skillsArray = formData.skills
-        ? formData.skills.split(",").map((s) => s.trim()).filter((s) => s)
-        : [];
+      // Skills are already in array format
 
       const jobData = {
         jobDate: formData.jobDate ?? "",
         jobTitle: formData.jobTitle ?? "",
         jobDescription: formData.jobDescription ?? "",
-        jobRoles: formData.jobRoles ?? "",
         employerId: finalEmployerId ?? null,
         employerName: formData.employerName ?? null,
         industry: formData.industry ?? null, // Auto-filled from employer
@@ -387,20 +424,21 @@ const NewJob: React.FC = () => {
         jobStatus: formData.jobStatus ?? "Active",
         applicationDeadline: formData.applicationDeadline ?? null,
         dressCode: formData.dressCode ?? null, // Replaces jobRequirements
-        skills: skillsArray, // Array format
+        skills: formData.skills ?? [], // Array format
         locationDetails: formData.locationDetails ?? "",
         shifts: shifts.map((shift) => ({
+          shiftDate: shift.shiftDate ?? formData.jobDate ?? "",
           startTime: shift.startTime ?? "",
           endTime: shift.endTime ?? "",
           breakDuration: shift.breakDuration ?? 0,
           totalWorkingHours: shift.totalWorkingHours ?? 0,
-          rateType: shift.rateType ?? "Weekday",
-          payPerHour: shift.payPerHour ?? 0,
+          rateType: shift.rateType ?? "Hourly",
+          rates: shift.rates ?? 0,
           totalWages: shift.totalWages ?? 0,
         })),
       };
 
-      const response = await axiosInstance.post("/jobs/create", jobData);
+      const response = await axiosInstance.post("/admin/jobs", jobData);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {
@@ -507,19 +545,17 @@ const NewJob: React.FC = () => {
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Job Date */}
+                {/* Job Posting Date - Autofilled */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Date <span className="text-red-500">*</span>
+                    Job Posting Date <span className="text-gray-400 text-xs">(Auto-filled)</span>
                   </label>
                   <input
                     type="date"
                     name="jobDate"
                     value={formData.jobDate ?? new Date().toISOString().split("T")[0]}
-                    onChange={handleChange}
-                    min={getTodayDateString()}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    readOnly
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
                   />
                 </div>
 
@@ -539,21 +575,6 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Job Roles */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Roles <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="jobRoles"
-                    value={formData.jobRoles ?? ""}
-                    onChange={handleChange}
-                    placeholder="e.g., Waiter, Cashier, Kitchen Staff"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
 
                 {/* Total Vacancies */}
                 <div>
@@ -786,21 +807,52 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Skills */}
+                {/* Skills - Array format (List) */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Skills <span className="text-gray-400 text-xs">(Optional - comma-separated, will be saved as array)</span>
+                    Skills <span className="text-gray-400 text-xs">(Optional - Add skills as a list)</span>
                   </label>
-                  <textarea
-                    name="skills"
-                    value={formData.skills ?? ""}
-                    onChange={handleChange}
-                    rows={3}
-                    placeholder="e.g., Customer service, Food handling, Cash handling, Team work (Enter comma-separated values)"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  />
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={skillInput}
+                        onChange={(e) => setSkillInput(e.target.value)}
+                        onKeyPress={handleSkillKeyPress}
+                        placeholder="Enter skill and press Enter or click Add"
+                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={addSkill}
+                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add
+                      </button>
+                    </div>
+                    {formData.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        {formData.skills.map((skill, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                          >
+                            {skill}
+                            <button
+                              type="button"
+                              onClick={() => removeSkill(index)}
+                              className="text-blue-600 hover:text-blue-800"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Note: These will be converted to an array format when saved. Example: "Skill1, Skill2" → ["Skill1", "Skill2"]
+                    Skills are stored as an array. Each skill is a separate item in the list.
                   </p>
                 </div>
 
@@ -859,6 +911,21 @@ const NewJob: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {/* Shift Date */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Shift Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={shift.shiftDate}
+                          onChange={(e) => updateShift(shift.id, "shiftDate", e.target.value)}
+                          min={formData.jobDate || new Date().toISOString().split("T")[0]}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      
                       {/* Shift Timing */}
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -930,40 +997,28 @@ const NewJob: React.FC = () => {
                           value={shift.rateType}
                           onChange={(e) => {
                             const newRateType = e.target.value;
-                            updateShift(shift.id, "rateType", newRateType as "Weekend" | "Weekday" | "Public Holiday");
-                            // Auto-update pay rate if default exists for this rate type
-                            if (defaultPayRates[newRateType]) {
-                              updateShift(shift.id, "payPerHour", defaultPayRates[newRateType]);
-                            }
+                            updateShift(shift.id, "rateType", newRateType as "Hourly" | "Weekly" | "Monthly");
                           }}
                           required
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                          {rateTypes.length > 0 ? (
-                            rateTypes.map((rateType) => (
-                              <option key={rateType} value={rateType}>{rateType}</option>
-                            ))
-                          ) : (
-                            <>
-                              <option value="Weekday">Weekday</option>
-                              <option value="Weekend">Weekend</option>
-                              <option value="Public Holiday">Public Holiday</option>
-                            </>
-                          )}
+                          <option value="Hourly">Hourly</option>
+                          <option value="Weekly">Weekly</option>
+                          <option value="Monthly">Monthly</option>
                         </select>
                       </div>
 
-                      {/* Pay/Hr */}
+                      {/* Rates */}
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Pay/Hr (SGD) <span className="text-red-500">*</span>
+                          {shift.rateType === "Hourly" ? "Rate/Hr (SGD)" : shift.rateType === "Weekly" ? "Rate/Week (SGD)" : "Rate/Month (SGD)"} <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={shift.payPerHour}
-                          onChange={(e) => updateShift(shift.id, "payPerHour", parseFloat(e.target.value) || 0)}
+                          value={shift.rates}
+                          onChange={(e) => updateShift(shift.id, "rates", parseFloat(e.target.value) || 0)}
                           required
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />

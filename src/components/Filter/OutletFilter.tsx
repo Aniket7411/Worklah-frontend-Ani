@@ -22,7 +22,7 @@ export default function OutletFilter() {
     const fetchOutlets = async () => {
       try {
         setLoading(true);
-        const response = await axiosInstance.get("/outlets");
+        const response = await axiosInstance.get("/admin/outlets");
         const outletsData = response.data.data || response.data.outlets || [];
         
         const formattedOutlets: Outlet[] = outletsData.map((outlet: any) => ({

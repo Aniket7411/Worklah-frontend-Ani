@@ -64,7 +64,8 @@ const JobPostChart = () => {
         setError("");
 
         // Fetch monthly job post data from backend
-        const chartResponse = await axiosInstance.get("/dashboard/job-posts");
+        // Use admin dashboard charts endpoint
+        const chartResponse = await axiosInstance.get("/admin/dashboard/charts?period=monthly");
         
         // Check for success field according to API spec
         if (chartResponse.data?.success === false) {
@@ -102,7 +103,7 @@ const JobPostChart = () => {
         }
 
         // Fetch recent posted jobs from backend
-        const jobsResponse = await axiosInstance.get("/jobs?limit=3&sortOrder=desc");
+        const jobsResponse = await axiosInstance.get("/admin/jobs?limit=3&sortOrder=desc");
         
         // Check for success field according to API spec
         if (jobsResponse.data?.success === false) {

@@ -68,7 +68,7 @@ const JobDetailsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axiosInstance.get(`/jobs/${jobId}`);
+      const response = await axiosInstance.get(`/admin/jobs/${jobId}`);
 
       // Check for success field according to API spec
       if (response?.data?.success === false) {
@@ -109,14 +109,14 @@ const JobDetailsPage = () => {
           setPenalties(jobsData.penalties);
           return;
         }
-        
+
         // Try to fetch default penalties from API
         const response = await axiosInstance.get("/admin/penalties").catch(() => null);
         if (response?.data?.penalties) {
           setPenalties(response.data.penalties);
           return;
         }
-        
+
         // Fallback to empty array if no penalties found
         setPenalties([]);
       } catch (error) {
@@ -218,8 +218,8 @@ const JobDetailsPage = () => {
         <div className="flex flex-col lg:flex-row justify-between gap-6">
           <div className="flex flex-col gap-4 flex-1">
             <div className="flex items-center gap-3">
-              <button 
-                className="p-2 rounded-full shadow-md bg-white hover:bg-gray-50 transition-colors" 
+              <button
+                className="p-2 rounded-full shadow-md bg-white hover:bg-gray-50 transition-colors"
                 onClick={() => navigate(-1)}
               >
                 <ArrowLeft className="w-6 h-6 text-gray-700" />
@@ -246,8 +246,8 @@ const JobDetailsPage = () => {
               <div className="flex-shrink-0">
                 {jobsData.employer?.companyLogo ? (
                   <img
-                    src={jobsData.employer.companyLogo.startsWith("http") 
-                      ? jobsData.employer.companyLogo 
+                    src={jobsData.employer.companyLogo.startsWith("http")
+                      ? jobsData.employer.companyLogo
                       : `${companyImage}${jobsData.employer.companyLogo}`}
                     alt="Company Logo"
                     className="w-16 h-16 rounded-lg object-cover border-2 border-white shadow-md"
@@ -268,9 +268,9 @@ const JobDetailsPage = () => {
                   />
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-200 to-blue-300 flex items-center justify-center text-xl font-bold text-blue-700 border-2 border-white shadow-md">
-                    {jobsData.employer?.name?.charAt(0)?.toUpperCase() || 
-                     jobsData.employerName?.charAt(0)?.toUpperCase() || 
-                     (jobsData.postedBy === "admin" ? "A" : "?")}
+                    {jobsData.employer?.name?.charAt(0)?.toUpperCase() ||
+                      jobsData.employerName?.charAt(0)?.toUpperCase() ||
+                      (jobsData.postedBy === "admin" ? "A" : "?")}
                   </div>
                 )}
               </div>
@@ -281,11 +281,10 @@ const JobDetailsPage = () => {
                     {jobsData.employer?.name || jobsData.employer?.companyLegalName || jobsData.employerName || "N/A"}
                   </p>
                   {jobsData.postedBy && (
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      jobsData.postedBy === "admin" 
-                        ? "bg-blue-100 text-blue-700 border border-blue-200" 
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${jobsData.postedBy === "admin"
+                        ? "bg-blue-100 text-blue-700 border border-blue-200"
                         : "bg-green-100 text-green-700 border border-green-200"
-                    }`}>
+                      }`}>
                       {jobsData.postedBy === "admin" ? "Admin Post" : "Employer Post"}
                     </span>
                   )}
@@ -355,7 +354,7 @@ const JobDetailsPage = () => {
                 </Link>
               )}
               <div className="relative">
-                <button 
+                <button
                   className="p-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
                   onClick={() => setIsSettingsOpen(!isSettingsOpen)}
                 >
@@ -373,11 +372,11 @@ const JobDetailsPage = () => {
                         </Link>
                       </li>
                       <li className="border-t border-gray-100">
-                        <button 
+                        <button
                           className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                           onClick={async () => {
                             try {
-                              const response = await axiosInstance.delete(`/jobs/${jobId}`);
+                              const response = await axiosInstance.delete(`/admin/jobs/${jobId}`);
                               if (response.data?.success === false) {
                                 alert(response.data?.message || "Failed to cancel job");
                                 return;
@@ -422,10 +421,10 @@ const JobDetailsPage = () => {
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Application Deadline</p>
                     <p className="text-sm font-semibold text-orange-600">
-                      {new Date(jobsData.applicationDeadline).toLocaleDateString('en-GB', { 
-                        day: 'numeric', 
-                        month: 'short', 
-                        year: 'numeric' 
+                      {new Date(jobsData.applicationDeadline).toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
                       })}
                     </p>
                   </div>
@@ -502,7 +501,7 @@ const JobDetailsPage = () => {
                   <tr key={shift.shiftId || shift.id || index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors relative">
                     <td className="p-4 text-center border-l border-gray-200">
                       <div className="relative">
-                        <button 
+                        <button
                           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
                           onClick={() => handlePopupToggle(index)}
                         >
@@ -627,7 +626,7 @@ const JobDetailsPage = () => {
           </div>
         </div>
       )}
-      
+
       {shifts.length === 0 && jobsData.shiftTiming && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Shift Information</h3>
@@ -713,38 +712,38 @@ const JobDetailsPage = () => {
             </div>
           ) : (
             penalties.map((item, index) => {
-            const penaltyValue = parseInt(
-              item.penalty.replace("$", "").replace(" Penalty", "").replace("No Penalty", "0")
-            );
+              const penaltyValue = parseInt(
+                item.penalty.replace("$", "").replace(" Penalty", "").replace("No Penalty", "0")
+              );
 
-            // Determine penalty text color
-            const penaltyColor =
-              penaltyValue >= 50
-                ? "text-red-800 bg-red-50 border-red-200"
-                : penaltyValue >= 15
-                  ? "text-red-700 bg-red-50 border-red-200"
-                  : penaltyValue >= 10
-                    ? "text-red-600 bg-orange-50 border-orange-200"
-                    : penaltyValue >= 5
-                      ? "text-orange-600 bg-orange-50 border-orange-200"
-                      : "text-gray-600 bg-gray-50 border-gray-200";
+              // Determine penalty text color
+              const penaltyColor =
+                penaltyValue >= 50
+                  ? "text-red-800 bg-red-50 border-red-200"
+                  : penaltyValue >= 15
+                    ? "text-red-700 bg-red-50 border-red-200"
+                    : penaltyValue >= 10
+                      ? "text-red-600 bg-orange-50 border-orange-200"
+                      : penaltyValue >= 5
+                        ? "text-orange-600 bg-orange-50 border-orange-200"
+                        : "text-gray-600 bg-gray-50 border-gray-200";
 
-            return (
-              <div 
-                key={index} 
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
-              >
-                <p className="text-sm font-medium text-gray-900">
-                  {item.condition}
-                </p>
-                <p
-                  className={`py-1.5 px-4 rounded-lg text-sm font-semibold border ${penaltyColor}`}
+              return (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
                 >
-                  {item.penalty}
-                </p>
-              </div>
-            );
-          }))
+                  <p className="text-sm font-medium text-gray-900">
+                    {item.condition}
+                  </p>
+                  <p
+                    className={`py-1.5 px-4 rounded-lg text-sm font-semibold border ${penaltyColor}`}
+                  >
+                    {item.penalty}
+                  </p>
+                </div>
+              );
+            }))
           }
         </div>
       </div>

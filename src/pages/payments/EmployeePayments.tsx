@@ -67,14 +67,21 @@ export default function EmployeePayments() {
         setLoading(true);
         setError(null);
 
-        let endpoint = activeTab === "payments" ? "/payments" : "/withdrawals";
+        // Use admin transactions endpoint with type filter
+        let endpoint = "/admin/transactions";
+        const params: any = {};
+        if (activeTab === "payments") {
+          params.type = "credit";
+        } else {
+          params.type = "debit";
+          params.status = "pending"; // For withdrawals, typically show pending
+        }
 
         // Add filter query parameters from URL
-        const params: any = {};
-        
+
         // Get URL search params
         const urlParams = new URLSearchParams(window.location.search);
-        
+
         // Status filter
         const statusParam = urlParams.get('status');
         if (statusParam) {
@@ -84,13 +91,13 @@ export default function EmployeePayments() {
         } else if (filter === "outstanding" && activeTab === "payments") {
           params.status = "outstanding";
         }
-        
+
         // Date range filters
         const dateFrom = urlParams.get('dateFrom');
         const dateTo = urlParams.get('dateTo');
-        if (dateFrom) params.dateFrom = dateFrom;
-        if (dateTo) params.dateTo = dateTo;
-        
+        if (dateFrom) params.startDate = dateFrom;
+        if (dateTo) params.endDate = dateTo;
+
         // Rate type filter
         const rateType = urlParams.get('rateType');
         if (rateType) params.rateType = rateType;
@@ -101,14 +108,14 @@ export default function EmployeePayments() {
         }
 
         const response = await axiosInstance.get(endpoint);
-        
+
         // Check for success field according to API spec
         if (response.data?.success === false) {
           throw new Error(response.data?.message || 'Failed to fetch data');
         }
-        
+
         let responseData = response?.data || null;
-        
+
         // Update: Use transactions array instead of withdrawals for withdrawals endpoint
         if (activeTab === "withdrawals" && responseData && responseData.transactions) {
           responseData = {
@@ -246,7 +253,7 @@ export default function EmployeePayments() {
                 ref={popupRef}
                 className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-md z-50 max-h-[600px] overflow-y-auto"
               >
-                <PaymentFilters 
+                <PaymentFilters
                   onApply={(filters) => {
                     // Filters are applied via URL navigation in PaymentFilters component
                     setIsLimitPopupOpen(false)

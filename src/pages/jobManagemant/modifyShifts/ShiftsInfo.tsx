@@ -32,7 +32,7 @@ const ShiftsInfo = () => {
 
       try {
         setLoading(true)
-        const response = await axiosInstance.get(`/jobs/${jobId}`)
+        const response = await axiosInstance.get(`/admin/jobs/${jobId}`)
         const job = response.data?.job || response.data
 
         if (job?.shifts && Array.isArray(job.shifts) && job.shifts.length > 0) {

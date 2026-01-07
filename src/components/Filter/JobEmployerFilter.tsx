@@ -36,7 +36,7 @@ export default function JobEmployerFilter({ onClose, onSelect }: JobEmployerFilt
   useEffect(() => {
     const fetchEmployers = async () => {
       try {
-        const response = await axiosInstance.get('/employers') // Adjust if needed
+        const response = await axiosInstance.get('/admin/employers') // Admin endpoint
 
         // Check for success field according to API spec
         if (response.data?.success === false) {

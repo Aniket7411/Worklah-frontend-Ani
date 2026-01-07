@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { useAuth } from "../../context/AuthContext";
@@ -19,6 +19,14 @@ import {
 } from "lucide-react";
 import { AxiosError } from "axios";
 import toast from "react-hot-toast";
+import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
+
+// Google Maps API type declaration
+declare global {
+  interface Window {
+    google: any;
+  }
+}
 
 interface ContactPerson {
   name: string;
@@ -29,8 +37,9 @@ interface ContactPerson {
 interface Outlet {
   name: string; // Outlet name (required)
   address: string;
+  contactNumber?: string; // Outlet contact number
   managerName?: string;
-  managerContact?: string;
+  managerContact?: string; // Alternate contact number (Manager) Optional
 }
 
 const AddEmployer: React.FC = () => {
@@ -45,28 +54,67 @@ const AddEmployer: React.FC = () => {
     }
   }, [user, navigate]);
 
+  // Load Google Maps API
+  useEffect(() => {
+    const loadGoogleMaps = () => {
+      if (window.google && window.google.maps) {
+        setIsGoogleMapsLoaded(true);
+        return;
+      }
+
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) {
+        // API key not set, autocomplete will work as regular textarea
+        console.log("Google Maps API key not set. Address autocomplete will be disabled.");
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => setIsGoogleMapsLoaded(true);
+      script.onerror = () => {
+        console.error("Failed to load Google Maps API");
+        // Don't show error toast if API key is missing - it's expected
+        if (apiKey) {
+          toast.error("Failed to load Google Maps API");
+        }
+      };
+      document.head.appendChild(script);
+    };
+
+    loadGoogleMaps();
+  }, []);
+
   const [formData, setFormData] = useState({
     employerId: "", // Auto-generated, read-only
     companyLogo: null as File | null,
     companyLegalName: "", // Name of employer (required)
     hqAddress: "", // Address (required)
-    mainContactPersonName: "",
-    jobPosition: "",
+    employerPosition: "", // Employer position (required)
+    jobPosition: "", // Position in company
     mainContactNumber: "", // Contact no. (required)
-    alternateContactNumber: "", // Alternate no. (required)
+    alternateContactNumber: "", // Alternate no. (Optional)
     emailAddress: "", // Email (required)
     officeNumber: "",
     acraBizfileCert: null as File | null,
     industry: "", // Industry type (required)
+    customIndustry: "", // Custom industry input
     serviceAgreement: "",
     serviceContract: null as File | null,
     contractExpiryDate: "",
   });
+  
+  const [showCustomIndustry, setShowCustomIndustry] = useState(false);
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const employerAddressRef = useRef<HTMLTextAreaElement>(null);
+  const outletAddressRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
     { name: "", position: "", number: "" }
   ]);
-  const [outlets, setOutlets] = useState<Outlet[]>([{ name: "", address: "" }]);
+  const [outlets, setOutlets] = useState<Outlet[]>([{ name: "", address: "", contactNumber: "" }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generateCredentials, setGenerateCredentials] = useState(true);
   const [employerCredentials, setEmployerCredentials] = useState<{
@@ -79,7 +127,46 @@ const AddEmployer: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Handle industry change
+    if (name === "industry") {
+      setShowCustomIndustry(value === "Others" || value === "");
+      setFormData(prev => ({ ...prev, [name]: value, customIndustry: value === "Others" ? prev.customIndustry : "" }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+  
+  // Google Places Autocomplete for Employer Address
+  // Only use autocomplete if Google Maps is available
+  const hasGoogleMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const {
+    ready: employerAddressReady = false,
+    value: employerAddressValue = "",
+    suggestions: { status = "", data = [] } = { status: "", data: [] },
+    setValue: setEmployerAddressValue,
+    clearSuggestions,
+  } = usePlacesAutocomplete({
+    requestOptions: {
+      componentRestrictions: { country: "sg" }, // Singapore only
+    },
+    debounce: 300,
+    initOnMount: hasGoogleMapsKey && isGoogleMapsLoaded,
+  });
+
+  // Handle employer address selection
+  const handleEmployerAddressSelect = async (description: string) => {
+    setEmployerAddressValue(description, false);
+    clearSuggestions();
+    setFormData(prev => ({ ...prev, hqAddress: description }));
+    
+    try {
+      const results = await getGeocode({ address: description });
+      const { lat, lng } = await getLatLng(results[0]);
+      // You can store lat/lng if needed
+    } catch (error) {
+      console.error("Error:", error);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
@@ -119,7 +206,8 @@ const AddEmployer: React.FC = () => {
   };
 
   const addOutlet = () => {
-    setOutlets([...outlets, { name: "", address: "" }]);
+    setOutlets([...outlets, { name: "", address: "", contactNumber: "" }]);
+    outletAddressRefs.current.push(null);
   };
 
   const removeOutlet = (index: number) => {
@@ -151,8 +239,16 @@ const AddEmployer: React.FC = () => {
       return;
     }
 
-    if (!formData.industry?.trim()) {
+    // Validate industry
+    const industryValue = showCustomIndustry ? formData.customIndustry?.trim() : formData.industry?.trim();
+    if (!industryValue) {
       toast.error("Industry type is required");
+      setIsSubmitting(false);
+      return;
+    }
+    
+    if (!formData.employerPosition?.trim()) {
+      toast.error("Employer position is required");
       setIsSubmitting(false);
       return;
     }
@@ -169,11 +265,7 @@ const AddEmployer: React.FC = () => {
       return;
     }
 
-    if (!formData.alternateContactNumber?.trim()) {
-      toast.error("Alternate contact number is required");
-      setIsSubmitting(false);
-      return;
-    }
+    // Alternate contact number is now optional - removed validation
 
     if (!formData.emailAddress?.trim()) {
       toast.error("Email address is required");
@@ -229,6 +321,9 @@ const AddEmployer: React.FC = () => {
         if (outlet.name && outlet.address) {
           formDataToSend.append(`outlets[${index}][name]`, outlet.name);
           formDataToSend.append(`outlets[${index}][address]`, outlet.address);
+          if (outlet.contactNumber) {
+            formDataToSend.append(`outlets[${index}][contactNumber]`, outlet.contactNumber);
+          }
           if (outlet.managerName) {
             formDataToSend.append(`outlets[${index}][managerName]`, outlet.managerName);
           }
@@ -237,11 +332,17 @@ const AddEmployer: React.FC = () => {
           }
         }
       });
+      
+      // Send industry value (custom or selected)
+      const industryToSend = showCustomIndustry ? formData.customIndustry : formData.industry;
+      if (industryToSend) {
+        formDataToSend.append("industry", industryToSend);
+      }
 
       // Add credential generation flag
       formDataToSend.append("generateCredentials", String(generateCredentials));
 
-      const response = await axiosInstance.post("/employers/create", formDataToSend, {
+      const response = await axiosInstance.post("/admin/employers", formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -385,41 +486,96 @@ const AddEmployer: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Industry Type <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="industry"
-                    value={formData.industry ?? ""}
-                    onChange={handleChange}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  >
-                    <option value="">Select Industry</option>
-                    <option value="Hospitality">Hospitality</option>
-                    <option value="IT">IT</option>
-                    <option value="F&B">F&B (Food & Beverage)</option>
-                    <option value="Hotel">Hotel</option>
-                    <option value="Retail">Retail</option>
-                    <option value="Logistics">Logistics</option>
-                    <option value="Healthcare">Healthcare</option>
-                    <option value="Education">Education</option>
-                    <option value="Construction">Construction</option>
-                    <option value="Others">Others</option>
-                  </select>
+                  {!showCustomIndustry ? (
+                    <select
+                      name="industry"
+                      value={formData.industry ?? ""}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    >
+                      <option value="">Select Industry</option>
+                      <option value="Hospitality">Hospitality</option>
+                      <option value="IT">IT</option>
+                      <option value="F&B">F&B (Food & Beverage)</option>
+                      <option value="Hotel">Hotel</option>
+                      <option value="Retail">Retail</option>
+                      <option value="Logistics">Logistics</option>
+                      <option value="Healthcare">Healthcare</option>
+                      <option value="Education">Education</option>
+                      <option value="Construction">Construction</option>
+                      <option value="Others">Others (Add Custom)</option>
+                    </select>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        name="customIndustry"
+                        value={formData.customIndustry ?? ""}
+                        onChange={handleChange}
+                        placeholder="Enter custom industry type"
+                        required
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCustomIndustry(false);
+                          setFormData(prev => ({ ...prev, customIndustry: "" }));
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        ← Back to list
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* HQ Address */}
+                {/* HQ Address with Google Places Autocomplete */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Address <span className="text-red-500">*</span>
+                    Employer Address <span className="text-red-500">*</span>
+                    {hasGoogleMapsKey && isGoogleMapsLoaded && (
+                      <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses only)</span>
+                    )}
                   </label>
-                  <textarea
-                    name="hqAddress"
-                    value={formData.hqAddress ?? ""}
-                    onChange={handleChange}
-                    placeholder="Enter address"
-                    rows={3}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-                  />
+                  <div className="relative">
+                    <textarea
+                      ref={employerAddressRef}
+                      name="hqAddress"
+                      value={hasGoogleMapsKey && isGoogleMapsLoaded ? (employerAddressValue || formData.hqAddress) ?? "" : formData.hqAddress ?? ""}
+                      onChange={(e) => {
+                        if (hasGoogleMapsKey && isGoogleMapsLoaded) {
+                          setEmployerAddressValue(e.target.value);
+                        }
+                        setFormData(prev => ({ ...prev, hqAddress: e.target.value }));
+                      }}
+                      placeholder={hasGoogleMapsKey && isGoogleMapsLoaded 
+                        ? "Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                        : "Enter address (e.g., Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123)"}
+                      rows={4}
+                      required
+                      disabled={hasGoogleMapsKey && (!employerAddressReady || !isGoogleMapsLoaded)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                    />
+                    {hasGoogleMapsKey && isGoogleMapsLoaded && status === "OK" && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {data.map(({ place_id, description }) => (
+                          <button
+                            key={place_id}
+                            type="button"
+                            onClick={() => handleEmployerAddressSelect(description)}
+                            className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm"
+                          >
+                            {description}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Format: Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123
+                  </p>
                 </div>
               </div>
             </section>
@@ -495,6 +651,37 @@ const AddEmployer: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Employer Position */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Employer Position <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="employerPosition"
+                    value={formData.employerPosition ?? ""}
+                    onChange={handleChange}
+                    placeholder="Enter employer position"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Position in Company */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Position in Company <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="jobPosition"
+                    value={formData.jobPosition}
+                    onChange={handleChange}
+                    placeholder="Enter position in company"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
                 {/* Main Contact Number */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -514,7 +701,7 @@ const AddEmployer: React.FC = () => {
                 {/* Alternate Contact Number */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Alternate Contact Number <span className="text-red-500">*</span>
+                    Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
                   </label>
                   <input
                     type="tel"
@@ -522,7 +709,6 @@ const AddEmployer: React.FC = () => {
                     value={formData.alternateContactNumber ?? ""}
                     onChange={handleChange}
                     placeholder="Enter alternate contact number"
-                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -554,21 +740,6 @@ const AddEmployer: React.FC = () => {
                     value={formData.officeNumber}
                     onChange={handleChange}
                     placeholder="Enter office number"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                {/* Job Position */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Position <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="jobPosition"
-                    value={formData.jobPosition}
-                    onChange={handleChange}
-                    placeholder="Enter job position"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -756,19 +927,35 @@ const AddEmployer: React.FC = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Outlet Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={outlet.contactNumber || ""}
+                        onChange={(e) => handleOutletChange(index, "contactNumber", e.target.value)}
+                        placeholder="Enter outlet contact number"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
                         Outlet Address <span className="text-red-500">*</span>
+                        <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses only)</span>
                       </label>
                       <textarea
                         value={outlet.address ?? ""}
                         onChange={(e) => handleOutletChange(index, "address", e.target.value)}
-                        placeholder="Enter outlet address"
-                        rows={2}
+                        placeholder="Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                        rows={3}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                       />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Format: Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123
+                      </p>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Manager Name (Optional)</label>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Manager Name <span className="text-gray-400 text-xs">(Optional)</span></label>
                       <input
                         type="text"
                         value={outlet.managerName || ""}
@@ -778,12 +965,12 @@ const AddEmployer: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Manager Contact (Optional)</label>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Alternate Contact Number (Manager) <span className="text-gray-400 text-xs">(Optional)</span></label>
                       <input
                         type="tel"
                         value={outlet.managerContact || ""}
                         onChange={(e) => handleOutletChange(index, "managerContact", e.target.value)}
-                        placeholder="Manager contact number"
+                        placeholder="Manager alternate contact number"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>

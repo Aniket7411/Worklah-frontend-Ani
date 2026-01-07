@@ -1,39 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import Cookies from 'js-cookie';
-import { axiosInstance } from '../../lib/authInstances';
 
 export default function SignIn() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, login } = useAuth();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    role: 'Admin',
   });
-
   const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<[] | null>([]);
-  const [error, setError] = useState<string | null>(null);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
+
     try {
       const success = await login(formData.email, formData.password);
       if (success) {
-        navigate('/');
-      } else {
-        // Error toast is already shown in AuthContext
-        setError('Login failed. Please check your credentials and try again.');
+        navigate('/', { replace: true });
       }
+      // Error toast is already shown in AuthContext
     } catch (err) {
-      setError('An unexpected error occurred. Please try again later.');
+      console.error('Login error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -64,7 +62,7 @@ export default function SignIn() {
       <div className="flex flex-col w-full md:w-1/2 p-12 sm:p-20 lg:p-24 justify-center">
         <div className="w-full max-w-lg mx-auto space-y-10">
           {/* Logo */}
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-2">
             <img
               src="/assets/logo.png"
               alt="Work Lah! Logo"

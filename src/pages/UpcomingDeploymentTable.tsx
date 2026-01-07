@@ -36,7 +36,7 @@ const UpcomingDeploymentTable = () => {
 
   useEffect(() => {
     fetchData();
-    axiosInstance.get("/employers").then((res) => setEmployers(res.data.employers || []));
+    axiosInstance.get("/admin/employers").then((res) => setEmployers(res.data.employers || []));
     axiosInstance.get("/admin/jobs").then((res) => setJobs(res.data?.jobs || []));
   }, []);
 

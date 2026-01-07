@@ -25,7 +25,8 @@ const RevenueChart = () => {
         setError("");
 
         // Fetch revenue data from backend
-        const revenueResponse = await axiosInstance.get("/dashboard/revenue");
+        // Use admin dashboard charts endpoint
+        const revenueResponse = await axiosInstance.get("/admin/dashboard/charts?period=monthly");
         
         // Check for success field according to API spec
         if (revenueResponse.data?.success === false) {

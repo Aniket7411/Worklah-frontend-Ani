@@ -82,7 +82,7 @@ const EditEmployer: React.FC = () => {
       setLoading(true);
       // API accepts both MongoDB ObjectId and EMP-xxxx format
       // The id from URL params can be either format
-      const response = await axiosInstance.get(`/employers/${id}`);
+      const response = await axiosInstance.get(`/admin/employers/${id}`);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {

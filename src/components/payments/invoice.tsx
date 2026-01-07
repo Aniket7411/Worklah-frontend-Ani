@@ -41,7 +41,7 @@ export default function Invoicereport() {
                     setInvoices(response.data.invoices || response.data.data || []);
                 } else {
                     // Fallback: fetch employers
-                    const employersResponse = await axiosInstance.get("/employers");
+                    const employersResponse = await axiosInstance.get("/admin/employers");
                     const employers = employersResponse.data.employers || [];
 
                     const invoicesData = employers.map((emp: any) => ({

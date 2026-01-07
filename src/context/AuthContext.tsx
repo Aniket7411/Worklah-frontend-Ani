@@ -35,10 +35,44 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Helper function to get token from storage
+  const getToken = (): string | null => {
+    // Try localStorage first, then cookies
+    const localToken = localStorage.getItem('authToken');
+    if (localToken) return localToken;
+    
+    const cookieToken = Cookies.get('authToken');
+    if (cookieToken) {
+      // Sync to localStorage if found in cookies
+      localStorage.setItem('authToken', cookieToken);
+      return cookieToken;
+    }
+    
+    return null;
+  };
+
+  // Helper function to set token in both storage methods
+  const setToken = (token: string) => {
+    // Store in localStorage (primary)
+    localStorage.setItem('authToken', token);
+    // Also store in cookies as backup
+    Cookies.set('authToken', token, { 
+      expires: 7, // 7 days
+      secure: window.location.protocol === 'https:', // Secure in production
+      sameSite: 'lax'
+    });
+  };
+
+  // Helper function to remove token from all storage
+  const removeToken = () => {
+    localStorage.removeItem('authToken');
+    Cookies.remove('authToken');
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = Cookies.get('authToken');
+        const token = getToken();
         if (!token) {
           setIsAuthenticated(false);
           setUser(null);
@@ -46,7 +80,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           return;
         }
 
-        const response = await axiosInstance.get('/user/me', {
+        const response = await axiosInstance.get('/admin/me', {
           timeout: 10000,
         });
         
@@ -54,26 +88,35 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         if (response.data?.success === false) {
           setIsAuthenticated(false);
           setUser(null);
-          Cookies.remove('authToken');
+          removeToken();
           return;
         }
 
-        const userData = response?.data?.user || response?.data;
+        // Admin API returns 'admin' field, not 'user'
+        const userData = response?.data?.admin || response?.data?.user || response?.data;
         if (userData) {
           setUser(userData);
           setIsAuthenticated(true);
         } else {
           setIsAuthenticated(false);
           setUser(null);
-          Cookies.remove('authToken');
+          removeToken();
         }
       } catch (error: any) {
         if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-          // Timeout error - keep existing auth state
+          // Timeout error - keep existing auth state if token exists
+          const token = getToken();
+          if (token) {
+            // Keep authenticated state, but try to refresh user data silently
+            console.warn('Auth check timeout, keeping existing session');
+          } else {
+            setIsAuthenticated(false);
+            setUser(null);
+          }
         } else {
           setUser(null);
           setIsAuthenticated(false);
-          Cookies.remove('authToken');
+          removeToken();
         }
       } finally {
         setIsLoading(false);
@@ -85,7 +128,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await axiosInstance.post('/user/login', { email, password });
+      const response = await axiosInstance.post('/admin/login', { email, password });
       
       // Check for success field according to API spec
       if (response.data?.success === false) {
@@ -93,16 +136,24 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         return false;
       }
 
-      const userData = response?.data?.user;
+      // Admin API returns 'admin' field, not 'user'
+      const userData = response?.data?.admin || response?.data?.user;
       const token = response?.data?.token;
       
+      if (!token) {
+        toast.error('Login failed: No token received from server.');
+        return false;
+      }
+
       if (userData) {
         setUser(userData);
+      } else {
+        toast.error('Login failed: No admin data received from server.');
+        return false;
       }
       
-      if (token) {
-        Cookies.set('authToken', token, { expires: 7 }); // Save token in cookies for 7 days
-      }
+      // Store token in both localStorage and cookies
+      setToken(token);
       
       setIsAuthenticated(true);
       toast.success('Login successful!');
@@ -110,6 +161,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || error?.message || 'Login failed. Please check your credentials and try again.';
       toast.error(errorMessage);
+      removeToken(); // Clear any existing tokens on failed login
       return false;
     }
   };
@@ -141,15 +193,15 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await axiosInstance.post('/user/logout', {});
+      await axiosInstance.post('/admin/logout', {});
       toast.success('Logged out successfully');
     } catch (error) {
       // Continue with logout even if API call fails
-      toast.error('Error during logout, but you have been logged out locally');
+      console.warn('Logout API call failed, but logging out locally');
     } finally {
       setUser(null);
       setIsAuthenticated(false);
-      Cookies.remove('authToken');
+      removeToken(); // Remove token from both localStorage and cookies
     }
   };
 
