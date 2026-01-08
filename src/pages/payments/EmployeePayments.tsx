@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Filter } from "lucide-react";
 import Payments from "../../components/payments/Payments";
+import EnhancedPayments from "../../components/payments/EnhancedPayments";
 import WithDrawals from "../../components/payments/WithDrawals";
 import { axiosInstance } from "../../lib/authInstances";
 import PaymentFilters from "../../components/Filter/PaymentFilters";
@@ -301,7 +302,7 @@ export default function EmployeePayments() {
                 <>
                   {activeTab === "payments" && (
                     <>
-                      <Payments data={data} />
+                      <EnhancedPayments data={data} />
                       {filter && data && (!data.payments || data.payments.length === 0) && (
                         <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mt-4">
                           No {filter === "pending" ? "pending" : "outstanding"} payments found. Try adjusting your filters or check back later.

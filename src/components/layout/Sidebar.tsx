@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode } from "lucide-react";
+import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode, Bell, Calendar, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 
@@ -55,6 +55,24 @@ const menuItems: MenuItem[] = [
     text: "QR Code Management",
     path: "/qrCode",
     description: "QR code settings"
+  },
+  {
+    icon: <Calendar className="w-5 h-5" />,
+    text: "Timesheet",
+    path: "/timesheet",
+    description: "Attendance sheets"
+  },
+  {
+    icon: <Bell className="w-5 h-5" />,
+    text: "Send Notification",
+    path: "/notifications/send",
+    description: "Send notifications"
+  },
+  {
+    icon: <UserPlus className="w-5 h-5" />,
+    text: "Create User",
+    path: "/admin/create-user",
+    description: "Create user accounts"
   },
 ];
 

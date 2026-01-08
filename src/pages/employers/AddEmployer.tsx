@@ -28,12 +28,6 @@ declare global {
   }
 }
 
-interface ContactPerson {
-  name: string;
-  position: string;
-  number: string;
-}
-
 interface Outlet {
   name: string; // Outlet name (required)
   address: string;
@@ -92,12 +86,11 @@ const AddEmployer: React.FC = () => {
     companyLogo: null as File | null,
     companyLegalName: "", // Name of employer (required)
     hqAddress: "", // Address (required)
-    employerPosition: "", // Employer position (required)
+    contactPersonName: "", // Name (required)
     jobPosition: "", // Position in company
     mainContactNumber: "", // Contact no. (required)
     alternateContactNumber: "", // Alternate no. (Optional)
     emailAddress: "", // Email (required)
-    officeNumber: "",
     acraBizfileCert: null as File | null,
     industry: "", // Industry type (required)
     customIndustry: "", // Custom industry input
@@ -111,9 +104,6 @@ const AddEmployer: React.FC = () => {
   const employerAddressRef = useRef<HTMLTextAreaElement>(null);
   const outletAddressRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
-  const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
-    { name: "", position: "", number: "" }
-  ]);
   const [outlets, setOutlets] = useState<Outlet[]>([{ name: "", address: "", contactNumber: "" }]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generateCredentials, setGenerateCredentials] = useState(true);
@@ -183,21 +173,6 @@ const AddEmployer: React.FC = () => {
     }
   };
 
-  const handleContactPersonChange = (index: number, field: keyof ContactPerson, value: string) => {
-    const updated = [...contactPersons];
-    updated[index] = { ...updated[index], [field]: value };
-    setContactPersons(updated);
-  };
-
-  const addContactPerson = () => {
-    setContactPersons([...contactPersons, { name: "", position: "", number: "" }]);
-  };
-
-  const removeContactPerson = (index: number) => {
-    if (contactPersons.length > 1) {
-      setContactPersons(contactPersons.filter((_, i) => i !== index));
-    }
-  };
 
   const handleOutletChange = (index: number, field: keyof Outlet, value: string) => {
     const updated = [...outlets];
@@ -247,8 +222,8 @@ const AddEmployer: React.FC = () => {
       return;
     }
     
-    if (!formData.employerPosition?.trim()) {
-      toast.error("Employer position is required");
+    if (!formData.contactPersonName?.trim()) {
+      toast.error("Name is required");
       setIsSubmitting(false);
       return;
     }
@@ -307,14 +282,10 @@ const AddEmployer: React.FC = () => {
         }
       });
 
-      // Append contact persons
-      contactPersons.forEach((contact, index) => {
-        if (contact.name || contact.position || contact.number) {
-          formDataToSend.append(`contactPersons[${index}][name]`, contact.name);
-          formDataToSend.append(`contactPersons[${index}][position]`, contact.position);
-          formDataToSend.append(`contactPersons[${index}][number]`, contact.number);
-        }
-      });
+      // Append contact person name
+      if (formData.contactPersonName) {
+        formDataToSend.append("contactPersonName", formData.contactPersonName);
+      }
 
       // Append outlets
       outlets.forEach((outlet, index) => {
@@ -587,81 +558,18 @@ const AddEmployer: React.FC = () => {
                 Contact Information
               </h2>
 
-              {/* Main Contact Person Name - Multiple */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Main Contact Person(s) <span className="text-gray-400 text-xs">(Optional - Multiple allowed)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addContactPerson}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Contact
-                  </button>
-                </div>
-
-                {contactPersons.map((contact, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
-                      <input
-                        type="text"
-                        value={contact.name}
-                        onChange={(e) => handleContactPersonChange(index, "name", e.target.value)}
-                        placeholder="Contact name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Position</label>
-                      <input
-                        type="text"
-                        value={contact.position}
-                        onChange={(e) => handleContactPersonChange(index, "position", e.target.value)}
-                        placeholder="Job position"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Number</label>
-                        <input
-                          type="tel"
-                          value={contact.number}
-                          onChange={(e) => handleContactPersonChange(index, "number", e.target.value)}
-                          placeholder="Contact number"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      {contactPersons.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeContactPerson(index)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Employer Position */}
+                {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer Position <span className="text-red-500">*</span>
+                    Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    name="employerPosition"
-                    value={formData.employerPosition ?? ""}
+                    name="contactPersonName"
+                    value={formData.contactPersonName ?? ""}
                     onChange={handleChange}
-                    placeholder="Enter employer position"
+                    placeholder="Enter name"
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
@@ -682,7 +590,7 @@ const AddEmployer: React.FC = () => {
                   />
                 </div>
 
-                {/* Main Contact Number */}
+                {/* Contact Number */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Contact Number <span className="text-red-500">*</span>
@@ -714,7 +622,7 @@ const AddEmployer: React.FC = () => {
                 </div>
 
                 {/* Email Address */}
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email Address <span className="text-red-500">*</span>
                   </label>
@@ -725,21 +633,6 @@ const AddEmployer: React.FC = () => {
                     onChange={handleChange}
                     placeholder="Enter email address"
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                {/* Office Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Office Number <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="officeNumber"
-                    value={formData.officeNumber}
-                    onChange={handleChange}
-                    placeholder="Enter office number"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>

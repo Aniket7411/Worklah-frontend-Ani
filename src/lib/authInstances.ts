@@ -11,6 +11,12 @@ import toast from 'react-hot-toast';
 // Alternative: https://worklah.onrender.com/api
 
 const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
+// Development: const API_BASE_URL = "http://localhost:3000/api"
+
+// ⚠️ IMPORTANT: Base URL already includes '/api'
+// When making requests, use endpoints WITHOUT '/api' prefix
+// ✅ Correct: '/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/admin/login
+// ❌ Wrong: '/api/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/api/admin/login (404 Error)
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,

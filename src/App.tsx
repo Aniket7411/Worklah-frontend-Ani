@@ -23,6 +23,9 @@ import EditEmployer from "./pages/employers/EditEmployer";
 import QRCodeManagement from "./pages/qrCode/QrCode";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import SupportFeedback from "./pages/support/SupportFeedback";
+import SendNotification from "./pages/notifications/SendNotification";
+import TimesheetManagement from "./pages/timesheet/TimesheetManagement";
+import CreateUser from "./pages/admin/CreateUser";
 
 const AppContent: React.FC = () => {
   return (
@@ -55,6 +58,9 @@ const AppContent: React.FC = () => {
           <Route path="payments" element={<EmployeePayments />} />
           <Route path="support" element={<SupportFeedback />} />
           <Route path="qrCode" element={<QRCodeManagement />} />
+          <Route path="notifications/send" element={<SendNotification />} />
+          <Route path="timesheet" element={<TimesheetManagement />} />
+          <Route path="admin/create-user" element={<CreateUser />} />
 
         </Route>
       </Route>

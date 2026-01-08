@@ -23,12 +23,6 @@ import Loader from "../../components/Loader";
 
 const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
-interface ContactPerson {
-  name: string;
-  position: string;
-  number: string;
-}
-
 interface Outlet {
   address: string;
   managerName?: string;
@@ -46,11 +40,11 @@ const EditEmployer: React.FC = () => {
     companyLogo: null as File | null,
     companyLegalName: "",
     hqAddress: "",
-    mainContactPersonName: "",
+    contactPersonName: "",
     jobPosition: "",
     mainContactNumber: "",
+    alternateContactNumber: "",
     emailAddress: "",
-    officeNumber: "",
     accountManager: "",
     acraBizfileCert: null as File | null,
     industry: "",
@@ -65,9 +59,6 @@ const EditEmployer: React.FC = () => {
     serviceContract: "",
   });
 
-  const [contactPersons, setContactPersons] = useState<ContactPerson[]>([
-    { name: "", position: "", number: "" }
-  ]);
   const [outlets, setOutlets] = useState<Outlet[]>([{ address: "" }]);
   const [showAccountManager, setShowAccountManager] = useState(false);
 
@@ -96,11 +87,11 @@ const EditEmployer: React.FC = () => {
           employerId: employer.employerId || employer._id || "",
           companyLegalName: employer.companyLegalName || employer.companyName || "",
           hqAddress: employer.hqAddress || "",
-          mainContactPersonName: employer.mainContactPersonName || "",
+          contactPersonName: employer.contactPersonName || employer.mainContactPersonName || (employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0 ? employer.mainContactPersons[0].name : "") || "",
           jobPosition: employer.jobPosition || employer.mainContactPersonPosition || "",
-          mainContactNumber: employer.mainContactNumber || employer.mainContactNumber || "",
+          mainContactNumber: employer.mainContactNumber || "",
+          alternateContactNumber: employer.alternateContactNumber || "",
           emailAddress: employer.emailAddress || employer.companyEmail || "",
-          officeNumber: employer.officeNumber || employer.companyNumber || "",
           accountManager: employer.accountManager || "",
           industry: employer.industry || "",
           serviceAgreement: employer.serviceAgreement || employer.contractStatus || "",
@@ -115,17 +106,6 @@ const EditEmployer: React.FC = () => {
           acraBizfileCert: employer.acraBizfileCert ? `${IMAGE_BASE_URL}${employer.acraBizfileCert}` : "",
           serviceContract: employer.serviceContract ? `${IMAGE_BASE_URL}${employer.serviceContract}` : "",
         });
-
-        // Handle contact persons
-        if (employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0) {
-          setContactPersons(employer.mainContactPersons);
-        } else if (employer.mainContactPersonName) {
-          setContactPersons([{
-            name: employer.mainContactPersonName,
-            position: employer.jobPosition || "",
-            number: employer.mainContactNumber || ""
-          }]);
-        }
 
         // Handle outlets
         if (employer.outlets && Array.isArray(employer.outlets) && employer.outlets.length > 0) {
@@ -166,21 +146,6 @@ const EditEmployer: React.FC = () => {
     }
   };
 
-  const handleContactPersonChange = (index: number, field: keyof ContactPerson, value: string) => {
-    const updated = [...contactPersons];
-    updated[index] = { ...updated[index], [field]: value };
-    setContactPersons(updated);
-  };
-
-  const addContactPerson = () => {
-    setContactPersons([...contactPersons, { name: "", position: "", number: "" }]);
-  };
-
-  const removeContactPerson = (index: number) => {
-    if (contactPersons.length > 1) {
-      setContactPersons(contactPersons.filter((_, i) => i !== index));
-    }
-  };
 
   const handleOutletChange = (index: number, field: keyof Outlet, value: string) => {
     const updated = [...outlets];
@@ -240,14 +205,10 @@ const EditEmployer: React.FC = () => {
         }
       });
 
-      // Append contact persons
-      contactPersons.forEach((contact, index) => {
-        if (contact.name || contact.position || contact.number) {
-          formDataToSend.append(`contactPersons[${index}][name]`, contact.name);
-          formDataToSend.append(`contactPersons[${index}][position]`, contact.position);
-          formDataToSend.append(`contactPersons[${index}][number]`, contact.number);
-        }
-      });
+      // Append contact person name
+      if (formData.contactPersonName) {
+        formDataToSend.append("contactPersonName", formData.contactPersonName);
+      }
 
       // Append outlets
       outlets.forEach((outlet, index) => {
@@ -440,89 +401,73 @@ const EditEmployer: React.FC = () => {
                 Contact Information
               </h2>
 
-              {/* Main Contact Person Name - Multiple */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Main Contact Person(s) <span className="text-gray-400 text-xs">(Optional - Multiple allowed)</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={addContactPerson}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Contact
-                  </button>
-                </div>
-
-                {contactPersons.map((contact, index) => (
-                  <div key={index} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Name</label>
-                      <input
-                        type="text"
-                        value={contact.name}
-                        onChange={(e) => handleContactPersonChange(index, "name", e.target.value)}
-                        placeholder="Contact name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Position</label>
-                      <input
-                        type="text"
-                        value={contact.position}
-                        onChange={(e) => handleContactPersonChange(index, "position", e.target.value)}
-                        placeholder="Job position"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div className="flex items-end gap-2">
-                      <div className="flex-1">
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Number</label>
-                        <input
-                          type="tel"
-                          value={contact.number}
-                          onChange={(e) => handleContactPersonChange(index, "number", e.target.value)}
-                          placeholder="Contact number"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      {contactPersons.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeContactPerson(index)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Main Contact Number */}
+                {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Main Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
+                    Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="contactPersonName"
+                    value={formData.contactPersonName}
+                    onChange={handleChange}
+                    placeholder="Enter name"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Position in Company */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Position in Company <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="jobPosition"
+                    value={formData.jobPosition}
+                    onChange={handleChange}
+                    placeholder="Enter position in company"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Contact Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Contact Number <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="tel"
                     name="mainContactNumber"
                     value={formData.mainContactNumber}
                     onChange={handleChange}
-                    placeholder="Enter main contact number"
+                    placeholder="Enter contact number"
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {/* Alternate Contact Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="alternateContactNumber"
+                    value={formData.alternateContactNumber}
+                    onChange={handleChange}
+                    placeholder="Enter alternate contact number"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
 
                 {/* Email Address */}
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address <span className="text-gray-400 text-xs">(Optional)</span>
+                    Email Address <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="email"
@@ -530,36 +475,7 @@ const EditEmployer: React.FC = () => {
                     value={formData.emailAddress}
                     onChange={handleChange}
                     placeholder="Enter email address"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                {/* Office Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Office Number <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="officeNumber"
-                    value={formData.officeNumber}
-                    onChange={handleChange}
-                    placeholder="Enter office number"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                {/* Job Position */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Position <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="jobPosition"
-                    value={formData.jobPosition}
-                    onChange={handleChange}
-                    placeholder="Enter job position"
+                    required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>

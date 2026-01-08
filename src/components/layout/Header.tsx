@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { useAuth } from "../../context/AuthContext";
+import NotificationCenter from "../notifications/NotificationCenter";
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -133,14 +134,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         {/* Right Section - Notifications & Profile */}
         <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
           {/* Notifications */}
-          <button
-            onClick={() => alert("Notifications feature coming soon!")}
-            className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors group flex items-center justify-center"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5 text-gray-600 group-hover:text-blue-600 transition-colors" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-          </button>
+          <NotificationCenter />
 
           {/* Profile Dropdown */}
           <div className="relative" ref={dropdownRef}>
