@@ -1,39 +1,44 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Bell, X, Check, CheckCheck, Send, Search } from "lucide-react";
+import { Bell, X, Check } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
 
 interface Notification {
   _id: string;
   userId?: string;
-  type: "System" | "Payment" | "Job" | "Application";
+  jobId?: string;
+  applicationId?: string;
+  type?: string;
   title: string;
   message: string;
-  read: boolean;
+  read?: boolean;
+  isRead?: boolean;
   createdAt: string;
 }
 
 export default function NotificationCenter() {
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
-    // Poll for new notifications every 30 seconds
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
 
+  const isUnread = (n: Notification) => !(n.isRead ?? n.read);
+
   const fetchNotifications = async () => {
     try {
-      const response = await axiosInstance.get("/admin/notifications?limit=50");
+      const response = await axiosInstance.get("/admin/notifications?limit=50&source=admin");
       if (response.data?.success !== false && response.data?.notifications) {
         setNotifications(response.data.notifications);
-        setUnreadCount(response.data.notifications.filter((n: Notification) => !n.read).length);
+        setUnreadCount(response.data.notifications.filter((n: Notification) => isUnread(n)).length);
       }
     } catch (err) {
       console.error("Error fetching notifications:", err);
@@ -45,7 +50,7 @@ export default function NotificationCenter() {
       const response = await axiosInstance.put(`/admin/notifications/${notificationId}/read`);
       if (response.data?.success !== false) {
         setNotifications(prev =>
-          prev.map(n => n._id === notificationId ? { ...n, read: true } : n)
+          prev.map(n => n._id === notificationId ? { ...n, read: true, isRead: true } : n)
         );
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
@@ -58,12 +63,23 @@ export default function NotificationCenter() {
     try {
       const response = await axiosInstance.put("/admin/notifications/read-all");
       if (response.data?.success !== false) {
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        setNotifications(prev => prev.map(n => ({ ...n, read: true, isRead: true })));
         setUnreadCount(0);
         toast.success("All notifications marked as read");
       }
     } catch (err) {
       toast.error("Failed to mark all as read");
+    }
+  };
+
+  const handleNotificationClick = (n: Notification) => {
+    if (!n.isRead && !n.read) handleMarkAsRead(n._id);
+    if (n.applicationId) {
+      setIsOpen(false);
+      navigate(`/applications/${n.applicationId}`);
+    } else if (n.jobId) {
+      setIsOpen(false);
+      navigate(`/jobs/${n.jobId}/candidates`);
     }
   };
 
@@ -113,49 +129,53 @@ export default function NotificationCenter() {
                   No notifications
                 </div>
               ) : (
-                notifications.map((notification) => (
-                  <div
-                    key={notification._id}
-                    className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${
-                      !notification.read ? "bg-blue-50" : ""
-                    }`}
-                    onClick={() => !notification.read && handleMarkAsRead(notification._id)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2 py-0.5 text-xs rounded ${
-                            notification.type === "Payment" ? "bg-green-100 text-green-800" :
-                            notification.type === "Job" ? "bg-blue-100 text-blue-800" :
-                            notification.type === "Application" ? "bg-purple-100 text-purple-800" :
-                            "bg-gray-100 text-gray-800"
-                          }`}>
-                            {notification.type}
-                          </span>
-                          {!notification.read && (
-                            <span className="h-2 w-2 bg-blue-500 rounded-full" />
+                notifications.map((notification) => {
+                  const unread = isUnread(notification);
+                  return (
+                    <div
+                      key={notification._id}
+                      className={`p-4 border-b hover:bg-gray-50 cursor-pointer ${unread ? "bg-blue-50" : ""
+                        } ${notification.applicationId || notification.jobId ? "cursor-pointer" : ""}`}
+                      onClick={() => handleNotificationClick(notification)}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-0.5 text-xs rounded ${notification.type === "Payment" ? "bg-green-100 text-green-800" :
+                                notification.type === "Job" || notification.type === "NEW_APPLICANT" ? "bg-blue-100 text-blue-800" :
+                                  notification.type === "Application" ? "bg-purple-100 text-purple-800" :
+                                    "bg-gray-100 text-gray-800"
+                              }`}>
+                              {notification.type === "NEW_APPLICANT" ? "New Applicant" : (notification.type || "System")}
+                            </span>
+                            {unread && (
+                              <span className="h-2 w-2 bg-blue-500 rounded-full" />
+                            )}
+                          </div>
+                          <p className="font-semibold text-sm">{notification.title}</p>
+                          <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                          <p className="text-xs text-gray-400 mt-2">
+                            {new Date(notification.createdAt).toLocaleString()}
+                          </p>
+                          {(notification.applicationId || notification.jobId) && (
+                            <p className="text-xs text-blue-600 mt-1">Click to view</p>
                           )}
                         </div>
-                        <p className="font-semibold text-sm">{notification.title}</p>
-                        <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-                        <p className="text-xs text-gray-400 mt-2">
-                          {new Date(notification.createdAt).toLocaleString()}
-                        </p>
+                        {unread && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkAsRead(notification._id);
+                            }}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <Check size={18} />
+                          </button>
+                        )}
                       </div>
-                      {!notification.read && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMarkAsRead(notification._id);
-                          }}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          <Check size={18} />
-                        </button>
-                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

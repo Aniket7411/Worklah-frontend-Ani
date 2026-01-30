@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import {
@@ -21,32 +21,10 @@ import WorkHistory from "../../components/employerDetail/WorkHistory";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { Trash2 } from "lucide-react";
 
-const IMAGE_BASE_URL = "https://worklah.onrender.com";
+// Images come as complete URLs from backend - no base URL needed
 
-interface EmployeeFormData {
-  fullName: string;
-  mobile: string;
-  email: string;
-  nric: string;
-  dateOfBirth: string;
-  gender: "Male" | "Female";
-  postalCode: string;
-  streetAddress: string;
-  profilePicture: File | string | null;
-  nricFront: File | string | null;
-  nricBack: File | string | null;
-  plocImage: File | string | null;
-  plocExpiryDate: string;
-  foodHygieneCert: File | string | null;
-  schools: string;
-  studentPassImage: File | string | null;
-  studentIdNo: string;
-  eWalletAmount: number;
-  registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)";
-}
-
-const EditCandidateProfile: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const EditCandidateProfile = () => {
+  const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,7 +34,7 @@ const EditCandidateProfile: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [formData, setFormData] = useState<EmployeeFormData>({
+  const [formData, setFormData] = useState({
     fullName: "",
     mobile: "",
     email: "",
@@ -157,7 +135,7 @@ const EditCandidateProfile: React.FC = () => {
       });
 
       setUserData(data);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching employee data:", error);
       const errorMessage = error?.response?.data?.message || error?.message || "Failed to load employee data";
       toast.error(errorMessage);
@@ -186,7 +164,7 @@ const EditCandidateProfile: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
@@ -333,7 +311,7 @@ const EditCandidateProfile: React.FC = () => {
 
       toast.success("Candidate deleted successfully");
       navigate("/hustle-heroes");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting candidate:", error);
       toast.error(error?.response?.data?.message || "Failed to delete candidate. Please try again.");
     } finally {
@@ -363,7 +341,7 @@ const EditCandidateProfile: React.FC = () => {
               <div className="relative">
                 {existingFiles.profilePicture ? (
                   <img
-                    src={existingFiles.profilePicture.startsWith("http") ? existingFiles.profilePicture : `${IMAGE_BASE_URL}${existingFiles.profilePicture}`}
+                    src={existingFiles.profilePicture}
                     alt="Profile"
                     className="w-20 h-20 rounded-full object-cover border-2 border-blue-500"
                   />
@@ -586,9 +564,7 @@ const EditCandidateProfile: React.FC = () => {
                           src={
                             formData.profilePicture instanceof File
                               ? URL.createObjectURL(formData.profilePicture)
-                              : existingFiles.profilePicture.startsWith("http")
-                                ? existingFiles.profilePicture
-                                : `${IMAGE_BASE_URL}${existingFiles.profilePicture}`
+                              : existingFiles.profilePicture
                           }
                           alt="Profile preview"
                           className="w-16 h-16 object-cover rounded-lg border border-gray-300"
@@ -633,9 +609,7 @@ const EditCandidateProfile: React.FC = () => {
                               src={
                                 formData.nricFront instanceof File
                                   ? URL.createObjectURL(formData.nricFront)
-                                  : existingFiles.nricFront.startsWith("http")
-                                    ? existingFiles.nricFront
-                                    : `${IMAGE_BASE_URL}${existingFiles.nricFront}`
+                                  : existingFiles.nricFront
                               }
                               alt="NRIC Front"
                               className="w-16 h-16 object-cover rounded-lg border border-gray-300"
@@ -677,9 +651,7 @@ const EditCandidateProfile: React.FC = () => {
                               src={
                                 formData.nricBack instanceof File
                                   ? URL.createObjectURL(formData.nricBack)
-                                  : existingFiles.nricBack.startsWith("http")
-                                    ? existingFiles.nricBack
-                                    : `${IMAGE_BASE_URL}${existingFiles.nricBack}`
+                                  : existingFiles.nricBack
                               }
                               alt="NRIC Back"
                               className="w-16 h-16 object-cover rounded-lg border border-gray-300"
@@ -726,9 +698,7 @@ const EditCandidateProfile: React.FC = () => {
                               src={
                                 formData.plocImage instanceof File
                                   ? URL.createObjectURL(formData.plocImage)
-                                  : existingFiles.plocImage.startsWith("http")
-                                    ? existingFiles.plocImage
-                                    : `${IMAGE_BASE_URL}${existingFiles.plocImage}`
+                                  : existingFiles.plocImage
                               }
                               alt="PLOC"
                               className="w-16 h-16 object-cover rounded-lg border border-gray-300"
@@ -809,9 +779,7 @@ const EditCandidateProfile: React.FC = () => {
                               src={
                                 formData.studentPassImage instanceof File
                                   ? URL.createObjectURL(formData.studentPassImage)
-                                  : existingFiles.studentPassImage.startsWith("http")
-                                    ? existingFiles.studentPassImage
-                                    : `${IMAGE_BASE_URL}${existingFiles.studentPassImage}`
+                                  : existingFiles.studentPassImage
                               }
                               alt="Student Pass"
                               className="w-16 h-16 object-cover rounded-lg border border-gray-300"

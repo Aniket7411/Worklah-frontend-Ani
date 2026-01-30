@@ -68,15 +68,18 @@ export default function EmployeePayments() {
         setLoading(true);
         setError(null);
 
-        // Use admin transactions endpoint with type filter
-        let endpoint = "/admin/transactions";
-        const params: any = {};
+        // Use admin payments/transactions endpoint per API doc 16.1
+        let endpoint = "/admin/payments/transactions";
+        const params: Record<string, string> = {};
         if (activeTab === "payments") {
+          // Payments tab: credit-type transactions
           params.type = "credit";
         } else {
           params.type = "debit";
-          params.status = "pending"; // For withdrawals, typically show pending
+          params.status = "pending";
         }
+        params.page = "1";
+        params.limit = "50";
 
         // Add filter query parameters from URL
 
@@ -93,9 +96,9 @@ export default function EmployeePayments() {
           params.status = "outstanding";
         }
 
-        // Date range filters
-        const dateFrom = urlParams.get('dateFrom');
-        const dateTo = urlParams.get('dateTo');
+        // Date range filters (API uses startDate, endDate)
+        const dateFrom = urlParams.get('dateFrom') || urlParams.get('startDate');
+        const dateTo = urlParams.get('dateTo') || urlParams.get('endDate');
         if (dateFrom) params.startDate = dateFrom;
         if (dateTo) params.endDate = dateTo;
 

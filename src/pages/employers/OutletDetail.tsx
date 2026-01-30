@@ -109,7 +109,7 @@ export default function OutletDetail() {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <button className="p-[14px] rounded-[26px] shadow-lg bg-[#FFFFFF] hover:bg-gray-50 " onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-[24px] h-[24px]"  />
+            <ArrowLeft className="w-[24px] h-[24px]" />
           </button>
           {outletData?.outletImage || outletData?.logo ? (
             <img
@@ -160,13 +160,19 @@ export default function OutletDetail() {
             <Mail className="w-4 h-4" />
             <span>{outletData.email || "N/A"}</span>
           </div>
+          {outletData.barcode && (
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg inline-block">
+              <span className="text-xs font-medium text-blue-800">Shift check-in barcode: </span>
+              <span className="font-mono text-sm font-semibold text-blue-900">{outletData.barcode}</span>
+            </div>
+          )}
         </div>
         <div className="text-end">
           <div className="text-sm text-gray-600">Employer:</div>
           {outletData.employer && (
             <div className="text-sm font-medium flex items-center gap-2">
               {outletData.employer.companyLogo && (
-                <img 
+                <img
                   src={
                     outletData.employer.companyLogo.startsWith('http')
                       ? outletData.employer.companyLogo
@@ -215,41 +221,41 @@ export default function OutletDetail() {
             {outletData.activeJobs || outletData.stats?.activeJobs || 0}
           </div>
           <div className="text-sm font-medium text-gray-600">
-            {outletData.averageAttendanceRate 
+            {outletData.averageAttendanceRate
               ? `${outletData.averageAttendanceRate.toFixed(1)}%`
-              : outletData.stats?.averageAttendanceRate 
-              ? `${outletData.stats.averageAttendanceRate.toFixed(1)}%`
-              : "N/A"}
+              : outletData.stats?.averageAttendanceRate
+                ? `${outletData.stats.averageAttendanceRate.toFixed(1)}%`
+                : "N/A"}
           </div>
           <div className="text-sm font-medium text-gray-600">
-            {outletData.noShowRate 
+            {outletData.noShowRate
               ? `${outletData.noShowRate.toFixed(1)}%`
-              : outletData.stats?.noShowRate 
-              ? `${outletData.stats.noShowRate.toFixed(1)}%`
-              : "N/A"}
+              : outletData.stats?.noShowRate
+                ? `${outletData.stats.noShowRate.toFixed(1)}%`
+                : "N/A"}
           </div>
           <div className="text-sm font-medium text-gray-600 flex gap-28">
             <span>
-              {outletData.topRoles 
+              {outletData.topRoles
                 ? outletData.topRoles.join(", ")
                 : outletData.stats?.topRoles
-                ? outletData.stats.topRoles.join(", ")
-                : "N/A"}
+                  ? outletData.stats.topRoles.join(", ")
+                  : "N/A"}
             </span>
             <div className="flex gap-2">
               <button className="p-[7px] rounded-[26px] border bg-[#FFFFFF] hover:bg-gray-50 ">
                 <Trash2 className="w-[12px] h-[12px]" />
               </button>
               <div>
-              <select
-                id="role"
-                value={selectedRole}
-                // onChange={handleChange}
-                className="px-8 border rounded-full bg-[#EDF8FF]"
-              >
-                <option value="all">All</option>
-                <option value="cashier">Cashier</option>
-              </select>
+                <select
+                  id="role"
+                  value={selectedRole}
+                  // onChange={handleChange}
+                  className="px-8 border rounded-full bg-[#EDF8FF]"
+                >
+                  <option value="all">All</option>
+                  <option value="cashier">Cashier</option>
+                </select>
               </div>
             </div>
           </div>
@@ -261,11 +267,11 @@ export default function OutletDetail() {
         <div className="text-sm text-gray-600 mb-2">Top Roles Posted:</div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">
-            {outletData.topRoles 
+            {outletData.topRoles
               ? outletData.topRoles.join(", ")
               : outletData.stats?.topRoles
-              ? outletData.stats.topRoles.join(", ")
-              : "N/A"}
+                ? outletData.stats.topRoles.join(", ")
+                : "N/A"}
           </span>
           <button className="p-1 hover:bg-gray-100 rounded">
             <svg
@@ -315,22 +321,22 @@ export default function OutletDetail() {
                 const jobStatus = job.jobStatus || job.status || "N/A";
                 const shifts = job.shifts || [];
                 const totalShifts = shifts.length;
-                const totalDuration = shifts.reduce((sum: number, shift: any) => 
+                const totalDuration = shifts.reduce((sum: number, shift: any) =>
                   sum + (shift.totalWorkingHours || shift.totalHours || 0), 0
                 );
-                const breakDuration = shifts.reduce((sum: number, shift: any) => 
+                const breakDuration = shifts.reduce((sum: number, shift: any) =>
                   sum + (shift.breakDuration || shift.breakHours || 0), 0
                 );
-                const totalVacancy = shifts.reduce((sum: number, shift: any) => 
+                const totalVacancy = shifts.reduce((sum: number, shift: any) =>
                   sum + (shift.vacancy || shift.availableVacancy || 0), 0
                 );
-                const filledVacancy = shifts.reduce((sum: number, shift: any) => 
+                const filledVacancy = shifts.reduce((sum: number, shift: any) =>
                   sum + (shift.vacancyFilled || 0), 0
                 );
-                const standbyVacancy = shifts.reduce((sum: number, shift: any) => 
+                const standbyVacancy = shifts.reduce((sum: number, shift: any) =>
                   sum + (shift.standbyVacancy || shift.standby || 0), 0
                 );
-                const totalWage = shifts.reduce((sum: number, shift: any) => 
+                const totalWage = shifts.reduce((sum: number, shift: any) =>
                   sum + (shift.totalWages || shift.totalWage || 0), 0
                 );
                 const payPerHour = totalDuration > 0 ? totalWage / totalDuration : 0;
@@ -353,24 +359,23 @@ export default function OutletDetail() {
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          jobStatus === "Active"
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${jobStatus === "Active"
                             ? "bg-green-100 text-green-800"
                             : jobStatus === "Completed"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
                       >
                         {jobStatus}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm">
-                      {jobDate 
-                        ? new Date(jobDate).toLocaleDateString("en-GB", { 
-                            day: "numeric", 
-                            month: "short", 
-                            year: "2-digit" 
-                          })
+                      {jobDate
+                        ? new Date(jobDate).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "2-digit"
+                        })
                         : "N/A"}
                     </td>
                     <td className="py-3 px-4 text-sm">{totalShifts}</td>
@@ -399,7 +404,7 @@ export default function OutletDetail() {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <button 
+                      <button
                         className="p-1 hover:bg-gray-100 rounded"
                         onClick={() => jobId && navigate(`/jobs/${jobId}`)}
                       >

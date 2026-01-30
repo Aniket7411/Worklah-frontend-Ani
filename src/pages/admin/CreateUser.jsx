@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserPlus, Mail, User, Building2, Shield, X } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
@@ -114,9 +114,11 @@ export default function CreateUser() {
     }
   };
 
-  if (formData.role === "EMPLOYER" && employers.length === 0) {
-    fetchEmployers();
-  }
+  useEffect(() => {
+    if (formData.role === "EMPLOYER" && employers.length === 0) {
+      fetchEmployers();
+    }
+  }, [formData.role]);
 
   if (loading) return <Loader />;
 
@@ -342,4 +344,3 @@ export default function CreateUser() {
     </div>
   );
 }
-

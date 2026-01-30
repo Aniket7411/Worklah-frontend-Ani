@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { useAuth } from "../../context/AuthContext";
@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import {
   Search,
   Plus,
-  MoreVertical,
   Eye,
   Edit,
   Trash2,
@@ -21,49 +20,32 @@ import {
   User,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { transformEmployerList } from "../../utils/dataTransformers";
 
-interface Employer {
-  employerId: string;
-  companyLegalName: string;
-  companyLogo: string | null;
-  mainContactPerson: string;
-  mainContactPersonPosition: string;
-  mainContactNumber: string;
-  companyEmail: string;
-  outlets: number;
-  serviceAgreement: string;
-  employerOriginalId: string;
-  employerIdForAPI: string;
-}
-
-const Employers: React.FC = () => {
-  const [employers, setEmployers] = useState<Employer[]>([]);
+const Employers = () => {
+  const [employers, setEmployers] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState<{
-    isOpen: boolean;
-    employerId: string | null;
-    employerName: string;
-  }>({
+  const [deleteModal, setDeleteModal] = useState<DeleteModalState>({
     isOpen: false,
     employerId: null,
     employerName: "",
   });
   const [isDeleting, setIsDeleting] = useState(false);
-  const menuRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterIndustry, setFilterIndustry] = useState("");
 
   const navigate = useNavigate();
   const { user } = useAuth();
-  const images = "https://worklah.onrender.com";
   const isAdmin = user?.role === "ADMIN";
   const itemsPerPage = 10;
 
   // Fetch employers data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await axiosInstance.get(`/admin/employers?page=${currentPage}&limit=${itemsPerPage}`);
@@ -72,146 +54,91 @@ const Employers: React.FC = () => {
         throw new Error(response.data?.message || "Failed to fetch employers");
       }
 
-      if (!response.data || !Array.isArray(response.data.employers)) {
-        throw new Error("Invalid API response format");
-      }
-
-      const employerData: Employer[] = response.data.employers.map((employer: any) => {
-        const employerIdForAPI = employer.employerId || employer._id || employer.id;
-        const mongoId = employer._id || employer.id;
-
-        const employerIdDisplay = employerIdForAPI
-          ? employerIdForAPI.startsWith("EMP-")
-            ? employerIdForAPI.split("-")[1] || employerIdForAPI.slice(-4)
-            : employerIdForAPI.slice(-4)
-          : "N/A";
-
-        const mainContactPerson =
-          Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
-            ? employer.mainContactPersons[0].name || "N/A"
-            : employer.mainContactPersonName || employer.mainContactPerson?.name || "N/A";
-
-        const mainContactPersonPosition =
-          Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
-            ? employer.mainContactPersons[0].position || employer.jobPosition || "N/A"
-            : employer.mainContactPersonPosition || employer.mainContactPerson?.position || "N/A";
-
-        const mainContactNumber =
-          Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0
-            ? employer.mainContactPersons[0].number || employer.mainContactNumber || "N/A"
-            : employer.mainContactNumber || employer.mainContactPersonNumber || "N/A";
-
-        const companyLogoPath = employer.companyLogo ? employer.companyLogo.replace(/\\/g, "/") : null;
-
-        return {
-          employerId: employerIdDisplay,
-          companyLogo: companyLogoPath ? `${images}${companyLogoPath}` : null,
-          companyLegalName: employer.companyLegalName || employer.companyName || "N/A",
-          mainContactPerson,
-          mainContactPersonPosition,
-          mainContactNumber,
-          companyEmail: employer.emailAddress || employer.companyEmail || "N/A",
-          outlets: Array.isArray(employer.outlets) ? employer.outlets.length : 0,
-          serviceAgreement: employer.serviceAgreement || "N/A",
-          employerOriginalId: mongoId || "",
-          employerIdForAPI: employerIdForAPI || mongoId || "",
-        };
-      });
-
+      const employerData = transformEmployerList(response.data);
       setEmployers(employerData);
+
       const pagination = response.data.pagination || {};
       setTotalPages(pagination.totalPages || response.data.totalPages || 1);
       setTotalItems(pagination.totalItems || response.data.totalItems || employerData.length);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error fetching employer data:", error);
       toast.error(error?.response?.data?.message || "Failed to fetch employers. Please try again later.");
       setEmployers([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage]);
 
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, [fetchData]);
 
-  // Filter employers based on search query
+  // Filter employers based on search query and filters
   const filteredEmployers = useMemo(() => {
-    if (!searchQuery.trim()) return employers;
+    let filtered = [...employers];
 
-    const query = searchQuery.toLowerCase();
-    return employers.filter((employer) => {
-      return (
-        employer.companyLegalName.toLowerCase().includes(query) ||
-        employer.mainContactPerson.toLowerCase().includes(query) ||
-        employer.companyEmail.toLowerCase().includes(query) ||
-        employer.mainContactNumber.includes(query) ||
-        employer.employerId.toLowerCase().includes(query)
-      );
-    });
-  }, [employers, searchQuery]);
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (openMenuId) {
-        const menuElement = menuRefs.current[openMenuId];
-        if (menuElement && !menuElement.contains(event.target as Node)) {
-          setOpenMenuId(null);
-        }
-      }
-    };
-
-    if (openMenuId) {
-      // Use a slight delay to ensure menu button click completes first
-      const timeoutId = setTimeout(() => {
-        document.addEventListener("mousedown", handleClickOutside);
-      }, 0);
-
-      return () => {
-        clearTimeout(timeoutId);
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((employer) => {
+        return (
+          employer.companyLegalName.toLowerCase().includes(query) ||
+          employer.mainContactPerson.toLowerCase().includes(query) ||
+          employer.companyEmail.toLowerCase().includes(query) ||
+          employer.mainContactNumber.includes(query) ||
+          employer.employerId.toLowerCase().includes(query)
+        );
+      });
     }
-  }, [openMenuId]);
 
-  const handlePageChange = (page: number) => {
+    // Apply status filter
+    if (filterStatus) {
+      filtered = filtered.filter((employer) => employer.serviceAgreement === filterStatus);
+    }
+
+    // Apply industry filter
+    if (filterIndustry) {
+      filtered = filtered.filter((employer) => {
+        const employerIndustry = employer.industry || "";
+        return employerIndustry === filterIndustry;
+      });
+    }
+
+    return filtered;
+  }, [employers, searchQuery, filterStatus, filterIndustry]);
+
+  const handlePageChange = useCallback((page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  }, []);
 
-  const handleView = (id: string) => {
+  const getEmployerApiId = useCallback((id) => {
     const employer = employers.find((emp) => emp.employerOriginalId === id);
-    const apiId = employer?.employerIdForAPI || id;
-    setOpenMenuId(null);
-    navigate(`/employers/${apiId}`);
-  };
+    return employer?.employerIdForAPI || id;
+  }, [employers]);
 
-  const handleEdit = (id: string) => {
-    const employer = employers.find((emp) => emp.employerOriginalId === id);
-    const apiId = employer?.employerIdForAPI || id;
-    setOpenMenuId(null);
-    navigate(`/employers/${apiId}/edit`);
-  };
+  const handleView = useCallback((id) => {
+    navigate(`/employers/${getEmployerApiId(id)}`);
+  }, [navigate, getEmployerApiId]);
 
-  const handleDeleteClick = (id: string, name: string) => {
-    const employer = employers.find((emp) => emp.employerOriginalId === id);
-    const apiId = employer?.employerIdForAPI || id;
-    setOpenMenuId(null);
-    setShowDeleteModal({
+  const handleEdit = useCallback((id: string) => {
+    navigate(`/employers/${getEmployerApiId(id)}/edit`);
+  }, [navigate, getEmployerApiId]);
+
+  const handleDeleteClick = useCallback((id, name) => {
+    setDeleteModal({
       isOpen: true,
-      employerId: apiId,
+      employerId: getEmployerApiId(id),
       employerName: name,
     });
-  };
+  }, [getEmployerApiId]);
 
-  const handleDelete = async () => {
-    if (!showDeleteModal.employerId) return;
+  const handleDelete = useCallback(async () => {
+    if (!deleteModal.employerId) return;
 
     setIsDeleting(true);
     try {
-      const response = await axiosInstance.delete(`/admin/employers/${showDeleteModal.employerId}`);
+      const response = await axiosInstance.delete(`/admin/employers/${deleteModal.employerId}`);
 
       if (response.data?.success === false) {
         toast.error(response.data?.message || "Failed to delete employer");
@@ -219,17 +146,17 @@ const Employers: React.FC = () => {
       }
 
       toast.success("Employer deleted successfully");
-      setShowDeleteModal({ isOpen: false, employerId: null, employerName: "" });
+      setDeleteModal({ isOpen: false, employerId: null, employerName: "" });
       fetchData();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting employer:", error);
       toast.error(error?.response?.data?.message || "Failed to delete employer. Please try again.");
     } finally {
       setIsDeleting(false);
     }
-  };
+  }, [deleteModal, fetchData]);
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status) => {
     switch (status) {
       case "Completed":
         return "bg-emerald-50 text-emerald-700 border-emerald-200";
@@ -243,13 +170,13 @@ const Employers: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header Section */}
+    <div className="w-full min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
-        <div className="px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col space-y-4 lg:flex-row lg:items-center lg:justify-between lg:space-y-0">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Employers</h1>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="pl-2 border-l-4 border-[#FED408]">
+              <h1 className="text-2xl font-bold text-gray-900">Employers</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {totalItems} {totalItems === 1 ? "employer" : "employers"} registered
               </p>
@@ -278,7 +205,7 @@ const Employers: React.FC = () => {
 
               {/* Filter Button */}
               <button
-                onClick={() => toast("Filter functionality coming soon", { icon: "ℹ️" })}
+                onClick={() => setShowFilterModal(true)}
                 className="p-2.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 transition-colors shadow-sm"
                 title="Filter"
               >
@@ -299,8 +226,8 @@ const Employers: React.FC = () => {
         </div>
       </div>
 
-      {/* Content Section */}
-      <div className="px-4 sm:px-6 lg:px-8 py-8">
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {isLoading ? (
           <div className="flex items-center justify-center min-h-[400px]">
             <div className="text-center">
@@ -356,7 +283,7 @@ const Employers: React.FC = () => {
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">
+                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -438,70 +365,36 @@ const Employers: React.FC = () => {
                         </td>
 
                         {/* Actions */}
-                        <td className="px-6 py-5 text-center whitespace-nowrap">
-                          <div
-                            className="relative"
-                            ref={(el) => {
-                              if (el) {
-                                menuRefs.current[employer.employerOriginalId] = el;
-                              }
-                            }}
-                          >
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <div className="flex items-center gap-2 justify-center">
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                setOpenMenuId(openMenuId === employer.employerOriginalId ? null : employer.employerOriginalId);
-                              }}
-                              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                              onClick={() => handleView(employer.employerOriginalId)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                               type="button"
+                              title="View Details"
                             >
-                              <MoreVertical className="w-5 h-5" />
+                              <Eye className="w-4 h-4" />
+                              <span className="hidden xl:inline">View</span>
                             </button>
-                            {openMenuId === employer.employerOriginalId && (
-                              <div
-                                className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 z-50"
-                                onClick={(e) => e.stopPropagation()}
+                            <button
+                              onClick={() => handleEdit(employer.employerOriginalId)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                              type="button"
+                              title="Edit Employer"
+                            >
+                              <Edit className="w-4 h-4" />
+                              <span className="hidden xl:inline">Edit</span>
+                            </button>
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteClick(employer.employerOriginalId, employer.companyLegalName)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                                type="button"
+                                title="Delete Employer"
                               >
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleView(employer.employerOriginalId);
-                                  }}
-                                  className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                  type="button"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View Details
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    handleEdit(employer.employerOriginalId);
-                                  }}
-                                  className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                  type="button"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Edit Employer
-                                </button>
-                                <div className="border-t border-gray-100">
-                                  <button
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleDeleteClick(employer.employerOriginalId, employer.companyLegalName);
-                                    }}
-                                    className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                    type="button"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                    Delete Employer
-                                  </button>
-                                </div>
-                              </div>
+                                <Trash2 className="w-4 h-4" />
+                                <span className="hidden xl:inline">Delete</span>
+                              </button>
                             )}
                           </div>
                         </td>
@@ -598,69 +491,32 @@ const Employers: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-0.5">ID: {employer.employerId}</p>
                       </div>
                     </div>
-                    <div
-                      className="relative flex-shrink-0"
-                      ref={(el) => {
-                        if (el) {
-                          menuRefs.current[employer.employerOriginalId] = el;
-                        }
-                      }}
-                    >
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setOpenMenuId(openMenuId === employer.employerOriginalId ? null : employer.employerOriginalId);
-                        }}
-                        className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                        onClick={() => handleView(employer.employerOriginalId)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                         type="button"
                       >
-                        <MoreVertical className="w-5 h-5" />
+                        <Eye className="w-4 h-4" />
+                        <span>View</span>
                       </button>
-                      {openMenuId === employer.employerOriginalId && (
-                        <div
-                          className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-lg border border-gray-200 z-50"
-                          onClick={(e) => e.stopPropagation()}
+                      <button
+                        onClick={() => handleEdit(employer.employerOriginalId)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                        type="button"
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteClick(employer.employerOriginalId, employer.companyLegalName)}
+                          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                          type="button"
                         >
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleView(employer.employerOriginalId);
-                            }}
-                            className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            type="button"
-                          >
-                            <Eye className="w-4 h-4" />
-                            View Details
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleEdit(employer.employerOriginalId);
-                            }}
-                            className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            type="button"
-                          >
-                            <Edit className="w-4 h-4" />
-                            Edit Employer
-                          </button>
-                          <div className="border-t border-gray-100">
-                            <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleDeleteClick(employer.employerOriginalId, employer.companyLegalName);
-                              }}
-                              className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
-                              type="button"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete Employer
-                            </button>
-                          </div>
-                        </div>
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete</span>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -731,13 +587,83 @@ const Employers: React.FC = () => {
         )}
       </div>
 
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Filter Employers</h3>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Service Agreement Status
+                </label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="Completed">Completed</option>
+                  <option value="In Discussion">In Discussion</option>
+                  <option value="Expired">Expired</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Industry
+                </label>
+                <select
+                  value={filterIndustry}
+                  onChange={(e) => setFilterIndustry(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Industries</option>
+                  <option value="F&B">F&B (Food & Beverage)</option>
+                  <option value="Hotel">Hotel</option>
+                  <option value="Retail">Retail</option>
+                  <option value="Logistics">Logistics</option>
+                  <option value="Healthcare">Healthcare</option>
+                  <option value="Education">Education</option>
+                  <option value="Construction">Construction</option>
+                </select>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setFilterStatus("");
+                    setFilterIndustry("");
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50"
+                >
+                  Clear Filters
+                </button>
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+                >
+                  Apply Filters
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
-        isOpen={showDeleteModal.isOpen}
-        onClose={() => setShowDeleteModal({ isOpen: false, employerId: null, employerName: "" })}
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, employerId: null, employerName: "" })}
         onConfirm={handleDelete}
         title="Delete Employer"
-        message={`Are you sure you want to delete ${showDeleteModal.employerName}? This action cannot be undone. All employer data, jobs, and outlets will be permanently removed.`}
+        message={`Are you sure you want to delete ${deleteModal.employerName}? This action cannot be undone. All employer data, jobs, and outlets will be permanently removed.`}
         confirmText={isDeleting ? "Deleting..." : "Delete Employer"}
         cancelText="Cancel"
         type="danger"

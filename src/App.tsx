@@ -12,7 +12,6 @@ import ActiveJobPosting from "./pages/employers/ActiveJobPosting";
 import HustleHeroesList from "./pages/hustleHeroes/HustleHeroesList";
 import EditCandidateProfile from "./pages/jobManagemant/EditCandidateProfile";
 import EmployeePayments from "./pages/payments/EmployeePayments";
-import OutletDetail from "./pages/employers/OutletDetail";
 import SignIn from "./pages/auth/SignIn";
 import PrivateRoute from "./components/PrivateRoute"; // Import PrivateRoute
 import { AuthProvider } from "./context/AuthContext";
@@ -23,9 +22,14 @@ import EditEmployer from "./pages/employers/EditEmployer";
 import QRCodeManagement from "./pages/qrCode/QrCode";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import SupportFeedback from "./pages/support/SupportFeedback";
+// @ts-ignore
 import SendNotification from "./pages/notifications/SendNotification";
+// @ts-ignore
 import TimesheetManagement from "./pages/timesheet/TimesheetManagement";
+// @ts-ignore
 import CreateUser from "./pages/admin/CreateUser";
+import ApplicationsList from "./pages/applications/ApplicationsList";
+import ApplicationDetail from "./pages/applications/ApplicationDetail";
 
 const AppContent: React.FC = () => {
   return (
@@ -46,12 +50,13 @@ const AppContent: React.FC = () => {
           <Route path="jobs/:jobId/modify" element={<ModifyJob />} />
           <Route path="jobs/:jobId/candidates/:id" element={<CandidateProfile />} />
           <Route path="edit-candidate-profile/:id" element={<EditCandidateProfile />} />
+          <Route path="applications" element={<ApplicationsList />} />
+          <Route path="applications/:applicationId" element={<ApplicationDetail />} />
 
           {/* Employers pages */}
           <Route path="employers" element={<EmployerTable />} />
           <Route path="employers/add-employer" element={<AddEmployer />} />
           <Route path="employers/:id/edit" element={<EditEmployer />} />
-          <Route path="employers/:id/outletDetails" element={<OutletDetail />} />
           <Route path="employers/:id" element={<ActiveJobPosting />} />
 
           <Route path="hustle-heroes" element={<HustleHeroesList />} />

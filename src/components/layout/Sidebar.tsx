@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode, Bell, Calendar, UserPlus } from "lucide-react";
+import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode, FileCheck, CalendarDays } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 
@@ -25,6 +25,12 @@ const menuItems: MenuItem[] = [
     text: "Job Management",
     path: "/jobs/job-management",
     description: "Manage all jobs"
+  },
+  {
+    icon: <FileCheck className="w-5 h-5" />,
+    text: "Applications",
+    path: "/applications",
+    description: "Review & approve applications"
   },
   {
     icon: <Users className="w-5 h-5" />,
@@ -57,22 +63,10 @@ const menuItems: MenuItem[] = [
     description: "QR code settings"
   },
   {
-    icon: <Calendar className="w-5 h-5" />,
+    icon: <CalendarDays className="w-5 h-5" />,
     text: "Timesheet",
     path: "/timesheet",
-    description: "Attendance sheets"
-  },
-  {
-    icon: <Bell className="w-5 h-5" />,
-    text: "Send Notification",
-    path: "/notifications/send",
-    description: "Send notifications"
-  },
-  {
-    icon: <UserPlus className="w-5 h-5" />,
-    text: "Create User",
-    path: "/admin/create-user",
-    description: "Create user accounts"
+    description: "Generate & manage timesheets"
   },
 ];
 
@@ -235,8 +229,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen: controlledIsOpen, onToggle })
                     {/* Icon */}
                     <div
                       className={`flex items-center justify-center w-10 h-10 rounded-lg transition-colors ${active
-                          ? "bg-white/20 text-white"
-                          : "bg-gray-100 text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600"
+                        ? "bg-white/20 text-white"
+                        : "bg-gray-100 text-gray-600 group-hover:bg-blue-50 group-hover:text-blue-600"
                         }`}
                     >
                       {item.icon}

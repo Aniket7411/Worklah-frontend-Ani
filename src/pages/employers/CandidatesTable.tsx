@@ -152,21 +152,53 @@ export default function CandidateManagement() {
   };
 
   const handleApprovedStatusChange = async (
-    userId: string,
+    applicationId: string, // This is the applicationId from the candidate object
     newStatus: string,
     reason: string | null = null
   ) => {
     setIsUpdating(true);
     try {
-      await axiosInstance.put(`/admin/applications/status/${userId}`, {
-        status: newStatus,
-        jobId,
-        reason, // optional reason
-      });
+      // According to API documentation:
+      // - POST /api/admin/applications/:applicationId/approve (for approval)
+      // - POST /api/admin/applications/:applicationId/reject (for rejection)
+      if (newStatus === "Approved" || newStatus === "Confirmed") {
+        await axiosInstance.post(`/admin/applications/${applicationId}/approve`, {
+          notes: reason || undefined
+        });
+      } else if (newStatus === "Rejected") {
+        await axiosInstance.post(`/admin/applications/${applicationId}/reject`, {
+          reason: reason || undefined,
+          notes: reason || undefined
+        });
+      } else {
+        // For other statuses (like "Pending"), use the status update endpoint
+        // PUT /api/admin/applications/status/:userId (requires userId and jobId)
+        // Note: This endpoint uses userId, not applicationId
+        const candidate = candidates.find(c => c.id === applicationId);
+        const userId = (candidate as any)?.userId || (candidate as any)?.user?._id || (candidate as any)?.user?.id;
+        if (userId && jobId) {
+          await axiosInstance.put(`/admin/applications/status/${userId}`, {
+            status: newStatus,
+            jobId: jobId,
+            notes: reason || undefined
+          });
+        } else {
+          // Fallback: try using applicationId as userId if structure is different
+          await axiosInstance.put(`/admin/applications/status/${applicationId}`, {
+            status: newStatus,
+            jobId: jobId,
+            notes: reason || undefined
+          });
+        }
+      }
 
       setCandidates((prev) =>
         prev.map((c) =>
-          c.id === userId ? { ...c, approvedStatus: newStatus, status: newStatus } : c
+          c.id === applicationId ? { 
+            ...c, 
+            approvedStatus: newStatus === "Approved" ? "Confirmed" : newStatus, 
+            status: newStatus === "Approved" ? "Upcoming" : newStatus 
+          } : c
         )
       );
       

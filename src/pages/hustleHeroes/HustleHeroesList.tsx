@@ -22,25 +22,29 @@ import { BiDonateBlood, BiSolidDonateBlood } from "react-icons/bi";
 import { CiFlag1 } from "react-icons/ci";
 import { FaLocationDot } from "react-icons/fa6";
 
+// User/Employee interface for Hustle Heroes (users registered via mobile app)
 interface Employee {
-  id: string;
-  fullName: string;
-  avatarUrl: string;
-  gender: string;
-  mobile: string;
-  nric: string;
-  icNumber: string;
-  dob: string;
-  registrationDate: string;
-  turnUpRate: string;
-  workingHours: string;
-  avgAttendRate: string;
-  workPassStatus: "Verified" | "Approved" | "Pending" | "Rejected";
-  status?: string;
-  verificationStatus?: string;
-  attendanceStatus?: string;
+  id?: string;
+  _id?: string;
+  fullName?: string;
+  email?: string;
+  phoneNumber?: string;
+  mobile?: string;
+  gender?: string;
+  dob?: string;
+  nric?: string;
+  icNumber?: string;
   profilePicture?: string;
-  [key: string]: any;
+  avatarUrl?: string;
+  registrationDate?: string;
+  createdAt?: string;
+  role?: string;
+  status?: string;
+  workPassStatus?: "Verified" | "Approved" | "Pending" | "Rejected";
+  verificationStatus?: string;
+  profileCompleted?: boolean;
+  turnUpRate?: string;
+  attendanceStatus?: string;
 }
 
 export default function HustleHeroesList() {
@@ -50,12 +54,6 @@ export default function HustleHeroesList() {
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
-  const [showRejectReasonId, setShowRejectReasonId] = useState<string | null>(
-    null
-  );
-  const [rejectReasons, setRejectReasons] = useState<{ [key: string]: string }>(
-    {}
-  );
   const [showDeleteModal, setShowDeleteModal] = useState<{ isOpen: boolean; candidateId: string | null; candidateName: string }>({
     isOpen: false,
     candidateId: null,
@@ -84,23 +82,65 @@ export default function HustleHeroesList() {
   useEffect(() => {
     const fetchEmployees = async () => {
       try {
-        const response = await axiosInstance.get("/admin/candidates");
+        // Use /admin/users endpoint with role=USER filter to get ONLY users (not admins or employers)
+        // According to API documentation: GET /api/admin/users?role=USER
+        const response = await axiosInstance.get("/admin/users", {
+          params: {
+            role: "USER", // Only fetch users, exclude ADMIN and EMPLOYER roles
+            limit: 1000 // Get all users (adjust if pagination is needed)
+          }
+        });
         
         // Check for success field according to API spec
         if (response.data?.success === false) {
-          console.error("Failed to fetch candidates:", response.data?.message);
+          console.error("Failed to fetch users:", response.data?.message);
+          toast.error(response.data?.message || "Failed to fetch users");
           return;
         }
         
-        const candidates = response?.data?.candidates || [];
-        if (Array.isArray(candidates)) {
-          setAllEmployees(candidates);
+        // API returns 'users' array for /admin/users endpoint
+        const users = response?.data?.users || [];
+        if (Array.isArray(users)) {
+          // Additional safety check: filter to ensure only USER role
+          const validUsers = users.filter(user => {
+            const role = user.role || "";
+            return role === "USER" || role === "user";
+          });
+          
+          // Map API user data to Employee interface format
+          const mappedUsers: Employee[] = validUsers.map(user => ({
+            id: user._id || user.id, // Use _id from API as id
+            _id: user._id || user.id,
+            fullName: user.fullName,
+            email: user.email,
+            phoneNumber: user.phoneNumber,
+            mobile: user.phoneNumber || user.mobile, // Map phoneNumber to mobile
+            gender: user.gender,
+            dob: user.dob,
+            nric: user.nric || user.icNumber,
+            icNumber: user.nric || user.icNumber,
+            profilePicture: user.profilePicture,
+            avatarUrl: user.profilePicture,
+            registrationDate: user.createdAt || user.registrationDate,
+            createdAt: user.createdAt,
+            role: user.role,
+            status: user.status,
+            workPassStatus: user.workPassStatus || user.verificationStatus,
+            verificationStatus: user.verificationStatus || user.workPassStatus,
+            profileCompleted: user.profileCompleted,
+            turnUpRate: user.turnUpRate,
+            attendanceStatus: user.attendanceStatus
+          }));
+          
+          setAllEmployees(mappedUsers);
         } else {
-          console.error('Invalid candidates data format');
+          console.error('Invalid users data format');
           setAllEmployees([]);
         }
       } catch (error: any) {
-        console.error("Error fetching employees:", error);
+        console.error("Error fetching users:", error);
+        toast.error(error?.response?.data?.message || "Failed to fetch users. Please try again.");
+        setAllEmployees([]);
       }
     };
     fetchEmployees();
@@ -150,7 +190,7 @@ export default function HustleHeroesList() {
     if (selectedRows.length === employees.length) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(employees.map((emp) => emp.id));
+      setSelectedRows(employees.map((emp) => emp.id || emp._id || "").filter(id => id !== ""));
     }
   };
 
@@ -233,11 +273,11 @@ export default function HustleHeroesList() {
       navigate(`/edit-candidate-profile/${id}`);
     }
     if (action === "Delete") {
-      const candidate = employees.find(emp => emp.id === id);
+      const candidate = employees.find(emp => (emp.id || emp._id) === id);
       setShowDeleteModal({
         isOpen: true,
         candidateId: id,
-        candidateName: candidate?.fullName || "this candidate",
+        candidateName: candidate?.fullName || "this user",
       });
     }
     setIsPopupOpen(null);
@@ -248,16 +288,18 @@ export default function HustleHeroesList() {
 
     setIsDeleting(true);
     try {
-      const response = await axiosInstance.delete(`/admin/candidates/${showDeleteModal.candidateId}`);
+      // Delete user endpoint according to API documentation
+      // Note: We might need to use /admin/users/:userId instead of /admin/candidates/:id
+      const response = await axiosInstance.delete(`/admin/users/${showDeleteModal.candidateId}`);
       
       if (response.data?.success === false) {
         toast.error(response.data?.message || "Failed to delete candidate");
         return;
       }
 
-      toast.success("Candidate deleted successfully");
-      setEmployees((prev) => prev.filter((emp) => emp.id !== showDeleteModal.candidateId));
-      setAllEmployees((prev) => prev.filter((emp) => emp.id !== showDeleteModal.candidateId));
+      toast.success("User deleted successfully");
+      setEmployees((prev) => prev.filter((emp) => (emp.id || emp._id) !== showDeleteModal.candidateId));
+      setAllEmployees((prev) => prev.filter((emp) => (emp.id || emp._id) !== showDeleteModal.candidateId));
       setShowDeleteModal({ isOpen: false, candidateId: null, candidateName: "" });
     } catch (error: any) {
       console.error("Error deleting candidate:", error);
@@ -282,46 +324,6 @@ export default function HustleHeroesList() {
     }
   };
 
-  const handleVerifyAction = (action: "Approve" | "Reject", id: string) => {
-    if (action === "Reject" && !rejectReasons[id]) {
-      alert("Please enter a rejection reason.");
-      return;
-    }
-
-    axiosInstance
-      .put(`/admin/verify-candidate/${id}`, {
-        action: action === "Approve" ? "approve" : "reject",
-        rejectionReason: rejectReasons[id] || "",
-      })
-      .then((response) => {
-        // Check for success field according to API spec
-        if (response.data?.success === false) {
-          alert(response.data?.message || `Failed to ${action.toLowerCase()} candidate`);
-          return;
-        }
-        
-        alert(`Candidate ${action}d`);
-        setEmployees((prev) =>
-          prev.map((emp) =>
-            emp.id === id
-              ? {
-                  ...emp,
-                  workPassStatus: action === "Approve" ? "Verified" : "Rejected",
-                }
-              : emp
-          )
-        );
-        setShowRejectReasonId(null);
-      })
-      .catch((err) => {
-        console.error("Error updating candidate status:", err);
-        alert("Failed to update status. Please try again.");
-      });
-  };
-
-  const toggleRejectReason = (id: string) => {
-    setShowRejectReasonId((prev) => (prev === id ? null : id));
-  };
 
   return (
     <>
@@ -381,39 +383,43 @@ export default function HustleHeroesList() {
             {employees.length === 0 ? (
               <tr>
                 <td colSpan={11} className="p-8 text-center text-gray-500">
-                  No candidates found
+                  No users found
                 </td>
               </tr>
             ) : (
               employees.map((employee, index) => (
-                <tr key={employee?.id || index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                <tr key={employee?.id || employee?._id || index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
                   <td className="p-3 md:p-4 text-center border-b border-gray-200">
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-gray-300 cursor-pointer"
-                      checked={selectedRows.includes(employee?.id || "")}
-                      onChange={() => toggleSelectRow(employee?.id || "")}
+                    checked={selectedRows.includes(employee?.id || employee?._id || "")}
+                    onChange={() => toggleSelectRow(employee?.id || employee?._id || "")}
                     />
                   </td>
                   <td className="p-3 md:p-4 text-left text-xs sm:text-sm border-b border-gray-200">
-                    {employee?.id ? convertIdToFourDigits(employee.id) : "N/A"}
+                    {employee?.id || employee?._id ? convertIdToFourDigits(employee.id || employee._id || "") : "N/A"}
                   </td>
                   <td className="p-3 md:p-4 text-left border-b border-gray-200">
                     <div className="flex items-center gap-2 justify-center">
-                      {employee?.profilePicture ? (
+                      {employee?.profilePicture || employee?.avatarUrl ? (
                         <img
-                          src={employee.profilePicture}
+                          src={employee.profilePicture || employee.avatarUrl}
                           alt={employee?.fullName || "Profile"}
                           className="h-8 w-8 rounded-full bg-gray-200 object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
                         />
-                      ) : (
+                      ) : null}
+                      {(!employee?.profilePicture && !employee?.avatarUrl) && (
                         <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
                           {employee?.fullName?.charAt(0)?.toUpperCase() || "?"}
                         </div>
                       )}
                       <span
                         onClick={() =>
-                          navigate(`/edit-candidate-profile/${employee?.id || ""}`)
+                          navigate(`/edit-candidate-profile/${employee?.id || employee?._id || ""}`)
                         }
                         className="text-blue-600 hover:underline cursor-pointer"
                       >
@@ -429,7 +435,7 @@ export default function HustleHeroesList() {
                         : "N/A"}
                   </td>
                   <td className="p-4 truncate text-center border">
-                    {employee?.mobile || "N/A"}
+                    {employee?.mobile || employee?.phoneNumber || "N/A"}
                   </td>
                   <td className="p-4 truncate text-center border">
                     {employee?.nric || employee?.icNumber || "N/A"}
@@ -443,9 +449,9 @@ export default function HustleHeroesList() {
                   </td>
 
                   <td className="p-4 truncate text-center border">
-                    {employee?.registrationDate ? (() => {
+                    {employee?.registrationDate || employee?.createdAt ? (() => {
                       try {
-                        const regDate = new Date(employee.registrationDate);
+                        const regDate = new Date(employee.registrationDate || employee.createdAt || "");
                         if (isNaN(regDate.getTime())) {
                           return "N/A";
                         }
@@ -455,7 +461,7 @@ export default function HustleHeroesList() {
                           year: 'numeric'
                         });
                       } catch {
-                        return employee.registrationDate || "N/A";
+                        return employee.registrationDate || employee.createdAt || "N/A";
                       }
                     })() : "N/A"}
                   </td>
@@ -472,45 +478,9 @@ export default function HustleHeroesList() {
                     </span>
                   </td>
                   <td className="p-4 truncate text-center border">
-                    <div className="flex flex-col gap-2">
-                      <button
-                        className="bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 text-sm"
-                        onClick={() => handleVerifyAction("Approve", employee?.id || "")}
-                        disabled={employee?.workPassStatus === "Verified"}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 text-sm"
-                        onClick={() => toggleRejectReason(employee?.id || "")}
-                        disabled={employee?.workPassStatus === "Rejected"}
-                      >
-                        Reject
-                      </button>
-                      {showRejectReasonId === employee?.id && (
-                        <>
-                          <textarea
-                            className="mt-2 p-2 border rounded w-full text-sm"
-                            placeholder="Enter rejection reason..."
-                            value={rejectReasons[employee?.id || ""] || ""}
-                            onChange={(e) =>
-                              setRejectReasons({
-                                ...rejectReasons,
-                                [employee?.id || ""]: e.target.value,
-                              })
-                            }
-                          />
-                          <button
-                            className="mt-2 bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800 text-sm"
-                            onClick={() =>
-                              handleVerifyAction("Reject", employee?.id || "")
-                            }
-                          >
-                            Reject Candidate
-                          </button>
-                        </>
-                      )}
-                    </div>
+                    <span className="text-xs text-gray-500">
+                      {employee?.workPassStatus || "Pending"}
+                    </span>
                   </td>
                   <td className="p-3 md:p-4 text-center border-b border-gray-200 sticky right-0 bg-white relative">
                     <div className="relative">
@@ -524,7 +494,7 @@ export default function HustleHeroesList() {
                         <div className="absolute right-0 top-full mt-1 w-36 bg-white shadow-lg border border-gray-200 rounded-lg z-20">
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            onClick={() => handleActionClick("View", employee?.id || "")}
+                            onClick={() => handleActionClick("View", employee?.id || employee?._id || "")}
                           >
                             <Eye size={16} />
                             View
@@ -532,7 +502,7 @@ export default function HustleHeroesList() {
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             onClick={() =>
-                              handleActionClick("Edit", employee?.id || "")
+                              handleActionClick("Edit", employee?.id || employee?._id || "")
                             }
                           >
                             <Edit size={16} />
@@ -540,14 +510,14 @@ export default function HustleHeroesList() {
                           </button>
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
-                            onClick={() => handleActionClick("Block", employee?.id || "")}
+                            onClick={() => handleActionClick("Block", employee?.id || employee?._id || "")}
                           >
                             <Ban size={16} color="#E34E30" />
                             Block
                           </button>
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
-                            onClick={() => handleActionClick("Delete", employee?.id || "")}
+                            onClick={() => handleActionClick("Delete", employee?.id || employee?._id || "")}
                           >
                             <Trash2 size={16} color="#E34E30" />
                             Delete
@@ -569,8 +539,8 @@ export default function HustleHeroesList() {
         isOpen={showDeleteModal.isOpen}
         onClose={() => setShowDeleteModal({ isOpen: false, candidateId: null, candidateName: "" })}
         onConfirm={handleDeleteCandidate}
-        title="Delete Candidate"
-        message={`Are you sure you want to delete ${showDeleteModal.candidateName}? This action cannot be undone and will permanently remove all candidate data.`}
+        title="Delete User"
+        message={`Are you sure you want to delete ${showDeleteModal.candidateName}? This action cannot be undone and will permanently remove all user data.`}
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"

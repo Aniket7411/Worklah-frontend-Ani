@@ -246,7 +246,7 @@ WorkLah-admin-panel/
 - Alternatives (commented): 
   - `http://localhost:3000/api`
   - `https://admin-panel-backend-imbt.onrender.com/api`
-  - `https://worklah.onrender.com/api`
+  - `https://worklah-updated-dec.onrender.com`
 
 ---
 

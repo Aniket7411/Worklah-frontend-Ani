@@ -307,7 +307,7 @@ const JobDetailsPage = () => {
             </div>
 
             {/* Key Info Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
               <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                 <p className="text-xs text-gray-500 mb-1">Job ID</p>
                 <p className="text-sm font-bold text-gray-900">
@@ -326,6 +326,12 @@ const JobDetailsPage = () => {
                   {jobsData.currentFulfilment?.display || `${jobsData.currentFulfilment?.filled || 0}/${jobsData.currentFulfilment?.total || jobsData.totalPositions || 0}` || jobsData.vacancyUsers || "0"}
                 </p>
               </div>
+              <Link to={`/jobs/${jobId}/candidates`} className="bg-purple-50 p-3 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer">
+                <p className="text-xs text-gray-500 mb-1">Applicants</p>
+                <p className="text-sm font-bold text-purple-600">
+                  {jobsData.applicantCount || jobsData.totalCandidates || jobsData.applicantsCount || 0}
+                </p>
+              </Link>
               <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                 <p className="text-xs text-gray-500 mb-1">Total Wage</p>
                 <p className="text-sm font-bold text-green-600">

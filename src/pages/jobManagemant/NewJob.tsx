@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import { useAuth } from "../../context/AuthContext";
@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { buildJobData } from "../../utils/dataTransformers";
 
 interface Employer {
   id: string;
@@ -31,6 +32,8 @@ interface Shift {
   rateType: "Hourly" | "Weekly" | "Monthly"; // Updated rate types
   rates: number; // Pay rate (can be hourly, weekly, or monthly)
   totalWages: number;
+  vacancy: number; // Required: minimum 1 (matches backend spec)
+  standbyVacancy: number; // Optional: default 0 (matches backend spec)
 }
 
 const NewJob: React.FC = () => {
@@ -76,6 +79,8 @@ const NewJob: React.FC = () => {
       rateType: "Hourly",
       rates: 0,
       totalWages: 0,
+      vacancy: 1, // Required: minimum 1 (matches backend spec)
+      standbyVacancy: 0, // Optional: default 0 (matches backend spec)
     },
   ]);
   
@@ -290,6 +295,8 @@ const NewJob: React.FC = () => {
       rateType: "Hourly",
       rates: 0,
       totalWages: 0,
+      vacancy: 1, // Required: minimum 1 (matches backend spec)
+      standbyVacancy: 0, // Optional: default 0 (matches backend spec)
     };
     setShifts([...shifts, newShift]);
   };
@@ -370,16 +377,13 @@ const NewJob: React.FC = () => {
       toast.error("Please select an employer");
       return false;
     }
+    // Outlet validation: At least one of outletId, outletAddress, or locationDetails must be provided
     if (!formData.useManualOutlet && !formData.outletId) {
       toast.error("Please select an outlet");
       return false;
     }
-    if (formData.useManualOutlet && !formData.outletAddress?.trim()) {
-      toast.error("Please enter outlet address");
-      return false;
-    }
-    if (!formData.locationDetails?.trim()) {
-      toast.error("Location details is required");
+    if (formData.useManualOutlet && !formData.outletAddress?.trim() && !formData.locationDetails?.trim()) {
+      toast.error("Please provide either outlet address or location details");
       return false;
     }
     if (shifts.length === 0) {
@@ -389,56 +393,26 @@ const NewJob: React.FC = () => {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setIsSubmitting(true);
     try {
-      // Determine postedBy based on user role
       const userRole = user?.role || "ADMIN";
-      const isAdmin = userRole === "ADMIN";
-      const isEmployer = userRole === "EMPLOYER";
-
-      // If user is employer, auto-set their employerId
-      const finalEmployerId = isEmployer && user?.employerId
+      const finalEmployerId = userRole === "EMPLOYER" && user?.employerId
         ? user.employerId
         : (selectedEmployer === "admin" ? null : (formData.employerId || null));
 
-      const finalPostedBy = isAdmin ? "admin" : "employer";
+      const jobData = buildJobData(
+        { ...formData, employerId: finalEmployerId || formData.employerId },
+        shifts,
+        userRole,
+        user?.employerId
+      );
 
-      // Skills are already in array format
-
-      const jobData = {
-        jobDate: formData.jobDate ?? "",
-        jobTitle: formData.jobTitle ?? "",
-        jobDescription: formData.jobDescription ?? "",
-        employerId: finalEmployerId ?? null,
-        employerName: formData.employerName ?? null,
-        industry: formData.industry ?? null, // Auto-filled from employer
-        postedBy: finalPostedBy, // REQUIRED: Set based on user role
-        outletId: formData.useManualOutlet ? null : (formData.outletId ?? null),
-        outletAddress: formData.useManualOutlet ? (formData.outletAddress ?? formData.locationDetails ?? null) : null,
-        totalPositions: formData.totalPositions ?? 1,
-        foodHygieneCertRequired: formData.foodHygieneCertRequired ?? false,
-        jobStatus: formData.jobStatus ?? "Active",
-        applicationDeadline: formData.applicationDeadline ?? null,
-        dressCode: formData.dressCode ?? null, // Replaces jobRequirements
-        skills: formData.skills ?? [], // Array format
-        locationDetails: formData.locationDetails ?? "",
-        shifts: shifts.map((shift) => ({
-          shiftDate: shift.shiftDate ?? formData.jobDate ?? "",
-          startTime: shift.startTime ?? "",
-          endTime: shift.endTime ?? "",
-          breakDuration: shift.breakDuration ?? 0,
-          totalWorkingHours: shift.totalWorkingHours ?? 0,
-          rateType: shift.rateType ?? "Hourly",
-          rates: shift.rates ?? 0,
-          totalWages: shift.totalWages ?? 0,
-        })),
-      };
-
-      const response = await axiosInstance.post("/admin/jobs", jobData);
+      // Backend endpoint: POST /api/admin/jobs/create (as per API documentation)
+      const response = await axiosInstance.post("/admin/jobs/create", jobData);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {
@@ -501,7 +475,7 @@ const NewJob: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [formData, shifts, user, selectedEmployer, validateForm, navigate]);
 
   const totalWages = shifts.reduce((sum, shift) => sum + shift.totalWages, 0);
 
@@ -1032,6 +1006,37 @@ const NewJob: React.FC = () => {
                         <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-semibold">
                           ${shift.totalWages.toFixed(2)}
                         </div>
+                      </div>
+
+                      {/* Vacancy */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Vacancy <span className="text-red-500">*</span>
+                          <span className="text-gray-400 text-xs font-normal ml-1">(Positions available)</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={shift.vacancy}
+                          onChange={(e) => updateShift(shift.id, "vacancy", parseInt(e.target.value) || 1)}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      {/* Standby Vacancy */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Standby Vacancy <span className="text-gray-400 text-xs">(Optional)</span>
+                          <span className="text-gray-400 text-xs font-normal ml-1 block">(Backup positions)</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={shift.standbyVacancy}
+                          onChange={(e) => updateShift(shift.id, "standbyVacancy", parseInt(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
                       </div>
                     </div>
                   </div>

@@ -10,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { buildJobData } from "../../utils/dataTransformers";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import Loader from "../../components/Loader.jsx";
@@ -24,13 +25,17 @@ interface Employer {
 
 interface Shift {
   id: number;
+  shiftDate?: string; // Shift date for this specific shift
   startTime: string;
   endTime: string;
   breakDuration: number;
   totalWorkingHours: number;
-  rateType: "Weekend" | "Weekday" | "Public Holiday";
-  payPerHour: number;
+  rateType: "Hourly" | "Weekly" | "Monthly"; // Updated to match backend spec
+  rates?: number; // Pay rate (can be hourly, weekly, or monthly)
+  payPerHour?: number; // Legacy field, maps to rates
   totalWages: number;
+  vacancy?: number; // Required: minimum 1 (matches backend spec)
+  standbyVacancy?: number; // Optional: default 0 (matches backend spec)
 }
 
 const ModifyJob: React.FC = () => {
@@ -66,13 +71,17 @@ const ModifyJob: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([
     {
       id: Date.now(),
+      shiftDate: new Date().toISOString().split("T")[0],
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: 0,
       totalWorkingHours: 8,
-      rateType: "Weekday",
+      rateType: "Hourly",
+      rates: 0,
       payPerHour: 0,
       totalWages: 0,
+      vacancy: 1, // Required: minimum 1 (matches backend spec)
+      standbyVacancy: 0, // Optional: default 0 (matches backend spec)
     },
   ]);
 
@@ -182,7 +191,7 @@ const ModifyJob: React.FC = () => {
           foodHygieneCertRequired: job.foodHygieneCertRequired || false,
           jobStatus: job.jobStatus || job.status || "Active",
           applicationDeadline: job.applicationDeadline || "",
-          jobRequirements: Array.isArray(job.requirements) ? job.requirements.join(", ") : job.jobRequirements || "",
+          jobRequirements: Array.isArray(job.skills) ? job.skills.join(", ") : Array.isArray(job.requirements) ? job.requirements.join(", ") : job.jobRequirements || "",
           locationDetails: job.locationDetails || job.location || "",
           contactPhone: job.contactInfo?.phone || "",
           contactEmail: job.contactInfo?.email || "",
@@ -191,18 +200,22 @@ const ModifyJob: React.FC = () => {
 
         setSelectedEmployer(job.employer?.id || job.employerId || "");
 
-        // Handle shifts
+        // Handle shifts - match backend spec
         if (job.shifts && Array.isArray(job.shifts) && job.shifts.length > 0) {
           setShifts(
             job.shifts.map((shift: any, index: number) => ({
               id: Date.now() + index,
+              shiftDate: shift.shiftDate || job.jobDate || formData.jobDate,
               startTime: shift.startTime || "09:00",
               endTime: shift.endTime || "17:00",
               breakDuration: shift.breakDuration || shift.breakHours || 0,
               totalWorkingHours: shift.totalWorkingHours || shift.duration || 8,
-              rateType: shift.rateType || "Weekday",
-              payPerHour: shift.payPerHour || shift.payRate || 0,
+              rateType: shift.rateType || "Hourly",
+              rates: shift.rates || shift.payPerHour || shift.payRate || 0,
+              payPerHour: shift.rates || shift.payPerHour || shift.payRate || 0, // Legacy support
               totalWages: shift.totalWages || shift.totalWage || 0,
+              vacancy: shift.vacancy || 1, // Required: minimum 1
+              standbyVacancy: shift.standbyVacancy || 0, // Optional: default 0
             }))
           );
         }
@@ -261,7 +274,9 @@ const ModifyJob: React.FC = () => {
             );
           }
 
-          updated.totalWages = updated.payPerHour * updated.totalWorkingHours;
+          // Calculate total wages using rates or payPerHour (legacy)
+          const rate = updated.rates || updated.payPerHour || 0;
+          updated.totalWages = rate * updated.totalWorkingHours;
 
           return updated;
         }
@@ -271,17 +286,21 @@ const ModifyJob: React.FC = () => {
   };
 
   const addShift = () => {
-    const defaultRateType = rateTypes.length > 0 ? rateTypes[0] : "Weekday";
+    const defaultRateType = rateTypes.length > 0 ? rateTypes[0] : "Hourly";
     const defaultPayRate = defaultPayRates[defaultRateType] || 0;
     const newShift: Shift = {
       id: Date.now(),
+      shiftDate: formData.jobDate || new Date().toISOString().split("T")[0],
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: 0,
       totalWorkingHours: 8,
-      rateType: defaultRateType as "Weekend" | "Weekday" | "Public Holiday",
-      payPerHour: defaultPayRate,
+      rateType: defaultRateType as "Hourly" | "Weekly" | "Monthly",
+      rates: defaultPayRate,
+      payPerHour: defaultPayRate, // Legacy support
       totalWages: defaultPayRate * 8,
+      vacancy: 1, // Required: minimum 1 (matches backend spec)
+      standbyVacancy: 0, // Optional: default 0 (matches backend spec)
     };
     setShifts([...shifts, newShift]);
   };
@@ -346,16 +365,13 @@ const ModifyJob: React.FC = () => {
       toast.error("Please select an employer or enter employer name");
       return false;
     }
+    // Outlet validation: At least one of outletId, outletAddress, or locationDetails must be provided
     if (!formData.useManualOutlet && !formData.outletId) {
       toast.error("Please select an outlet");
       return false;
     }
-    if (formData.useManualOutlet && !formData.outletAddress.trim()) {
-      toast.error("Please enter outlet address");
-      return false;
-    }
-    if (!formData.locationDetails.trim()) {
-      toast.error("Location details is required");
+    if (formData.useManualOutlet && !formData.outletAddress?.trim() && !formData.locationDetails?.trim()) {
+      toast.error("Please provide either outlet address or location details");
       return false;
     }
     if (shifts.length === 0) {
@@ -371,38 +387,29 @@ const ModifyJob: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Convert skills from comma-separated string to array
-      const skillsArray = formData.skills
-        ? formData.skills.split(",").map((s) => s.trim()).filter((s) => s)
+      // Convert jobRequirements to skills array (backend expects 'skills' field)
+      const skillsArray = formData.jobRequirements
+        ? formData.jobRequirements.split(",").map((s) => s.trim()).filter((s) => s)
         : [];
 
-      const jobData = {
-        jobDate: formData.jobDate,
-        jobTitle: formData.jobTitle,
-        jobDescription: formData.jobDescription,
-        jobRoles: formData.jobRoles,
-        employerId: formData.employerId || null,
-        employerName: formData.employerName || null, // For manual entry
-        outletId: formData.useManualOutlet ? null : formData.outletId,
-        outletAddress: formData.useManualOutlet ? formData.outletAddress : null, // For manual entry
-        totalPositions: formData.totalPositions,
-        foodHygieneCertRequired: formData.foodHygieneCertRequired,
-        jobStatus: formData.jobStatus,
-        applicationDeadline: formData.applicationDeadline || null,
-        dressCode: formData.dressCode || null, // Replaces jobRequirements
-        skills: skillsArray, // Array format - replaces jobRequirements
-        locationDetails: formData.locationDetails,
-        shifts: shifts.map((shift) => ({
-          startTime: shift.startTime,
-          endTime: shift.endTime,
-          breakDuration: shift.breakDuration,
-          totalWorkingHours: shift.totalWorkingHours,
-          rateType: shift.rateType,
-          payPerHour: shift.payPerHour,
-          totalWages: shift.totalWages,
+      // Use buildJobData utility to match backend spec
+      const jobData = buildJobData(
+        {
+          ...formData,
+          skills: skillsArray, // Map jobRequirements to skills for API
+          employerId: formData.employerId || null,
+          outletId: formData.useManualOutlet ? null : formData.outletId,
+          outletAddress: formData.useManualOutlet ? formData.outletAddress : null,
+        },
+        shifts.map((shift) => ({
+          ...shift,
+          rates: shift.rates || shift.payPerHour || 0, // Ensure rates is set
+          shiftDate: shift.shiftDate || formData.jobDate,
         })),
-      };
+        "ADMIN" // Admin role for modify
+      );
 
+      // Backend endpoint: PUT /api/admin/jobs/:id
       const response = await axiosInstance.put(`/admin/jobs/${jobId}`, jobData);
 
       // Check for success field according to API spec
@@ -1008,6 +1015,37 @@ const ModifyJob: React.FC = () => {
                         <div className="px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-semibold">
                           ${shift.totalWages.toFixed(2)}
                         </div>
+                      </div>
+
+                      {/* Vacancy */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Vacancy <span className="text-red-500">*</span>
+                          <span className="text-gray-400 text-xs font-normal ml-1">(Positions available)</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={shift.vacancy || 1}
+                          onChange={(e) => updateShift(shift.id, "vacancy", parseInt(e.target.value) || 1)}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      {/* Standby Vacancy */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Standby Vacancy <span className="text-gray-400 text-xs">(Optional)</span>
+                          <span className="text-gray-400 text-xs font-normal ml-1 block">(Backup positions)</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={shift.standbyVacancy || 0}
+                          onChange={(e) => updateShift(shift.id, "standbyVacancy", parseInt(e.target.value) || 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
                       </div>
                     </div>
                   </div>

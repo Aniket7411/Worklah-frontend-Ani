@@ -465,11 +465,11 @@ const JobManagement = () => {
 
 
   return (
-    <div className="w-full max-w-full font-sans">
-      {/* Jobs Section */}
-      <div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">{getPageTitle()}</h1>
+    <div className="w-full min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 font-sans">
+      {/* Header & filters */}
+      <div className="mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 pl-2 border-l-4 border-[#FED408]">{getPageTitle()}</h1>
 
           <div className="flex flex-wrap items-center gap-3 md:gap-6 w-full sm:w-auto">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-initial">
@@ -803,121 +803,129 @@ const JobManagement = () => {
         )}
 
         {/* Jobs Table */}
-        <div className="table-wrapper rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="table-wrapper rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full border-collapse">
 
               <thead>
-                <tr className="bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF]">
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                <tr className="bg-gradient-to-r from-blue-50 via-blue-50 to-indigo-50 border-b-2 border-blue-100">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Job Title & Details
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Job Date
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  <th className="px-5 py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Shifts
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Shift Timings
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden lg:table-cell">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">
                     Shift ID
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Employer
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden md:table-cell">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap hidden md:table-cell">
                     Outlet
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden lg:table-cell">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">
                     Breaks
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden xl:table-cell">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap hidden xl:table-cell">
                     Duration
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  <th className="px-5 py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Vacancy
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden lg:table-cell">
+                  <th className="px-5 py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap hidden lg:table-cell">
                     Standby
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap hidden xl:table-cell">
+                  <th className="px-5 py-4 text-left text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap hidden xl:table-cell">
                     Total Wage
                   </th>
-                  <th className="p-3 md:p-4 text-left text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap">
+                  <th className="px-5 py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
+                    Applicants
+                  </th>
+                  <th className="px-5 py-4 text-center text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
                     Status
                   </th>
-                  <th className="p-3 md:p-4 text-center sticky right-0 bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF] z-10">
+                  <th className="px-5 py-4 text-center sticky right-0 bg-gradient-to-r from-blue-50 via-blue-50 to-indigo-50 border-b-2 border-blue-100 z-10">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="bg-white divide-y divide-gray-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={14} className="text-center py-8">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-gray-600">Loading jobs...</span>
+                    <td colSpan={15} className="text-center py-16">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-gray-600 font-medium">Loading jobs...</span>
                       </div>
                     </td>
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={14} className="text-center py-8">
-                      <div className="text-red-500 mb-2">{error}</div>
-                      <button
-                        onClick={() => fetchJobDetails(queryParams)}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm"
-                      >
-                        Retry
-                      </button>
+                    <td colSpan={15} className="text-center py-16">
+                      <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+                          <Ban className="w-8 h-8 text-red-500" />
+                        </div>
+                        <div className="text-red-600 font-semibold mb-2">{error}</div>
+                        <button
+                          onClick={() => fetchJobDetails(queryParams)}
+                          className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+                        >
+                          Retry
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ) : jobsData.length > 0 ? (
                   jobsData.map((row: any, index: number) => (
                     <tr
                       key={row.jobId || row._id || index}
-                      className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
+                      className="border-b border-gray-100 hover:bg-blue-50/30 transition-all duration-200 group"
                     >
                       {/* Job Title & ID */}
                       <td
-                        className="p-4 md:p-5 text-left border-b border-gray-200 cursor-pointer hover:bg-blue-50/50 transition-colors group"
+                        className="px-5 py-5 text-left cursor-pointer group/item"
                         onClick={() => handleActionClick("View", row._id || row.jobId)}
                       >
-                        <div className={`${getBorderColor(row.jobStatus || row.status)} pl-3 py-1`}>
-                          <div className="font-bold text-blue-700 hover:text-blue-800 group-hover:underline text-sm sm:text-base mb-1.5 flex items-center gap-2">
+                        <div className={`${getBorderColor(row.jobStatus || row.status)} pl-4 py-2 rounded-l-md`}>
+                          <div className="font-bold text-gray-900 hover:text-blue-700 group-hover/item:underline text-base mb-2 flex items-center gap-2">
                             {row.jobTitle || row.jobName || "N/A"}
-                            <span className="text-xs font-normal text-gray-400">
+                            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                               {row.jobId ? `#${row.jobId.slice(-4)}` : (row._id ? `#${convertIdToFourDigits(row._id)}` : "")}
                             </span>
                           </div>
                           {row.jobRoles && (
-                            <div className="text-xs text-gray-600 mb-2 font-medium">
+                            <div className="text-sm text-gray-700 mb-2 font-medium">
                               {row.jobRoles}
                             </div>
                           )}
                           {/* Skills/Requirements */}
                           {row.jobRequirements && Array.isArray(row.jobRequirements) && row.jobRequirements.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 mt-2">
+                            <div className="flex flex-wrap gap-2 mt-2">
                               {row.jobRequirements.slice(0, 2).map((skill: string, idx: number) => (
                                 <span
                                   key={idx}
-                                  className="px-2.5 py-1 bg-blue-50 text-blue-700 text-xs rounded-md font-medium border border-blue-200"
+                                  className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-semibold border border-blue-200"
                                 >
                                   {skill}
                                 </span>
                               ))}
                               {row.jobRequirements.length > 2 && (
-                                <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs rounded-md font-medium border border-gray-200">
+                                <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-semibold border border-gray-200">
                                   +{row.jobRequirements.length - 2} more
                                 </span>
                               )}
                             </div>
                           )}
                           {row.jobDescription && (
-                            <div className="text-xs text-gray-500 mt-2 line-clamp-2">
+                            <div className="text-xs text-gray-500 mt-3 line-clamp-2 leading-relaxed">
                               {row.jobDescription.substring(0, 80)}{row.jobDescription.length > 80 ? "..." : ""}
                             </div>
                           )}
@@ -925,45 +933,47 @@ const JobManagement = () => {
                       </td>
 
                       {/* Job Date */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200">
-                        <div className="flex flex-col gap-1.5">
+                      <td className="px-5 py-5 text-left">
+                        <div className="flex flex-col gap-2">
                           {row.jobDate ? (
                             <>
-                              <div className="flex items-center gap-1.5">
-                                <CalendarDays className="w-4 h-4 text-blue-600" />
-                                <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                              <div className="flex items-center gap-2">
+                                <CalendarDays className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                <div className="text-sm font-semibold text-gray-900">
                                   {formatDate(row.jobDate)}
                                 </div>
                               </div>
                               {row.applicationDeadline && (
-                                <div className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-md border border-orange-200">
+                                <div className="text-xs text-orange-700 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200 font-medium">
                                   Deadline: {new Date(row.applicationDeadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                                 </div>
                               )}
                             </>
                           ) : row.date ? (
-                            <div className="flex items-center gap-1.5">
-                              <CalendarDays className="w-4 h-4 text-blue-600" />
-                              <span className="text-xs sm:text-sm font-semibold">{formatDate(row.date)}</span>
+                            <div className="flex items-center gap-2">
+                              <CalendarDays className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                              <span className="text-sm font-semibold text-gray-900">{formatDate(row.date)}</span>
                             </div>
                           ) : (
-                            <span className="text-xs sm:text-sm text-gray-400">N/A</span>
+                            <span className="text-sm text-gray-400 italic">N/A</span>
                           )}
                         </div>
                       </td>
                       {/* Number of Shifts */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200">
-                        <div className="flex items-center justify-center w-10 h-10 bg-blue-50 rounded-full">
-                          <span className="text-sm font-bold text-blue-700">
-                            {row.shifts?.length || row.shiftTiming ? (row.shifts?.length || 1) : "0"}
-                          </span>
+                      <td className="px-5 py-5 text-center">
+                        <div className="flex items-center justify-center">
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-md">
+                            <span className="text-base font-bold text-white">
+                              {row.shifts?.length || row.shiftTiming ? (row.shifts?.length || 1) : "0"}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       {/* Shift Timings */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200">
-                        <div className="flex flex-col gap-1.5">
+                      <td className="px-5 py-5 text-left">
+                        <div className="flex flex-col gap-2">
                           {row.shiftTiming?.display ? (
-                            <div className="bg-gradient-to-r from-[#048BE1] to-[#0066CC] px-3 py-1.5 rounded-lg font-semibold text-white text-xs shadow-sm">
+                            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 rounded-lg font-semibold text-white text-xs shadow-md">
                               {row.shiftTiming.display}
                             </div>
                           ) : row.shifts?.length > 0 ? (
@@ -971,7 +981,7 @@ const JobManagement = () => {
                               {row.shifts.slice(0, 2).map((shift: any, i: number) => (
                                 <div
                                   key={i}
-                                  className="bg-gradient-to-r from-[#048BE1] to-[#0066CC] px-3 py-1.5 rounded-lg font-semibold text-white text-xs shadow-sm"
+                                  className="bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 rounded-lg font-semibold text-white text-xs shadow-md"
                                 >
                                   {shift.startTime && shift.endTime
                                     ? `${shift.startTime} - ${shift.endTime}`
@@ -979,32 +989,34 @@ const JobManagement = () => {
                                 </div>
                               ))}
                               {row.shifts.length > 2 && (
-                                <span className="text-xs text-gray-500 font-medium">+{row.shifts.length - 2} more shifts</span>
+                                <span className="text-xs text-gray-600 font-medium">+{row.shifts.length - 2} more shifts</span>
                               )}
                             </>
                           ) : (
-                            <span className="text-xs sm:text-sm text-gray-400 italic">No shifts</span>
+                            <span className="text-sm text-gray-400 italic">No shifts</span>
                           )}
                         </div>
                       </td>
                       {/* Shift ID */}
-                      <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm hidden lg:table-cell">
+                      <td className="px-5 py-5 text-left text-sm font-mono text-gray-600 hidden lg:table-cell">
                         {row.shifts?.length > 0
                           ? row.shifts.map((shift: any, i: number) => (
-                            <div key={i} className="mb-1">
-                              {convertIdToFourDigits(shift.shiftId || shift._id || shift.id || "")}
+                            <div key={i} className="mb-1.5">
+                              <span className="bg-gray-100 px-2 py-1 rounded text-xs font-semibold">
+                                {convertIdToFourDigits(shift.shiftId || shift._id || shift.id || "")}
+                              </span>
                             </div>
                           ))
-                          : "N/A"}
+                          : <span className="text-gray-400 italic">N/A</span>}
                       </td>
 
                       {/* Employer */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex items-center gap-2.5">
+                      <td className="px-5 py-5 text-left">
+                        <div className="flex flex-col gap-2.5">
+                          <div className="flex items-center gap-3">
                             {row.employer?.companyLogo ? (
                               <img
-                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border-2 border-gray-200 shadow-sm"
+                                className="w-12 h-12 rounded-xl object-cover border-2 border-gray-200 shadow-md"
                                 src={row.employer.companyLogo.startsWith("http")
                                   ? row.employer.companyLogo
                                   : `${companyImage}${row.employer.companyLogo}`}
@@ -1015,7 +1027,7 @@ const JobManagement = () => {
                               />
                             ) : row.employer?.logo ? (
                               <img
-                                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border-2 border-gray-200 shadow-sm"
+                                className="w-12 h-12 rounded-xl object-cover border-2 border-gray-200 shadow-md"
                                 src={`${companyImage}${row.employer.logo}`}
                                 alt="Company Logo"
                                 onError={(e) => {
@@ -1023,20 +1035,20 @@ const JobManagement = () => {
                                 }}
                               />
                             ) : (
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-sm font-bold text-blue-700 border-2 border-blue-200 shadow-sm">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-base font-bold text-white border-2 border-blue-300 shadow-md">
                                 {row.employer?.name?.charAt(0)?.toUpperCase() ||
                                   row.employerName?.charAt(0)?.toUpperCase() ||
                                   (row.postedBy === "admin" ? "A" : "?")}
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <div className="text-xs sm:text-sm font-semibold text-gray-900 truncate mb-1">
+                              <div className="text-sm font-bold text-gray-900 truncate mb-1.5">
                                 {row.employer?.name || row.employer?.companyLegalName || row.employerName || "N/A"}
                               </div>
                               {row.postedBy && (
-                                <span className={`text-xs px-2 py-0.5 rounded-full inline-block font-semibold ${row.postedBy === "admin"
-                                  ? "bg-blue-100 text-blue-700 border border-blue-200"
-                                  : "bg-green-100 text-green-700 border border-green-200"
+                                <span className={`text-xs px-2.5 py-1 rounded-full inline-block font-semibold ${row.postedBy === "admin"
+                                  ? "bg-blue-100 text-blue-700 border border-blue-300"
+                                  : "bg-green-100 text-green-700 border border-green-300"
                                   }`}>
                                   {row.postedBy === "admin" ? "Admin Post" : "Employer Post"}
                                 </span>
@@ -1044,29 +1056,29 @@ const JobManagement = () => {
                             </div>
                           </div>
                           {row.contactInfo && (row.contactInfo.phone !== "N/A" || row.contactInfo.email !== "N/A") && (
-                            <div className="text-xs text-gray-500 space-y-0.5">
+                            <div className="text-xs text-gray-600 space-y-1">
                               {row.contactInfo.phone && row.contactInfo.phone !== "N/A" && (
-                                <div className="flex items-center gap-1">
-                                  <PhoneCall className="w-3 h-3" />
+                                <div className="flex items-center gap-1.5">
+                                  <PhoneCall className="w-3.5 h-3.5 text-gray-400" />
                                   <span>{row.contactInfo.phone}</span>
                                 </div>
                               )}
                               {row.contactInfo.email && row.contactInfo.email !== "N/A" && (
-                                <div className="truncate">{row.contactInfo.email}</div>
+                                <div className="truncate text-gray-500">{row.contactInfo.email}</div>
                               )}
                             </div>
                           )}
                         </div>
                       </td>
                       {/* Outlet */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200 hidden md:table-cell">
-                        <div className="flex flex-col gap-1.5">
-                          <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                      <td className="px-5 py-5 text-left hidden md:table-cell">
+                        <div className="flex flex-col gap-2">
+                          <div className="text-sm font-semibold text-gray-900">
                             {row.outlet?.name || row.outlet?.id || "N/A"}
                           </div>
-                          <div className="text-xs text-gray-600 truncate max-w-[150px] flex items-start gap-1">
-                            <span className="text-gray-400">📍</span>
-                            <span>{row.outlet?.address || row.outletAddress || row.locationDetails || "N/A"}</span>
+                          <div className="text-xs text-gray-600 truncate max-w-[150px] flex items-start gap-1.5">
+                            <span className="text-gray-400 mt-0.5">📍</span>
+                            <span className="leading-relaxed">{row.outlet?.address || row.outletAddress || row.locationDetails || "N/A"}</span>
                           </div>
                           {row.locationDetails && row.outlet?.address && row.outlet.address !== row.locationDetails && (
                             <div className="text-xs text-gray-500 truncate max-w-[150px]">
@@ -1076,10 +1088,10 @@ const JobManagement = () => {
                         </div>
                       </td>
                       {/* Breaks */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200 hidden lg:table-cell">
-                        <div className="flex flex-col gap-1.5">
+                      <td className="px-5 py-5 text-left hidden lg:table-cell">
+                        <div className="flex flex-col gap-2">
                           {row.breakDuration ? (
-                            <div className="text-xs sm:text-sm font-semibold text-gray-700">
+                            <div className="text-sm font-semibold text-gray-800 bg-gray-50 px-3 py-1.5 rounded-lg inline-block w-fit">
                               {parseFloat(row.breakDuration.toString()).toFixed(2)} hrs
                             </div>
                           ) : row.shifts?.length > 0 ? (
@@ -1089,11 +1101,11 @@ const JobManagement = () => {
 
                               return (
                                 <div key={i} className="font-medium">
-                                  <span className="text-gray-700 text-xs sm:text-sm">{`${breakParts[0] || ""} ${breakParts[1] || ""} `}</span>
+                                  <span className="text-gray-700 text-sm">{`${breakParts[0] || ""} ${breakParts[1] || ""} `}</span>
                                   <span
-                                    className={`text-xs sm:text-sm ${breakType === "Paid"
-                                      ? "text-green-600 font-semibold"
-                                      : "text-red-600 font-semibold"
+                                    className={`text-sm font-bold ${breakType === "Paid"
+                                      ? "text-green-600"
+                                      : "text-red-600"
                                       }`}
                                   >
                                     {breakType}
@@ -1102,142 +1114,159 @@ const JobManagement = () => {
                               );
                             })
                           ) : (
-                            <span className="text-xs sm:text-sm text-gray-400">N/A</span>
+                            <span className="text-sm text-gray-400 italic">N/A</span>
                           )}
                         </div>
                       </td>
 
                       {/* Total Duration */}
-                      <td className="p-4 md:p-5 text-left border-b border-gray-200 hidden xl:table-cell">
-                        <div className="flex flex-col gap-1.5">
+                      <td className="px-5 py-5 text-left hidden xl:table-cell">
+                        <div className="flex flex-col gap-2">
                           {row.totalWorkingHours ? (
                             <>
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="w-4 h-4 text-blue-600" />
-                                <div className="text-xs sm:text-sm font-bold text-gray-900">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                <div className="text-sm font-bold text-gray-900">
                                   {parseFloat(row.totalWorkingHours.toString()).toFixed(2)} hrs
                                 </div>
                               </div>
                               {row.breakDuration && parseFloat(row.breakDuration.toString()) > 0 && (
-                                <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md">
+                                <div className="text-xs text-gray-600 bg-gray-50 px-2.5 py-1 rounded-md">
                                   Break: {parseFloat(row.breakDuration.toString()).toFixed(2)} hrs
                                 </div>
                               )}
                             </>
                           ) : row.shifts?.[0]?.duration ? (
-                            <div className="text-xs sm:text-sm font-medium">{row.shifts[0].duration}</div>
+                            <div className="text-sm font-medium text-gray-700">{row.shifts[0].duration}</div>
                           ) : (
-                            <div className="text-xs sm:text-sm text-gray-400">N/A</div>
+                            <div className="text-sm text-gray-400 italic">N/A</div>
                           )}
                         </div>
                       </td>
                       {/* Vacancy Users */}
-                      <td className="p-3 md:p-4 text-left border-b border-gray-200">
-                        <div className="flex flex-col gap-1">
+                      <td className="px-5 py-5 text-center">
+                        <div className="flex flex-col gap-1.5">
                           {row.currentFulfilment ? (
                             <>
-                              <div className="text-xs sm:text-sm font-semibold text-gray-900">
+                              <div className="text-base font-bold text-gray-900">
                                 {row.currentFulfilment.display || `${row.currentFulfilment.filled}/${row.currentFulfilment.total}`}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-600">
                                 {row.totalPositions || row.currentFulfilment.total} positions
                               </div>
                             </>
                           ) : (
-                            <div className="text-xs sm:text-sm font-medium">
+                            <div className="text-base font-semibold text-gray-900">
                               {row.vacancyUsers || row.totalPositions || "0"}
                             </div>
                           )}
                         </div>
                       </td>
                       {/* Standby Users */}
-                      <td className="p-3 md:p-4 text-left border-b border-gray-200 text-xs sm:text-sm hidden lg:table-cell">
-                        {row.standbyUsers || "0"}
+                      <td className="px-5 py-5 text-center text-sm font-semibold text-gray-700 hidden lg:table-cell">
+                        <span className="bg-gray-100 px-3 py-1.5 rounded-lg inline-block">
+                          {row.standbyUsers || "0"}
+                        </span>
                       </td>
                       {/* Total Wage */}
-                      <td className="p-3 md:p-4 text-left border-b border-gray-200 hidden xl:table-cell">
-                        <div className="flex flex-col gap-1">
+                      <td className="px-5 py-5 text-left hidden xl:table-cell">
+                        <div className="flex flex-col gap-1.5">
                           {row.totalWages ? (
                             <>
-                              <div className="text-xs sm:text-sm font-semibold text-green-700">
+                              <div className="text-base font-bold text-green-700">
                                 ${parseFloat(row.totalWages.toString()).toFixed(2)}
                               </div>
                               {row.payPerHour && (
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-gray-600">
                                   ${row.payPerHour}/hr
                                 </div>
                               )}
                               {row.rateType && (
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded">
                                   {row.rateType}
                                 </div>
                               )}
                             </>
                           ) : row.totalWage ? (
-                            <div className="text-xs sm:text-sm font-semibold text-green-700">
+                            <div className="text-base font-bold text-green-700">
                               ${parseFloat(row.totalWage.toString()).toFixed(2)}
                             </div>
                           ) : (
-                            <div className="text-xs sm:text-sm text-gray-500">$0.00</div>
+                            <div className="text-sm text-gray-400 italic">$0.00</div>
                           )}
                         </div>
                       </td>
+                      {/* Applicants */}
+                      <td className="px-5 py-5 text-center">
+                        <Link
+                          to={`/jobs/${row._id || row.jobId}/candidates`}
+                          className="inline-block"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded-lg font-semibold text-sm transition-colors cursor-pointer">
+                              {row.applicantCount || row.totalCandidates || row.applicantsCount || 0}
+                            </div>
+                            <span className="text-xs text-gray-500">applicants</span>
+                          </div>
+                        </Link>
+                      </td>
                       {/* Job Status */}
-                      <td className="p-3 md:p-4 text-left border-b border-gray-200">
-                        <div className="flex flex-col gap-1">
+                      <td className="px-5 py-5 text-center">
+                        <div className="flex flex-col gap-2 items-center">
                           <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-semibold inline-block w-fit ${getStatusColor(
+                            className={`px-3 py-1.5 rounded-full text-xs font-bold inline-block ${getStatusColor(
                               row.jobStatus || row.status
                             )}`}
                           >
                             {row.jobStatus || row.status || "N/A"}
                           </span>
                           {row.foodHygieneCertRequired && (
-                            <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full inline-block w-fit">
+                            <span className="text-xs px-2.5 py-1 bg-orange-100 text-orange-700 rounded-full inline-block font-semibold border border-orange-200">
                               Cert Required
                             </span>
                           )}
                         </div>
                       </td>
                       {/* Actions */}
-                      <td className="p-3 md:p-4 text-center border-b border-gray-200 sticky right-0 bg-white z-10">
+                      <td className="px-5 py-5 text-center sticky right-0 bg-white z-10 group-hover:bg-blue-50/30 transition-colors">
                         <div className="relative">
                           <button
-                            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                            className="p-2.5 hover:bg-blue-100 rounded-lg transition-colors group/btn"
                             onClick={() => handlePopupToggle(index)}
                             aria-label="Actions"
                           >
-                            <MoreVertical className="h-4 w-4 text-gray-600" />
+                            <MoreVertical className="h-5 w-5 text-gray-600 group-hover/btn:text-blue-600" />
                           </button>
                           {isPopupOpen === index && (
-                            <div className="absolute right-0 top-full mt-1 w-40 bg-white shadow-xl border border-gray-200 rounded-lg z-20 overflow-hidden">
+                            <div className="absolute right-0 top-full mt-2 w-48 bg-white shadow-2xl border border-gray-200 rounded-xl z-20 overflow-hidden">
                               <button
-                                className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors border-b border-gray-100"
+                                className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors border-b border-gray-100 font-medium"
                                 onClick={() => handleActionClick("View", row._id || row.jobId)}
                               >
-                                <Eye size={16} className="text-blue-600" /> View Details
+                                <Eye size={18} className="text-blue-600" /> View Details
                               </button>
                               <button
-                                className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors border-b border-gray-100"
+                                className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors border-b border-gray-100 font-medium"
                                 onClick={() => handleActionClick("Modify", row._id || row.jobId)}
                               >
-                                <Edit size={16} className="text-blue-600" /> Edit Job
+                                <Edit size={18} className="text-blue-600" /> Edit Job
                               </button>
                               <button
-                                className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
+                                className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-red-600 hover:bg-red-50 transition-colors border-b border-gray-100 font-medium"
                                 onClick={() =>
                                   handleActionClick("Cancel Job", row._id || row.jobId)
                                 }
                               >
-                                <Ban size={16} color="#E34E30" /> Cancel Job
+                                <Ban size={18} color="#E34E30" /> Cancel Job
                               </button>
                               <button
-                                className="flex items-center gap-2 px-4 py-2.5 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
+                                className="flex items-center gap-3 px-4 py-3 w-full text-left text-sm text-red-600 hover:bg-red-50 transition-colors font-medium"
                                 onClick={() =>
                                   handleActionClick("Delete", row._id || row.jobId)
                                 }
                               >
-                                <Trash2 size={16} color="#E34E30" /> Delete
+                                <Trash2 size={18} color="#E34E30" /> Delete
                               </button>
                             </div>
                           )}
@@ -1247,15 +1276,15 @@ const JobManagement = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={14} className="text-center py-12">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                          <Briefcase className="w-8 h-8 text-gray-400" />
+                    <td colSpan={15} className="text-center py-20">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center shadow-inner">
+                          <Briefcase className="w-10 h-10 text-gray-400" />
                         </div>
-                        <div className="text-gray-500 font-medium">No jobs available</div>
-                        <div className="text-sm text-gray-400">
+                        <div className="text-gray-700 font-semibold text-lg">No jobs available</div>
+                        <div className="text-sm text-gray-500 max-w-md">
                           {queryParams.startDate || queryParams.endDate
-                            ? "Try adjusting your date filters"
+                            ? "Try adjusting your date filters to see more results"
                             : "Create a new job posting to get started"}
                         </div>
                       </div>

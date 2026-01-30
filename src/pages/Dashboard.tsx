@@ -43,7 +43,7 @@ const Dashboard = () => {
     try {
       setIsLoading(true);
       setError("");
-      
+
       // Build query params
       const params = new URLSearchParams();
       if (dateRange.startDate) params.append('startDate', dateRange.startDate);
@@ -51,25 +51,25 @@ const Dashboard = () => {
       if (selectedEmployerId && user?.role === "ADMIN") {
         params.append('employerId', selectedEmployerId);
       }
-      
+
       const queryString = params.toString();
       // Use admin dashboard stats endpoint according to documentation
       const endpoint = `/admin/dashboard/stats${queryString ? `?${queryString}` : ''}`;
-      
+
       const response = await axiosInstance.get(endpoint);
-      
+
       // Check for success field according to API spec
       if (response.data?.success === false) {
         throw new Error(response.data?.message || "Failed to fetch dashboard data");
       }
 
-      // Map response data - documentation shows 'stats' object
+      // Map response data - API doc 9.1: stats object
       const stats = response?.data?.stats || response?.data;
       setDashboardData({
         totalJobs: stats?.totalJobs || stats?.activeJobs || 0,
         activatedHeroes: stats?.activeUsers || stats?.activatedHeroes || 0,
         vacancies: stats?.vacancies || 0,
-        vacanciesFilled: stats?.vacanciesFilled || 0,
+        vacanciesFilled: stats?.vacanciesFilled || stats?.approvedApplications || 0,
         pendingVerifications: stats?.pendingApplications || stats?.pendingVerifications || 0,
         pendingPayments: stats?.pendingPayments || 0,
         totalAmountPaid: stats?.totalRevenue || stats?.totalAmountPaid || 0,
@@ -285,11 +285,10 @@ const Dashboard = () => {
           <div
             key={index}
             onClick={() => handleCardClick(index)}
-            className={`cursor-pointer rounded-lg ${
-              selectedCard === index
+            className={`cursor-pointer rounded-lg ${selectedCard === index
                 ? "border-2 border-black"
                 : "border border-gray-200"
-            }`}
+              }`}
           >
             <DashboardCard
               title={card.title}

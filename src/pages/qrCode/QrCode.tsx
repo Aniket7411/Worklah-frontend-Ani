@@ -52,6 +52,8 @@ const QRCodeManagement: React.FC = () => {
   const [showGenerateModal, setShowGenerateModal] = useState<boolean>(false);
   const [selectedEmployerForGen, setSelectedEmployerForGen] = useState<string>("");
   const [selectedOutletForGen, setSelectedOutletForGen] = useState<string>("");
+  const [selectedJobForGen, setSelectedJobForGen] = useState<string>("");
+  const [jobsForGen, setJobsForGen] = useState<any[]>([]);
   const qrRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -180,9 +182,23 @@ const QRCodeManagement: React.FC = () => {
     documentTitle: `QR_Code_${selectedQRCode?.qrCodeId || "print"}`,
   });
 
+  const fetchJobsForOutlet = async (employerId: string, outletId: string) => {
+    try {
+      const response = await axiosInstance.get(`/admin/jobs?employerId=${employerId}&outletId=${outletId}&limit=100`);
+      if (response.data?.jobs && Array.isArray(response.data.jobs)) {
+        setJobsForGen(response.data.jobs);
+      } else {
+        setJobsForGen([]);
+      }
+    } catch (error) {
+      console.error("Error fetching jobs:", error);
+      setJobsForGen([]);
+    }
+  };
+
   const handleGenerateQRCode = async () => {
-    if (!selectedEmployerForGen || !selectedOutletForGen) {
-      toast.error("Please select both employer and outlet");
+    if (!selectedEmployerForGen || !selectedOutletForGen || !selectedJobForGen) {
+      toast.error("Please select employer, outlet, and job");
       return;
     }
 
@@ -190,6 +206,7 @@ const QRCodeManagement: React.FC = () => {
       const response = await axiosInstance.post("/admin/qr-codes/generate", {
         employerId: selectedEmployerForGen,
         outletId: selectedOutletForGen,
+        jobId: selectedJobForGen,
       });
 
       if (response.data?.success !== false) {
@@ -197,6 +214,8 @@ const QRCodeManagement: React.FC = () => {
         setShowGenerateModal(false);
         setSelectedEmployerForGen("");
         setSelectedOutletForGen("");
+        setSelectedJobForGen("");
+        setJobsForGen([]);
         fetchQRCodes();
       } else {
         throw new Error(response.data?.message || "Failed to generate QR code");
@@ -227,6 +246,8 @@ const QRCodeManagement: React.FC = () => {
         setShowGenerateModal(false);
         setSelectedEmployerForGen("");
         setSelectedOutletForGen("");
+        setSelectedJobForGen("");
+        setJobsForGen([]);
       }
     }
   };
@@ -510,6 +531,8 @@ const QRCodeManagement: React.FC = () => {
                   setShowGenerateModal(false);
                   setSelectedEmployerForGen("");
                   setSelectedOutletForGen("");
+                  setSelectedJobForGen("");
+                  setJobsForGen([]);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -527,6 +550,8 @@ const QRCodeManagement: React.FC = () => {
                   onChange={(e) => {
                     setSelectedEmployerForGen(e.target.value);
                     setSelectedOutletForGen("");
+                    setSelectedJobForGen("");
+                    setJobsForGen([]);
                   }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
@@ -546,13 +571,41 @@ const QRCodeManagement: React.FC = () => {
                   </label>
                   <select
                     value={selectedOutletForGen}
-                    onChange={(e) => setSelectedOutletForGen(e.target.value)}
+                    onChange={async (e) => {
+                      setSelectedOutletForGen(e.target.value);
+                      setSelectedJobForGen("");
+                      if (e.target.value && selectedEmployerForGen) {
+                        await fetchJobsForOutlet(selectedEmployerForGen, e.target.value);
+                      } else {
+                        setJobsForGen([]);
+                      }
+                    }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Select Outlet</option>
                     {getSelectedEmployerOutlets().map((outlet) => (
                       <option key={outlet._id} value={outlet._id}>
                         {outlet.outletName || outlet.name || "Unknown"} - {outlet.outletAddress || outlet.address || ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {selectedEmployerForGen && selectedOutletForGen && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Job <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedJobForGen}
+                    onChange={(e) => setSelectedJobForGen(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Select Job</option>
+                    {jobsForGen.map((job) => (
+                      <option key={job._id} value={job._id}>
+                        {job.jobTitle || job.jobName || "Unknown"} - {job.jobDate ? new Date(job.jobDate).toLocaleDateString() : ""}
                       </option>
                     ))}
                   </select>
@@ -585,7 +638,7 @@ const QRCodeManagement: React.FC = () => {
               </button>
               <button
                 onClick={handleGenerateQRCode}
-                disabled={!selectedEmployerForGen || !selectedOutletForGen}
+                disabled={!selectedEmployerForGen || !selectedOutletForGen || !selectedJobForGen}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Generate QR Code
