@@ -80,15 +80,18 @@ export const transformEmployerList = (response: any) => {
 export const buildEmployerFormData = (formData: any, outlets: any[], industry: string, generateCredentials: boolean = false) => {
   const formDataToSend = new FormData();
 
-  // Build clean data object
+  // Build clean data object (ADMIN_EMPLOYER_AND_OUTLET.md: phoneCountry, extensions)
   const employerData: any = {
+    phoneCountry: formData.phoneCountry || "SG",
     companyLegalName: formData.companyLegalName,
     companyNumber: formData.companyNumber?.trim() || null, // Optional - null if empty
     hqAddress: formData.hqAddress,
     contactPersonName: formData.contactPersonName,
     jobPosition: formData.jobPosition || "",
     mainContactNumber: formData.mainContactNumber,
+    mainContactExtension: formData.mainContactExtension?.trim() || null,
     alternateContactNumber: formData.alternateContactNumber || "",
+    alternateContactExtension: formData.alternateContactExtension?.trim() || null,
     emailAddress: formData.emailAddress,
     accountManager: formData.accountManager || "",
     industry: industry,
@@ -105,6 +108,7 @@ export const buildEmployerFormData = (formData: any, outlets: any[], industry: s
       name: outlet.name,
       managerName: outlet.managerName,
       contactNumber: outlet.contactNumber,
+      contactExtension: (outlet as any).contactExtension?.trim() || null,
       address: outlet.address,
       openingHours: outlet.openingHours || null,
       closingHours: outlet.closingHours || null,
@@ -209,31 +213,35 @@ export const validateEmail = (email: string): boolean => {
 export const buildEmployerUpdateFormData = (formData: any, outlets: any[], industry: string) => {
   const formDataToSend = new FormData();
 
-  // Build clean data object
+  // Build clean data object (ADMIN_EMPLOYER_AND_OUTLET.md: phoneCountry, extensions; include _id for existing outlets)
   const employerData: any = {
+    phoneCountry: formData.phoneCountry || "SG",
     companyLegalName: formData.companyLegalName,
     companyNumber: formData.companyNumber?.trim() || null, // Optional - null if empty
     hqAddress: formData.hqAddress,
     contactPersonName: formData.contactPersonName,
     jobPosition: formData.jobPosition || "",
     mainContactNumber: formData.mainContactNumber,
+    mainContactExtension: formData.mainContactExtension?.trim() || null,
     alternateContactNumber: formData.alternateContactNumber || "",
+    alternateContactExtension: formData.alternateContactExtension?.trim() || null,
     emailAddress: formData.emailAddress,
     accountManager: formData.accountManager || "",
     industry: industry,
     serviceAgreement: formData.serviceAgreement || "Active",
     contractExpiryDate: formData.contractExpiryDate || null,
-    // Outlets: do not send barcode - backend auto-generates on creation (updatebarcodecreation.md)
+    // Outlets: existing have _id (update), new have no _id (add); omit to leave unchanged, use DELETE to remove
     outlets: outlets.filter(outlet =>
       outlet.name?.trim() &&
       outlet.managerName?.trim() &&
       outlet.contactNumber?.trim() &&
       outlet.address?.trim()
     ).map(outlet => ({
-      _id: outlet._id || null,
+      _id: outlet._id || undefined,
       name: outlet.name,
       managerName: outlet.managerName,
       contactNumber: outlet.contactNumber,
+      contactExtension: (outlet as any).contactExtension?.trim() || null,
       address: outlet.address,
       openingHours: outlet.openingHours || null,
       closingHours: outlet.closingHours || null,

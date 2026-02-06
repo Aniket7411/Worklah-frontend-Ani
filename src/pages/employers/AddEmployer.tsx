@@ -31,13 +31,12 @@ declare global {
   }
 }
 
-// Outlet interface - simplified to required fields only
-// Required: name, managerName, contactNumber, address
-// Optional: openingHours, closingHours, isActive
+// Outlet interface - required: name, managerName, contactNumber, address; optional: contactExtension, openingHours, closingHours, isActive
 interface Outlet {
   name: string;
   managerName: string;
   contactNumber: string;
+  contactExtension?: string;
   address: string;
   openingHours?: string;
   closingHours?: string;
@@ -99,7 +98,9 @@ const AddEmployer = () => {
     contactPersonName: "", // Name (required)
     jobPosition: "", // Position in company
     mainContactNumber: "", // Contact no. (required)
+    mainContactExtension: "", // Optional extension
     alternateContactNumber: "", // Alternate no. (Optional)
+    alternateContactExtension: "", // Optional extension
     emailAddress: "", // Email (required)
     acraBizfileCert: null as File | null,
     industry: "", // Industry type (required)
@@ -206,7 +207,7 @@ const AddEmployer = () => {
   };
 
   const addOutlet = () => {
-    setOutlets([...outlets, { name: "", managerName: "", contactNumber: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
+    setOutlets([...outlets, { name: "", managerName: "", contactNumber: "", contactExtension: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
     outletAddressRefs.current.push(null);
   };
 
@@ -343,7 +344,12 @@ const AddEmployer = () => {
 
     try {
       const industryToSend = showCustomIndustry ? formData.customIndustry : formData.industry;
-      const formDataToSend = buildEmployerFormData(formData, outlets, industryToSend || "", generateCredentials);
+      const formDataToSend = buildEmployerFormData(
+        { ...formData, phoneCountry },
+        outlets,
+        industryToSend || "",
+        generateCredentials
+      );
 
       // Use file instance with longer timeout
       const response = await axiosFileInstance.post("/admin/employers", formDataToSend);
@@ -662,34 +668,53 @@ const AddEmployer = () => {
                   />
                 </div>
 
-                {/* Contact Number – India (91) 10 digits, Singapore 8, Malaysia 10 or 11 */}
+                {/* Location first (drives contact validation) */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Location (Country) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={phoneCountry}
+                    onChange={(e) => setPhoneCountry(e.target.value as keyof typeof PHONE_RULES)}
+                    className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="SG">+65 Singapore</option>
+                    <option value="MY">+60 Malaysia</option>
+                    <option value="IN">+91 India</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">Used for contact number validation and format.</p>
+                </div>
+
+                {/* Contact Number (validated per phoneCountry) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Contact Number <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={phoneCountry}
-                      onChange={(e) => setPhoneCountry(e.target.value as keyof typeof PHONE_RULES)}
-                      className="w-32 px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                    >
-                      <option value="IN">+91 India</option>
-                      <option value="SG">+65 Singapore</option>
-                      <option value="MY">+60 Malaysia</option>
-                    </select>
-                    <input
-                      type="tel"
-                      name="mainContactNumber"
-                      value={formData.mainContactNumber ?? ""}
-                      onChange={handleChange}
-                      placeholder={getPlaceholder(phoneCountry)}
-                      required
-                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                  </div>
+                  <input
+                    type="tel"
+                    name="mainContactNumber"
+                    value={formData.mainContactNumber ?? ""}
+                    onChange={handleChange}
+                    placeholder={getPlaceholder(phoneCountry)}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Extension <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="mainContactExtension"
+                    value={formData.mainContactExtension ?? ""}
+                    onChange={handleChange}
+                    placeholder="e.g. 101"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
                 </div>
 
-                {/* Alternate Contact Number (same country as main) */}
+                {/* Alternate Contact Number + Extension */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
@@ -700,6 +725,19 @@ const AddEmployer = () => {
                     value={formData.alternateContactNumber ?? ""}
                     onChange={handleChange}
                     placeholder={getPlaceholder(phoneCountry)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Alternate Extension <span className="text-gray-400 text-xs">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="alternateContactExtension"
+                    value={formData.alternateContactExtension ?? ""}
+                    onChange={handleChange}
+                    placeholder="e.g. 102"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -742,6 +780,7 @@ const AddEmployer = () => {
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   >
                     <option value="">Select Status</option>
+                    <option value="Active">Active</option>
                     <option value="In Discussion">In Discussion</option>
                     <option value="Completed">Completed</option>
                     <option value="Expired">Expired</option>
@@ -923,8 +962,20 @@ const AddEmployer = () => {
                         type="tel"
                         value={outlet.contactNumber || ""}
                         onChange={(e) => handleOutletChange(index, "contactNumber", e.target.value)}
-                        placeholder="Enter outlet contact number"
+                        placeholder={getPlaceholder(phoneCountry)}
                         required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Outlet Extension <span className="text-gray-400 text-xs">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={outlet.contactExtension ?? ""}
+                        onChange={(e) => handleOutletChange(index, "contactExtension", e.target.value)}
+                        placeholder="e.g. 201"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>

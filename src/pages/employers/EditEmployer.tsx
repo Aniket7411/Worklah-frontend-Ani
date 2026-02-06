@@ -22,6 +22,7 @@ import toast from "react-hot-toast";
 // @ts-ignore - Loader is a JSX file without types
 import Loader from "../../components/Loader";
 import { buildEmployerUpdateFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
+import { validatePhone, getPlaceholder } from "../../utils/phoneValidation";
 
 // Images come as complete URLs from backend - no base URL needed
 
@@ -44,7 +45,9 @@ const EditEmployer = () => {
     contactPersonName: "",
     jobPosition: "",
     mainContactNumber: "",
+    mainContactExtension: "",
     alternateContactNumber: "",
+    alternateContactExtension: "",
     emailAddress: "",
     accountManager: "",
     acraBizfileCert: null as File | null,
@@ -52,6 +55,7 @@ const EditEmployer = () => {
     serviceAgreement: "",
     serviceContract: null as File | null,
     contractExpiryDate: "",
+    phoneCountry: "SG" as "SG" | "MY" | "IN",
   });
 
   const [existingFiles, setExistingFiles] = useState({
@@ -60,7 +64,7 @@ const EditEmployer = () => {
     serviceContract: "",
   });
 
-  const [outlets, setOutlets] = useState<Array<{ name: string; managerName: string; contactNumber: string; address: string; openingHours: string; closingHours: string; isActive: boolean; _id?: string; barcode?: string }>>([]);
+  const [outlets, setOutlets] = useState<Array<{ name: string; managerName: string; contactNumber: string; contactExtension?: string; address: string; openingHours: string; closingHours: string; isActive: boolean; _id?: string; barcode?: string }>>([]);
   const [showAccountManager, setShowAccountManager] = useState(false);
 
   // Delete confirmation modal state
@@ -96,22 +100,27 @@ const EditEmployer = () => {
       const employer = response?.data?.employer || response?.data;
 
       if (employer) {
+        const country = (employer.phoneCountry === "MY" || employer.phoneCountry === "IN") ? employer.phoneCountry : "SG";
         setFormData({
           employerId: employer.employerId || employer._id || "",
           companyLegalName: employer.companyLegalName || employer.companyName || "",
+          companyNumber: employer.companyNumber || "",
           hqAddress: employer.hqAddress || "",
           contactPersonName: employer.contactPersonName || employer.mainContactPersonName || (employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0 ? employer.mainContactPersons[0].name : "") || "",
           jobPosition: employer.jobPosition || employer.mainContactPersonPosition || "",
-          mainContactNumber: employer.mainContactNumber || "",
+          mainContactNumber: employer.mainContactNumber || employer.mainContactPersonNumber || "",
+          mainContactExtension: employer.mainContactExtension || "",
           alternateContactNumber: employer.alternateContactNumber || "",
+          alternateContactExtension: employer.alternateContactExtension || "",
           emailAddress: employer.emailAddress || employer.companyEmail || "",
           accountManager: employer.accountManager || "",
           industry: employer.industry || "",
           serviceAgreement: employer.serviceAgreement || employer.contractStatus || "",
-          contractExpiryDate: employer.contractExpiryDate || "",
+          contractExpiryDate: employer.contractExpiryDate || employer.contractEndDate || "",
           companyLogo: null,
           acraBizfileCert: null,
           serviceContract: null,
+          phoneCountry: country,
         });
 
         // Images come as complete URLs from backend
@@ -129,6 +138,7 @@ const EditEmployer = () => {
             name: outlet.name || outlet.outletName || "",
             managerName: outlet.managerName || "",
             contactNumber: outlet.contactNumber || "",
+            contactExtension: outlet.contactExtension || "",
             address: outlet.address || outlet.outletAddress || outlet.location || "",
             openingHours: outlet.openingHours || "",
             closingHours: outlet.closingHours || "",
@@ -177,7 +187,7 @@ const EditEmployer = () => {
   };
 
   const addOutlet = () => {
-    setOutlets([...outlets, { name: "", managerName: "", contactNumber: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
+    setOutlets([...outlets, { name: "", managerName: "", contactNumber: "", contactExtension: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
   };
 
   const openDeleteModal = (index: number) => {
@@ -199,16 +209,33 @@ const EditEmployer = () => {
     setConfirmDelete(false);
   };
 
-  const confirmDeleteOutlet = () => {
+  const confirmDeleteOutlet = async () => {
     if (!confirmDelete) {
       toast.error("Please confirm by checking the warning checkbox");
       return;
     }
 
-    if (deleteModal.outletIndex !== null) {
-      // Outlets are optional, so we can delete the last one
+    if (deleteModal.outletIndex === null) {
+      closeDeleteModal();
+      return;
+    }
+
+    const outlet = outlets[deleteModal.outletIndex];
+    const outletId = outlet?._id;
+    const employerIdForApi = id || formData.employerId;
+
+    if (outletId && employerIdForApi) {
+      try {
+        await axiosInstance.delete(`/admin/employers/${employerIdForApi}/outlets/${outletId}`);
+        setOutlets(outlets.filter((_, i) => i !== deleteModal.outletIndex));
+        toast.success("Outlet deleted successfully");
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || "Failed to delete outlet");
+      }
+    } else {
+      // New outlet (no _id) - just remove from local state
       setOutlets(outlets.filter((_, i) => i !== deleteModal.outletIndex));
-      toast.success("Outlet deleted successfully");
+      toast.success("Outlet removed");
     }
     closeDeleteModal();
   };
@@ -216,13 +243,37 @@ const EditEmployer = () => {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate email
+    const phoneCountry = formData.phoneCountry || "SG";
+    if (formData.mainContactNumber?.trim()) {
+      const mainResult = validatePhone(formData.mainContactNumber.trim(), phoneCountry);
+      if (!mainResult.valid) {
+        toast.error(mainResult.message || "Invalid contact number");
+        return;
+      }
+    }
+    if (formData.alternateContactNumber?.trim()) {
+      const altResult = validatePhone(formData.alternateContactNumber.trim(), phoneCountry);
+      if (!altResult.valid) {
+        toast.error(altResult.message || "Invalid alternate contact number");
+        return;
+      }
+    }
+    for (let i = 0; i < outlets.length; i++) {
+      const o = outlets[i];
+      if (o.contactNumber?.trim()) {
+        const oResult = validatePhone(o.contactNumber.trim(), phoneCountry);
+        if (!oResult.valid) {
+          toast.error(`Outlet ${i + 1}: ${oResult.message || "Invalid contact number"}`);
+          return;
+        }
+      }
+    }
+
     if (formData.emailAddress && !validateEmail(formData.emailAddress)) {
       toast.error("Please enter a valid email address");
       return;
     }
 
-    // Validate date format
     if (formData.contractExpiryDate && !validateDate(formData.contractExpiryDate)) {
       toast.error("Contract Expiry Date must be in YYYY-MM-DD format");
       return;
@@ -244,6 +295,32 @@ const EditEmployer = () => {
 
       if (response.status === 200 || response.status === 201) {
         toast.success("Employer updated successfully!");
+        const updated = response.data?.employer;
+        if (updated) {
+          setFormData(prev => ({
+            ...prev,
+            companyLegalName: updated.companyLegalName ?? prev.companyLegalName,
+            mainContactNumber: updated.mainContactNumber ?? prev.mainContactNumber,
+            mainContactExtension: updated.mainContactExtension ?? prev.mainContactExtension,
+            alternateContactNumber: updated.alternateContactNumber ?? prev.alternateContactNumber,
+            alternateContactExtension: updated.alternateContactExtension ?? prev.alternateContactExtension,
+            phoneCountry: (updated.phoneCountry === "MY" || updated.phoneCountry === "IN") ? updated.phoneCountry : "SG",
+          }));
+          if (Array.isArray(updated.outlets)) {
+            setOutlets(updated.outlets.map((o: any) => ({
+              name: o.name || o.outletName || "",
+              managerName: o.managerName || "",
+              contactNumber: o.contactNumber || "",
+              contactExtension: o.contactExtension || "",
+              address: o.address || o.outletAddress || o.location || "",
+              openingHours: o.openingHours || "",
+              closingHours: o.closingHours || "",
+              isActive: o.isActive !== undefined ? o.isActive : true,
+              _id: o._id || o.id,
+              barcode: o.barcode || "",
+            })));
+          }
+        }
         navigate("/employers");
       }
     } catch (error: any) {
@@ -414,10 +491,15 @@ const EditEmployer = () => {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
                       <option value="">Select Industry</option>
+                      <option value="Hospitality">Hospitality</option>
+                      <option value="IT">IT</option>
                       <option value="F&B">F&B (Food & Beverage)</option>
                       <option value="Hotel">Hotel</option>
                       <option value="Retail">Retail</option>
                       <option value="Logistics">Logistics</option>
+                      <option value="Healthcare">Healthcare</option>
+                      <option value="Education">Education</option>
+                      <option value="Construction">Construction</option>
                       <option value="Others">Others</option>
                     </select>
                   </div>
@@ -447,6 +529,24 @@ const EditEmployer = () => {
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Location (country) - drives validation */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Location (Country) <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="phoneCountry"
+                      value={formData.phoneCountry}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phoneCountry: e.target.value as "SG" | "MY" | "IN" }))}
+                      className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    >
+                      <option value="SG">+65 Singapore</option>
+                      <option value="MY">+60 Malaysia</option>
+                      <option value="IN">+91 India</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">Used for contact number validation and format.</p>
+                  </div>
+
                   {/* Name */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -478,7 +578,7 @@ const EditEmployer = () => {
                     />
                   </div>
 
-                  {/* Contact Number */}
+                  {/* Contact Number + Extension */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Contact Number <span className="text-red-500">*</span>
@@ -488,13 +588,26 @@ const EditEmployer = () => {
                       name="mainContactNumber"
                       value={formData.mainContactNumber}
                       onChange={handleChange}
-                      placeholder="Enter contact number"
+                      placeholder={getPlaceholder(formData.phoneCountry)}
                       required
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Extension <span className="text-gray-400 text-xs">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="mainContactExtension"
+                      value={formData.mainContactExtension}
+                      onChange={handleChange}
+                      placeholder="e.g. 101"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
 
-                  {/* Alternate Contact Number */}
+                  {/* Alternate Contact Number + Extension */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
@@ -504,7 +617,20 @@ const EditEmployer = () => {
                       name="alternateContactNumber"
                       value={formData.alternateContactNumber}
                       onChange={handleChange}
-                      placeholder="Enter alternate contact number"
+                      placeholder={getPlaceholder(formData.phoneCountry)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Alternate Extension <span className="text-gray-400 text-xs">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="alternateContactExtension"
+                      value={formData.alternateContactExtension}
+                      onChange={handleChange}
+                      placeholder="e.g. 102"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                   </div>
@@ -569,6 +695,7 @@ const EditEmployer = () => {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     >
                       <option value="">Select Status</option>
+                      <option value="Active">Active</option>
                       <option value="In Discussion">In Discussion</option>
                       <option value="Completed">Completed</option>
                       <option value="Expired">Expired</option>
@@ -733,8 +860,20 @@ const EditEmployer = () => {
                           type="tel"
                           value={outlet.contactNumber || ""}
                           onChange={(e) => handleOutletChange(index, "contactNumber", e.target.value)}
-                          placeholder="Enter outlet contact number"
+                          placeholder={getPlaceholder(formData.phoneCountry)}
                           required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Outlet Extension <span className="text-gray-400 text-xs">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={outlet.contactExtension ?? ""}
+                          onChange={(e) => handleOutletChange(index, "contactExtension", e.target.value)}
+                          placeholder="e.g. 201"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
