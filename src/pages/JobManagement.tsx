@@ -5,7 +5,6 @@ import {
   Clock,
   Edit,
   Eye,
-  Filter,
   PhoneCall,
   Plus,
   Trash2,
@@ -18,7 +17,6 @@ import DatePicker from "react-datepicker";
 import { FaCaretDown } from "react-icons/fa";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { axiosInstance } from "../lib/authInstances";
-import JobFilter from "../components/Filter/JobFilter";
 import { convertIdToFourDigits, formatDate } from "../lib/utils";
 import UpcomingDeploymentTable from "./UpcomingDeploymentTable";
 import { useAuth } from "../context/AuthContext";
@@ -90,7 +88,6 @@ const JobManagement = () => {
   // ✅ Initialize with dynamic date range (for UI display only, not applied by default)
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -131,18 +128,10 @@ const JobManagement = () => {
     return "Most Recent Required";
   };
 
-  const popupRef = useRef<HTMLDivElement>(null);
-
   const companyImage = "https://worklah.onrender.com";
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        popupRef.current &&
-        !popupRef.current.contains(event.target as Node)
-      ) {
-        setIsLimitPopupOpen(false);
-      }
       if (
         sortDropdownRef.current &&
         !sortDropdownRef.current.contains(event.target as Node)
@@ -151,14 +140,14 @@ const JobManagement = () => {
       }
     };
 
-    if (isLimitPopupOpen || isOpen) {
+    if (isOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     } else {
       document.removeEventListener("mousedown", handleClickOutside);
     }
 
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isLimitPopupOpen, isOpen]);
+  }, [isOpen]);
 
   const CustomInput = React.forwardRef(({ value, onClick, label }: any, ref: any) => (
     <div
@@ -411,8 +400,9 @@ const JobManagement = () => {
       navigate(`/jobs/${id}/modify`);
     }
     if (action === "Cancel Job") {
+      // API doc §11.9: PATCH /api/admin/jobs/:id/cancel
       axiosInstance
-        .put(`/jobs/${id}`, { status: 'Cancelled' })
+        .patch(`/admin/jobs/${id}/cancel`)
         .then((response) => {
           // Check for success field according to API spec
           if (response.data?.success !== false) {
@@ -550,44 +540,6 @@ const JobManagement = () => {
                 </button>
               </Link>
             )}
-            <div className="relative">
-              <button
-                className="p-3 sm:p-[14px] rounded-full shadow-md bg-dark hover:bg-slate-800 transition-all duration-200"
-                onClick={() => setIsLimitPopupOpen(!isLimitPopupOpen)}
-              >
-                <Filter
-                  className="w-5 h-5 sm:w-6 sm:h-6"
-                  color="#FFFFFF"
-                  fill="#ffffff"
-                />
-              </button>
-
-              {isLimitPopupOpen && (
-                <div
-                  ref={popupRef}
-                  className="absolute right-0 top-full mt-2 bg-white border rounded-xl shadow-xl z-50 min-w-[280px]"
-                >
-                  <JobFilter
-                    onApplyFilter={(newFilters) => {
-                      setQueryParams((prev) => ({
-                        ...prev,
-                        status: "", // Clear single status when using filter
-                        statuses: newFilters.status || [], // Use array of statuses from filter
-                        location: newFilters.location || newFilters.city?.[0] || "",
-                        search: newFilters.search || "",
-                        date: newFilters.date || "",
-                        rateType: newFilters.rateType || "",
-                        postedBy: newFilters.postedBy || "",
-                        page: 1,
-                      }));
-                      setActiveTab("All Jobs"); // Reset tab when filter is applied
-                      setIsLimitPopupOpen(false); // Close the filter popup
-                    }}
-                    onClose={() => setIsLimitPopupOpen(false)}
-                  />
-                </div>
-              )}
-            </div>
           </div>
         </div>
 

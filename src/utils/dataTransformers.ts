@@ -40,12 +40,16 @@ export const transformEmployer = (employer) => {
       : employer.mainContactPersonNumber) ||
     "N/A";
 
-  // Use image URL directly from API (already complete URL)
-  const companyLogo = employer.companyLogo || null;
+  // Only use logo from API when it's a real URL; do not use default/placeholder (backend should not set logo when none uploaded)
+  const rawLogo = employer.companyLogo;
+  const companyLogo =
+    rawLogo && typeof rawLogo === "string" && rawLogo.trim() !== "" && !/default|placeholder|empty/i.test(rawLogo)
+      ? rawLogo
+      : null;
 
   return {
     employerId: employerIdDisplay,
-    companyLogo: companyLogo,
+    companyLogo,
     companyLegalName: employer.companyLegalName || employer.companyName || "N/A",
     mainContactPerson,
     mainContactPersonPosition,
@@ -127,16 +131,29 @@ export const buildEmployerFormData = (formData: any, outlets: any[], industry: s
 
 /**
  * Build job data object for API
- * Matches backend API specification from BUACKEND_IMPLEMENTATION_GUIDE.md
+ * Matches COMPLETE_API_DOCUMENTATIONupdate.md §11.3 Create Job (Admin)
+ * Required: jobName, jobTitle, jobDescription, employerId, jobDate, location, industry, jobScope, shifts
  */
 export const buildJobData = (formData: any, shifts: any[], userRole: string, userId?: string) => {
   const isAdmin = userRole === "ADMIN";
   const isEmployer = userRole === "EMPLOYER";
   const finalEmployerId = isEmployer && userId ? userId : formData.employerId || null;
   const finalPostedBy = isAdmin ? "admin" : "employer";
+  // location is required by API; use outlet address or location details
+  const location =
+    formData.outletAddress?.trim() ||
+    formData.location?.trim() ||
+    formData.locationDetails?.trim() ||
+    "";
+  // jobScope is required (array of strings); use jobScope or skills
+  const jobScope = Array.isArray(formData.jobScope)
+    ? formData.jobScope
+    : Array.isArray(formData.skills)
+      ? formData.skills
+      : [];
 
   return {
-    jobDate: formData.jobDate || "",
+    jobName: formData.jobName || formData.jobTitle || "",
     jobTitle: formData.jobTitle || "",
     jobDescription: formData.jobDescription || "",
     employerId: finalEmployerId,
@@ -147,7 +164,10 @@ export const buildJobData = (formData: any, shifts: any[], userRole: string, use
     outletAddress: formData.useManualOutlet
       ? (formData.outletAddress || null)
       : null,
+    jobDate: formData.jobDate || "",
+    location,
     locationDetails: formData.locationDetails || null,
+    jobScope,
     totalPositions: formData.totalPositions || 1,
     foodHygieneCertRequired: formData.foodHygieneCertRequired || false,
     jobStatus: formData.jobStatus || "Active",
@@ -155,16 +175,21 @@ export const buildJobData = (formData: any, shifts: any[], userRole: string, use
     dressCode: formData.dressCode || null,
     skills: Array.isArray(formData.skills) ? formData.skills : [],
     shifts: shifts.map((shift) => ({
-      shiftDate: shift.shiftDate || formData.jobDate || "",
+      date: shift.shiftDate || shift.date || formData.jobDate || "",
       startTime: shift.startTime || "",
       endTime: shift.endTime || "",
-      breakDuration: shift.breakDuration || 0,
-      totalWorkingHours: shift.totalWorkingHours || 0,
+      breakHours: shift.breakDuration ?? shift.breakHours ?? 0,
+      breakType: shift.breakType || "Paid",
+      payRate: shift.rates ?? shift.payRate ?? shift.payPerHour ?? 0,
+      vacancy: shift.vacancy ?? 1,
+      standbyVacancy: shift.standbyVacancy ?? 0,
+      // Legacy fields for backends that still expect them
+      shiftDate: shift.shiftDate || formData.jobDate || "",
+      breakDuration: shift.breakDuration ?? 0,
+      totalWorkingHours: shift.totalWorkingHours ?? 0,
       rateType: shift.rateType || "Hourly",
-      rates: shift.rates || shift.payPerHour || 0,
-      totalWages: shift.totalWages || 0,
-      vacancy: shift.vacancy || 1, // Required: minimum 1
-      standbyVacancy: shift.standbyVacancy || 0, // Optional: default 0
+      rates: shift.rates ?? shift.payRate ?? 0,
+      totalWages: shift.totalWages ?? 0,
     })),
   };
 };

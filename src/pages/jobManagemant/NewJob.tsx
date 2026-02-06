@@ -36,6 +36,19 @@ interface Shift {
   standbyVacancy: number; // Optional: default 0 (matches backend spec)
 }
 
+// Normalize and deduplicate outlets from API (may use _id or id; avoid showing duplicate entries)
+function normalizeOutlets(raw: any[]): Array<{ id: string; address: string; name?: string }> {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const seen = new Set<string>();
+  return raw
+    .map((o: any) => ({
+      id: o._id || o.id || "",
+      address: o.address || o.outletAddress || o.location || "",
+      name: o.name || o.outletName || "",
+    }))
+    .filter((o) => o.id && !seen.has(o.id) && seen.add(o.id));
+}
+
 const NewJob: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -83,7 +96,7 @@ const NewJob: React.FC = () => {
       standbyVacancy: 0, // Optional: default 0 (matches backend spec)
     },
   ]);
-  
+
   const [skillInput, setSkillInput] = useState<string>(""); // Temporary input for adding skills
 
   const [rateTypes, setRateTypes] = useState<string[]>([]);
@@ -130,9 +143,9 @@ const NewJob: React.FC = () => {
           industry: industry,
         }));
 
-        // Fetch outlets for this employer
+        // Fetch outlets for this employer (normalize and dedupe so 2 outlets don't show as 3)
         if (employer?.outlets && employer.outlets.length > 0) {
-          setAvailableOutlets(employer.outlets);
+          setAvailableOutlets(normalizeOutlets(employer.outlets));
           setFormData((prev) => ({ ...prev, useManualOutlet: false }));
         } else {
           fetchEmployerOutlets(selectedEmployer);
@@ -165,7 +178,7 @@ const NewJob: React.FC = () => {
       // API accepts both MongoDB ObjectId and EMP-xxxx format
       const response = await axiosInstance.get(`/admin/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
-        setAvailableOutlets(response.data.employer.outlets);
+        setAvailableOutlets(normalizeOutlets(response.data.employer.outlets));
         setFormData((prev) => ({ ...prev, useManualOutlet: false }));
       } else {
         // No outlets available, allow manual entry
@@ -279,12 +292,12 @@ const NewJob: React.FC = () => {
     // Default to next day if there are existing shifts
     const defaultDate = shifts.length > 0 && shifts[shifts.length - 1].shiftDate
       ? (() => {
-          const lastDate = new Date(shifts[shifts.length - 1].shiftDate);
-          lastDate.setDate(lastDate.getDate() + 1);
-          return lastDate.toISOString().split("T")[0];
-        })()
+        const lastDate = new Date(shifts[shifts.length - 1].shiftDate);
+        lastDate.setDate(lastDate.getDate() + 1);
+        return lastDate.toISOString().split("T")[0];
+      })()
       : formData.jobDate || new Date().toISOString().split("T")[0];
-    
+
     const newShift: Shift = {
       id: Date.now(),
       shiftDate: defaultDate,
@@ -300,7 +313,7 @@ const NewJob: React.FC = () => {
     };
     setShifts([...shifts, newShift]);
   };
-  
+
   // Add skill to array
   const addSkill = () => {
     if (skillInput.trim()) {
@@ -311,7 +324,7 @@ const NewJob: React.FC = () => {
       setSkillInput("");
     }
   };
-  
+
   // Remove skill from array
   const removeSkill = (index: number) => {
     setFormData(prev => ({
@@ -319,7 +332,7 @@ const NewJob: React.FC = () => {
       skills: prev.skills.filter((_, i) => i !== index)
     }));
   };
-  
+
   // Handle Enter key for skill input
   const handleSkillKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -420,8 +433,22 @@ const NewJob: React.FC = () => {
       }
 
       if (response.status === 201 || response.status === 200) {
+        const createdJob = response.data?.job;
+        const jobId = createdJob?._id || createdJob?.id;
+        if (jobId) {
+          try {
+            const updated = await axiosInstance.get(`/admin/jobs/${jobId}`);
+            if (updated?.data?.success !== false && updated?.data?.job) {
+              toast.success("Job created. QR/Barcodes are attached to this job.");
+              navigate(`/jobs/${jobId}`, { state: { job: updated.data.job } });
+              return;
+            }
+          } catch (_) {
+            // Fallback: still navigate to list
+          }
+        }
         toast.success("Job posting created successfully!");
-        navigate("/jobs/job-management");
+        navigate(jobId ? `/jobs/${jobId}` : "/jobs/job-management");
       }
     } catch (error: any) {
       // Enhanced error handling with detailed messages
@@ -899,7 +926,7 @@ const NewJob: React.FC = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                       </div>
-                      
+
                       {/* Shift Timing */}
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">

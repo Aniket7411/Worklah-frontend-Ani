@@ -1,9 +1,11 @@
 # WorkLah - Complete API Documentation
 
-**Version:** 2.1  
-**Last Updated:** January 30, 2026  
+**Version:** 2.3  
+**Last Updated:** January 26, 2026  
 **Base URL:** `https://worklah-updated-dec.onrender.com` (Production)  
 **Development:** `http://localhost:3000/api`
+
+**Handover Notes:** Backend complete for Admin (Employer, Outlet, Job) and User (Apply, Clock-in/out, Barcode). Payment integration (Stripe) pending. App uses **Job Title** (and Responsibilities) in job detail UI; apply flow and saved jobs (client-side) are implemented.
 
 ---
 
@@ -54,12 +56,84 @@ This document is the single source of truth for **React Native (App)** and **Rea
 17. [Reports & Analytics](#17-reports--analytics-reactjs)
 18. [Settings & Configuration](#18-settings--configuration-reactjs)
 19. [Notifications (Admin)](#19-notifications-admin-reactjs)
-20. [QR Code Management](#20-qr-code-management-reactjs)
+20. [Timesheet Management](#20-timesheet-management-reactjs)
+21. [QR Code Management](#21-qr-code-management-reactjs)
+22. [Additional Admin Endpoints](#22-additional-admin-endpoints-reactjs)
 
 ### Common
 24. [Response Format Standards](#24-response-format-standards)
 25. [Error Handling](#25-error-handling)
 26. [Authentication & Authorization](#26-authentication--authorization)
+
+### React Native App – Implementation Notes
+- [Job Title & Responsibilities (UI)](#rn-job-title-and-responsibilities)
+- [Apply for Job Flow](#rn-apply-for-job-flow)
+- [Saved / Bookmark Jobs](#rn-saved-bookmark-jobs)
+
+---
+
+## React Native App – Implementation Notes
+
+### Job Title & Responsibilities (UI) {#rn-job-title-and-responsibilities}
+
+In the mobile app, the job detail screen shows:
+- **Job Title** section: Displays `jobTitle` (or `jobName`), `jobDescription`, and a **Responsibilities** sub-section.
+- **Responsibilities**: Rendered as a bullet list from the backend field **`jobScope`** (array of strings).
+
+Backend/Admin should continue to expose:
+- `jobTitle` – role title (e.g. "Waiter").
+- `jobDescription` – full text description.
+- `jobScope` – array of responsibility/duty bullets (shown under "Responsibilities" in the app).
+
+No API change required; only the app UI labels "Job Title" and "Responsibilities" instead of "Job Scope".
+
+---
+
+### Apply for Job Flow {#rn-apply-for-job-flow}
+
+End-to-end flow in the app:
+1. User opens **Job Detail** → selects a shift from **Available Shifts**.
+2. Taps **Select shifts to apply** → **JobApplyShifts** (review selected shift).
+3. Taps **Confirm Booking** → **JobConfirmBooking** (terms + medical waiver).
+4. Taps **Confirm Booking** → `POST /api/jobs/:jobId/apply` with body `{ shiftId, date }` (date in `YYYY-MM-DD`).
+
+Requirements:
+- **Profile must be complete**; otherwise backend returns `ProfileIncompleteError` with `profileCompletion` (app shows "Complete profile" and link to profile).
+- Backend returns clear `message` for: already applied, no vacancy, invalid shift, job not found.
+
+---
+
+### Saved / Bookmark Jobs {#rn-saved-bookmark-jobs}
+
+- **Current implementation:** Saved jobs are stored **only on the device** (AsyncStorage). No backend API is used.
+- **App behaviour:** User can bookmark from Job List and Job Detail; a **Saved jobs** screen lists bookmarked jobs and opens Job Detail by `jobId`.
+- **Optional future (Backend/Admin):** If sync across devices is needed, backend can add:
+  - `GET /api/user/saved-jobs` – return list of saved job IDs (or full job summaries).
+  - `POST /api/user/saved-jobs` – body `{ jobId }` to save.
+  - `DELETE /api/user/saved-jobs/:jobId` – to remove.
+  Until then, the app works fully with local-only bookmarks.
+
+---
+
+## Admin Panel (ReactJS) – Quick Start
+
+**Use sections 8–22** for Admin Panel development.
+
+| Step | Endpoint | Notes |
+|------|----------|-------|
+| 1. Login | `POST /api/admin/login` | Body: `{ email, password }` → returns `token` |
+| 2. Auth header | `Authorization: Bearer <token>` | Required for all admin endpoints |
+| 3. Dashboard | `GET /api/admin/dashboard/stats` | Stats for admin home |
+| 4. Create employer | `POST /api/admin/employers` | **Use `multipart/form-data`** for file uploads; outlets optional |
+| 5. Get employers | `GET /api/admin/employers` | Includes outlets with `barcode` |
+| 6. Create job | `POST /api/admin/jobs/create` | Multiple shifts supported |
+| 7. Get applications | `GET /api/admin/applications` | Filter by status (Pending, Approved, Rejected) |
+| 8. Approve | `POST /api/admin/applications/:applicationId/approve` | No body required |
+| 9. Reject | `POST /api/admin/applications/:applicationId/reject` | Optional body: `{ reason }` |
+| 10. Payments | `GET /api/admin/payments/transactions` | Filter by status; approve via `PUT .../transactions/:transactionId/approve` |
+| 11. Notifications | `GET /api/admin/notifications` | Use `applicationId` / `jobId` to open application detail |
+
+**Important:** Always check `success` before using response data; show `message` for user feedback. Employer create/update uses **multipart/form-data**.
 
 ---
 
@@ -536,14 +610,17 @@ Authorization: Bearer <token>
 Authorization: Bearer <token>
 ```
 
+**URL Parameter:** `jobId` – Job ID (from URL path)
+
 **Request Body:**
 ```json
 {
-  "userId": "507f1f77bcf86cd799439011",
   "shiftId": "507f1f77bcf86cd799439014",
   "date": "2025-01-15"
 }
 ```
+
+**Note:** `userId` is taken from the auth token. Do not send userId in body.
 
 **Success Response (200):**
 ```json
@@ -917,7 +994,45 @@ Authorization: Bearer <token>
 ---
 
 ## 7.2 Clock In
-**Endpoint:** `POST /api/attendance/clock-in`
+**Endpoint:** `POST /api/qr/clock-in`
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Request Body (one of):**
+```json
+{
+  "jobId": "507f1f77bcf86cd799439011",
+  "shiftId": "507f1f77bcf86cd799439020"
+}
+```
+Or after scanning QR, send the scanned data:
+```json
+{
+  "qrData": "{\"jobId\":\"...\",\"shiftId\":\"...\",\"barcode\":\"JOB-0001\",\"outletId\":\"...\"}"
+}
+```
+Or both jobId/shiftId and qrData.
+
+**Requirements:** User must have an **approved** (adminStatus: Confirmed) application for this job/shift.
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Clocked in successfully",
+  "applicationId": "507f1f77bcf86cd799439016",
+  "attendanceId": "507f1f77bcf86cd799439016",
+  "clockInTime": "2025-01-30T09:00:00.000Z"
+}
+```
+
+---
+
+## 7.3 Clock Out
+**Endpoint:** `POST /api/qr/clock-out`
 
 **Headers:**
 ```
@@ -928,44 +1043,18 @@ Authorization: Bearer <token>
 ```json
 {
   "jobId": "507f1f77bcf86cd799439011",
-  "applicationId": "507f1f77bcf86cd799439016",
-  "latitude": 1.3521,
-  "longitude": 103.8198
+  "shiftId": "507f1f77bcf86cd799439020"
 }
 ```
+Optional: Include `applicationId` or `attendanceId` if you have it (from clock-in response) for faster lookup.
 
 **Success Response (200):**
 ```json
 {
   "success": true,
-  "message": "Clocked in successfully"
-}
-```
-
----
-
-## 7.3 Clock Out
-**Endpoint:** `POST /api/qr/clock-out` or `POST /api/attendance/clock-out`
-
-**Headers:**
-```
-Authorization: Bearer <token>
-```
-
-**Request Body:**
-```json
-{
-  "attendanceId": "507f1f77bcf86cd799439018",
-  "latitude": 1.3521,
-  "longitude": 103.8198
-}
-```
-
-**Success Response (200):**
-```json
-{
-  "success": true,
-  "message": "Clocked out successfully"
+  "message": "Clocked out successfully",
+  "clockOutTime": "2025-01-30T17:00:00.000Z",
+  "totalHours": 8
 }
 ```
 
@@ -982,21 +1071,26 @@ Authorization: Bearer <token>
 **Request Body:**
 ```json
 {
-  "qrCodeData": "QR_CODE_DATA",
-  "latitude": 1.3521,
-  "longitude": 103.8198
+  "qrData": "{\"jobId\":\"...\",\"shiftId\":\"...\",\"barcode\":\"JOB-0001\",\"outletId\":\"...\"}"
 }
 ```
+`qrData` is the raw string decoded from the QR code (JSON string).
 
 **Success Response (200):**
 ```json
 {
   "success": true,
-  "message": "QR code scanned successfully",
+  "valid": true,
   "jobId": "507f1f77bcf86cd799439011",
-  "jobTitle": "Waiter Position"
+  "shiftId": "507f1f77bcf86cd799439020",
+  "jobTitle": "Waiter Position",
+  "jobDate": "2025-01-30",
+  "outlet": { "name": "Orchard Branch", "address": "123 Orchard Road" },
+  "employer": { "name": "ABC Restaurant Pte Ltd" },
+  "message": "QR code is valid"
 }
 ```
+Use `jobId` and `shiftId` for clock-in.
 
 ---
 
@@ -1069,10 +1163,12 @@ or
 ```json
 {
   "success": false,
-  "message": "Invalid barcode. No outlet found for this code.",
+  "message": "Invalid barcode. No outlet or job found for this code.",
   "error": "InvalidBarcode"
 }
 ```
+
+**Job barcode response:** When barcode matches a job (jobId or job.barcodes), response includes `barcodeType: "job"`, `jobId`, and same `shifts` structure.
 
 **Notes:**
 - Outlet `barcode` is returned when getting employer/outlet (see Employer Management). Each outlet has a unique barcode for shift login.
@@ -3640,10 +3736,11 @@ Authorization: Bearer <token>
 - [ ] User registration
 - [ ] OTP login flow
 - [ ] Browse jobs with filters
-- [ ] View job details (with deadline and status)
-- [ ] Apply for job
+- [ ] View job details (Job Title, Responsibilities, requirements, deadline and status)
+- [ ] Apply for job (select shift → JobApplyShifts → JobConfirmBooking → submit)
 - [ ] View applications (with status filter)
 - [ ] Cancel application
+- [ ] Bookmark / save jobs (Saved jobs screen, from Home header)
 - [ ] View ongoing/completed/cancelled jobs
 - [ ] View notifications
 - [ ] Clock in/out
@@ -3672,8 +3769,8 @@ Authorization: Bearer <token>
 
 1. **Login:** `POST /api/user/login` → `POST /api/user/verify-otp`
 2. **Get Jobs:** `GET /api/jobs`
-3. **Get Job Details:** `GET /api/jobs/:id`
-4. **Apply:** `POST /api/jobs/:jobId/apply`
+3. **Get Job Details:** `GET /api/jobs/:id` (app shows Job Title, Responsibilities from `jobScope`, requirements)
+4. **Apply:** `POST /api/jobs/:jobId/apply` — body: `{ shiftId, date }` (YYYY-MM-DD)
 5. **Get Applications:** `GET /api/user/applications`
 6. **Get Upcoming Shifts:** `GET /api/qr/upcoming`
 7. **Cancel Application:** `POST /api/jobs/:jobId/cancel`
@@ -3681,6 +3778,7 @@ Authorization: Bearer <token>
 9. **Validate Barcode (shift check-in):** `POST /api/qr/validate-barcode` — body: `{ "barcode" }` or `{ "userId" }`
 10. **Clock In/Out:** `POST /api/qr/clock-in`, `POST /api/qr/clock-out`
 11. **Wallet:** `GET /api/wallet`
+12. **Saved jobs:** Client-side only (AsyncStorage); optional future: `GET/POST/DELETE /api/user/saved-jobs`
 
 ## ReactJS Admin - Most Used Endpoints
 
@@ -3693,14 +3791,14 @@ Authorization: Bearer <token>
 7. **Approve Application:** `POST /api/admin/applications/:applicationId/approve`
 8. **Reject Application:** `POST /api/admin/applications/:applicationId/reject`
 9. **Admin Notifications (new applicants):** `GET /api/admin/notifications` — use `applicationId` in each notification to open application detail
-10. **Payment (release/history):** `GET /api/admin/payments/transactions`, `PUT /api/admin/payments/transactions/:id/approve`
+10. **Payment (release/history):** `GET /api/admin/payments/transactions`, `PUT /api/admin/payments/transactions/:transactionId/approve`
 
 ---
 
-**Document Version:** 2.0  
+**Document Version:** 2.3  
 **Last Updated:** January 26, 2026  
 **Backend Completion:** ~85-90%  
-**Status:** ✅ Ready for Frontend Integration
+**Status:** ✅ Ready for Frontend Integration. App: Job Title + Responsibilities UI, full apply flow, saved jobs (client-side).
 
 ---
 

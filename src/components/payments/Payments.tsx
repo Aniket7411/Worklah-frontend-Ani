@@ -152,14 +152,15 @@ export default function Payments({ data }: PaymentsProps) {
     }
 
     try {
-      // Use admin cashout endpoints - for processing/rejecting transactions
-      const endpoint = newStatus === "completed" 
-        ? `/admin/cashout/${paymentId}/process`
-        : `/admin/cashout/${paymentId}/reject`;
-      const response = await axiosInstance.post(endpoint, {
-        status: newStatus,
-        rejectionReason: rejectionReasons[paymentId] || "",
-      });
+      // API doc §16.2 / §16.3: PUT payments/transactions/:id/approve | .../reject
+      const isApprove = newStatus === "Approved" || newStatus === "completed";
+      const endpoint = isApprove
+        ? `/admin/payments/transactions/${paymentId}/approve`
+        : `/admin/payments/transactions/${paymentId}/reject`;
+      const payload = isApprove
+        ? undefined
+        : { reason: rejectionReasons[paymentId] || "" };
+      const response = await axiosInstance.put(endpoint, payload);
 
       // Check for success field according to API spec
       if (response.data?.success === false) {

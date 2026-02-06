@@ -22,8 +22,29 @@ import {
 import { Link } from "react-router-dom";
 import { transformEmployerList } from "../../utils/dataTransformers";
 
+interface DeleteModalState {
+  isOpen: boolean;
+  employerId: string | null;
+  employerName: string;
+}
+
+interface EmployerItem {
+  employerId: string;
+  companyLogo: string | null;
+  companyLegalName: string;
+  mainContactPerson: string;
+  mainContactPersonPosition: string;
+  mainContactNumber: string;
+  companyEmail: string;
+  outlets: number;
+  serviceAgreement: string;
+  industry: string;
+  employerOriginalId: string;
+  employerIdForAPI: string;
+}
+
 const Employers = () => {
-  const [employers, setEmployers] = useState([]);
+  const [employers, setEmployers] = useState<EmployerItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -60,7 +81,7 @@ const Employers = () => {
       const pagination = response.data.pagination || {};
       setTotalPages(pagination.totalPages || response.data.totalPages || 1);
       setTotalItems(pagination.totalItems || response.data.totalItems || employerData.length);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching employer data:", error);
       toast.error(error?.response?.data?.message || "Failed to fetch employers. Please try again later.");
       setEmployers([]);
@@ -112,12 +133,12 @@ const Employers = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  const getEmployerApiId = useCallback((id) => {
+  const getEmployerApiId = useCallback((id: string) => {
     const employer = employers.find((emp) => emp.employerOriginalId === id);
     return employer?.employerIdForAPI || id;
   }, [employers]);
 
-  const handleView = useCallback((id) => {
+  const handleView = useCallback((id: string) => {
     navigate(`/employers/${getEmployerApiId(id)}`);
   }, [navigate, getEmployerApiId]);
 
@@ -125,7 +146,7 @@ const Employers = () => {
     navigate(`/employers/${getEmployerApiId(id)}/edit`);
   }, [navigate, getEmployerApiId]);
 
-  const handleDeleteClick = useCallback((id, name) => {
+  const handleDeleteClick = useCallback((id: string, name: string) => {
     setDeleteModal({
       isOpen: true,
       employerId: getEmployerApiId(id),
@@ -138,17 +159,17 @@ const Employers = () => {
 
     setIsDeleting(true);
     try {
-      const response = await axiosInstance.delete(`/admin/employers/${deleteModal.employerId}`);
+      const res = await axiosInstance.delete(`/admin/employers/${deleteModal.employerId}`);
 
-      if (response.data?.success === false) {
-        toast.error(response.data?.message || "Failed to delete employer");
+      if (res.data?.success === false) {
+        toast.error(res.data?.message || "Failed to delete employer");
         return;
       }
 
       toast.success("Employer deleted successfully");
       setDeleteModal({ isOpen: false, employerId: null, employerName: "" });
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting employer:", error);
       toast.error(error?.response?.data?.message || "Failed to delete employer. Please try again.");
     } finally {
@@ -156,7 +177,7 @@ const Employers = () => {
     }
   }, [deleteModal, fetchData]);
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case "Completed":
         return "bg-emerald-50 text-emerald-700 border-emerald-200";

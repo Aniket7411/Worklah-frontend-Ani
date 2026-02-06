@@ -38,6 +38,19 @@ interface Shift {
   standbyVacancy?: number; // Optional: default 0 (matches backend spec)
 }
 
+// Normalize and deduplicate outlets from API (avoid showing duplicate entries)
+function normalizeOutlets(raw: any[]): Array<{ id: string; address: string; name?: string }> {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+  const seen = new Set<string>();
+  return raw
+    .map((o: any) => ({
+      id: o._id || o.id || "",
+      address: o.address || o.outletAddress || o.location || "",
+      name: o.name || o.outletName || "",
+    }))
+    .filter((o) => o.id && !seen.has(o.id) && seen.add(o.id));
+}
+
 const ModifyJob: React.FC = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
@@ -110,7 +123,7 @@ const ModifyJob: React.FC = () => {
     if (selectedEmployer) {
       const employer = employers.find((e) => e.id === selectedEmployer);
       if (employer?.outlets && employer.outlets.length > 0) {
-        setAvailableOutlets(employer.outlets);
+        setAvailableOutlets(normalizeOutlets(employer.outlets));
         setFormData((prev) => ({ ...prev, useManualOutlet: false }));
       } else {
         fetchEmployerOutlets(selectedEmployer);
@@ -139,7 +152,7 @@ const ModifyJob: React.FC = () => {
       // API accepts both MongoDB ObjectId and EMP-xxxx format
       const response = await axiosInstance.get(`/admin/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
-        setAvailableOutlets(response.data.employer.outlets);
+        setAvailableOutlets(normalizeOutlets(response.data.employer.outlets));
         setFormData((prev) => ({ ...prev, useManualOutlet: false }));
       } else {
         // No outlets available, allow manual entry

@@ -54,13 +54,17 @@ const QRCodeManagement: React.FC = () => {
   const [selectedOutletForGen, setSelectedOutletForGen] = useState<string>("");
   const [selectedJobForGen, setSelectedJobForGen] = useState<string>("");
   const [jobsForGen, setJobsForGen] = useState<any[]>([]);
+  const [jobFilterId, setJobFilterId] = useState<string>("");
   const qrRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchEmployers();
-    fetchQRCodes();
   }, []);
+
+  useEffect(() => {
+    fetchQRCodes();
+  }, [jobFilterId]);
 
   const fetchEmployers = async () => {
     try {
@@ -77,19 +81,19 @@ const QRCodeManagement: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      // Fetch existing QR codes from backend
-      // Endpoint: GET /admin/qr-codes (baseURL already includes /api)
-      const response = await axiosInstance.get("/admin/qr-codes");
-      
+      const params = new URLSearchParams();
+      if (jobFilterId) params.set("jobId", jobFilterId);
+      const url = `/admin/qr-codes${params.toString() ? `?${params.toString()}` : ""}`;
+      const response = await axiosInstance.get(url);
       if (response?.data?.success !== false && response?.data?.qrCodes) {
         setQrCodes(response.data.qrCodes);
+      } else if (response?.data?.success !== false && response?.data?.barcodes) {
+        setQrCodes(response.data.barcodes);
       } else {
-        // If response doesn't have qrCodes, fallback to generating from employers
         await generateQRCodesFromEmployers();
       }
     } catch (err: any) {
-      // If endpoint returns 404 or other error, fallback to generating from employers
-      console.log("QR codes API not available, generating from employers:", err?.response?.status);
+      if (jobFilterId) setJobFilterId("");
       await generateQRCodesFromEmployers();
     } finally {
       setLoading(false);
@@ -101,11 +105,11 @@ const QRCodeManagement: React.FC = () => {
       const response = await axiosInstance.get("/admin/employers?limit=100");
       if (response.data?.success !== false && response.data?.employers) {
         const allQRCodes: QRCode[] = [];
-        
+
         response.data.employers.forEach((employer: any, empIndex: number) => {
           const employerId = employer.employerId || employer._id || `EMP${empIndex + 1}`;
           const employerLetter = String.fromCharCode(65 + empIndex); // A, B, C...
-          
+
           if (employer.outlets && Array.isArray(employer.outlets) && employer.outlets.length > 0) {
             employer.outlets.forEach((outlet: any, outletIndex: number) => {
               const qrCodeId = `${employerLetter}-${outletIndex + 1}`;
@@ -124,7 +128,7 @@ const QRCodeManagement: React.FC = () => {
             });
           }
         });
-        
+
         setQrCodes(allQRCodes);
       }
     } catch (err: any) {
@@ -137,7 +141,7 @@ const QRCodeManagement: React.FC = () => {
     // Find employer index
     const empIndex = employers.findIndex(emp => (emp._id === employerId || emp.employerId === employerId));
     const employerLetter = empIndex >= 0 ? String.fromCharCode(65 + empIndex) : "X";
-    
+
     // Find outlet index for this employer
     const employer = employers.find(emp => (emp._id === employerId || emp.employerId === employerId));
     if (employer?.outlets) {
@@ -163,7 +167,7 @@ const QRCodeManagement: React.FC = () => {
   const downloadQRCode = (qrCode?: QRCode) => {
     const targetQR = qrCode || selectedQRCode;
     if (!targetQR) return;
-    
+
     if (qrRef.current) {
       const canvas = qrRef.current.querySelector("canvas");
       if (canvas) {
@@ -224,7 +228,7 @@ const QRCodeManagement: React.FC = () => {
       // If API doesn't exist yet, create locally
       const employer = employers.find(emp => emp._id === selectedEmployerForGen);
       const outlet = employer?.outlets?.find(out => out._id === selectedOutletForGen);
-      
+
       if (employer && outlet) {
         const qrCodeId = generateQRCodeId(selectedEmployerForGen, selectedOutletForGen);
         const newQRCode: QRCode = {
@@ -240,7 +244,7 @@ const QRCodeManagement: React.FC = () => {
           status: "Active",
           generatedAt: new Date().toISOString(),
         };
-        
+
         setQrCodes(prev => [...prev.filter(qr => qr.id !== newQRCode.id), newQRCode]);
         toast.success("QR Code generated successfully");
         setShowGenerateModal(false);
@@ -259,9 +263,9 @@ const QRCodeManagement: React.FC = () => {
       // Use _id if available (from backend), otherwise use the provided ID
       const qrCode = qrCodes.find(qr => qr._id === qrCodeIdOrId || qr.id === qrCodeIdOrId || qr.qrCodeId === qrCodeIdOrId);
       const deleteId = qrCode?._id || qrCodeIdOrId;
-      
+
       const response = await axiosInstance.delete(`/admin/qr-codes/${deleteId}`).catch(() => null);
-      
+
       if (response?.data?.success !== false) {
         toast.success("QR Code deleted successfully");
         // Remove from local state
@@ -271,7 +275,7 @@ const QRCodeManagement: React.FC = () => {
         setQrCodes(prev => prev.filter(qr => qr.id !== qrCodeIdOrId && qr._id !== deleteId));
         toast.success("QR Code deleted successfully");
       }
-      
+
       fetchQRCodes();
       if (selectedQRCode?.id === qrCodeIdOrId || selectedQRCode?._id === deleteId) {
         setSelectedQRCode(null);
@@ -282,13 +286,13 @@ const QRCodeManagement: React.FC = () => {
   };
 
   const filteredQRCodes = qrCodes.filter(qr => {
-    const matchesSearch = searchQuery === "" || 
+    const matchesSearch = searchQuery === "" ||
       qr.employerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       qr.outletName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       qr.qrCodeId.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     const matchesEmployer = selectedEmployerFilter === "all" || qr.employerId === selectedEmployerFilter;
-    
+
     return matchesSearch && matchesEmployer;
   });
 
@@ -380,8 +384,8 @@ const QRCodeManagement: React.FC = () => {
               {filteredQRCodes.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                    {searchQuery || selectedEmployerFilter !== "all" 
-                      ? "No QR codes found matching your filters" 
+                    {searchQuery || selectedEmployerFilter !== "all"
+                      ? "No QR codes found matching your filters"
                       : "No QR codes generated yet. Click 'Generate QR Code' to create one."}
                   </td>
                 </tr>
@@ -389,9 +393,8 @@ const QRCodeManagement: React.FC = () => {
                 filteredQRCodes.map((qr) => (
                   <tr
                     key={qr.id}
-                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${
-                      selectedQRCode?.id === qr.id ? "bg-blue-50" : ""
-                    }`}
+                    className={`hover:bg-gray-50 cursor-pointer transition-colors ${selectedQRCode?.id === qr.id ? "bg-blue-50" : ""
+                      }`}
                     onClick={() => setSelectedQRCode(qr)}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -420,9 +423,8 @@ const QRCodeManagement: React.FC = () => {
                       <span className="text-sm text-gray-600">{qr.outletAddress}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        qr.status === "Active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
-                      }`}>
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${qr.status === "Active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"
+                        }`}>
                         {qr.status || "Active"}
                       </span>
                     </td>
@@ -539,7 +541,7 @@ const QRCodeManagement: React.FC = () => {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

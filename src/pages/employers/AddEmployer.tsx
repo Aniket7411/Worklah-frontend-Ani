@@ -22,6 +22,7 @@ import {
 import toast from "react-hot-toast";
 import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
 import { buildEmployerFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
+import { validatePhone, getPlaceholder, PHONE_RULES } from "../../utils/phoneValidation";
 
 // Google Maps API type declaration
 declare global {
@@ -130,6 +131,7 @@ const AddEmployer = () => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generateCredentials, setGenerateCredentials] = useState(true);
+  const [phoneCountry, setPhoneCountry] = useState<keyof typeof PHONE_RULES>("SG");
   const [employerCredentials, setEmployerCredentials] = useState<{
     email: string;
     password: string;
@@ -269,6 +271,18 @@ const AddEmployer = () => {
       toast.error("Contact number is required");
       return false;
     }
+    const phoneResult = validatePhone(formData.mainContactNumber.trim(), phoneCountry);
+    if (!phoneResult.valid) {
+      toast.error(phoneResult.message || "Invalid contact number");
+      return false;
+    }
+    if (formData.alternateContactNumber?.trim()) {
+      const altResult = validatePhone(formData.alternateContactNumber.trim(), phoneCountry);
+      if (!altResult.valid) {
+        toast.error(altResult.message || "Invalid alternate contact number");
+        return false;
+      }
+    }
 
     if (!formData.emailAddress?.trim()) {
       toast.error("Email address is required");
@@ -303,6 +317,11 @@ const AddEmployer = () => {
           toast.error(`Outlet ${i + 1}: Outlet Contact Number is required`);
           return false;
         }
+        const outletPhoneResult = validatePhone(outlet.contactNumber.trim(), phoneCountry);
+        if (!outletPhoneResult.valid) {
+          toast.error(`Outlet ${i + 1}: ${outletPhoneResult.message || "Invalid contact number"}`);
+          return false;
+        }
         if (!outlet.address?.trim()) {
           toast.error(`Outlet ${i + 1}: Outlet Address is required`);
           return false;
@@ -311,7 +330,7 @@ const AddEmployer = () => {
     }
 
     return true;
-  }, [formData, showCustomIndustry, outlets]);
+  }, [formData, showCustomIndustry, outlets, phoneCountry]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -643,23 +662,34 @@ const AddEmployer = () => {
                   />
                 </div>
 
-                {/* Contact Number */}
+                {/* Contact Number – India (91) 10 digits, Singapore 8, Malaysia 10 or 11 */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Contact Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="tel"
-                    name="mainContactNumber"
-                    value={formData.mainContactNumber ?? ""}
-                    onChange={handleChange}
-                    placeholder="Enter contact number"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={phoneCountry}
+                      onChange={(e) => setPhoneCountry(e.target.value as keyof typeof PHONE_RULES)}
+                      className="w-32 px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                    >
+                      <option value="IN">+91 India</option>
+                      <option value="SG">+65 Singapore</option>
+                      <option value="MY">+60 Malaysia</option>
+                    </select>
+                    <input
+                      type="tel"
+                      name="mainContactNumber"
+                      value={formData.mainContactNumber ?? ""}
+                      onChange={handleChange}
+                      placeholder={getPlaceholder(phoneCountry)}
+                      required
+                      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
                 </div>
 
-                {/* Alternate Contact Number */}
+                {/* Alternate Contact Number (same country as main) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
@@ -669,7 +699,7 @@ const AddEmployer = () => {
                     name="alternateContactNumber"
                     value={formData.alternateContactNumber ?? ""}
                     onChange={handleChange}
-                    placeholder="Enter alternate contact number"
+                    placeholder={getPlaceholder(phoneCountry)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>

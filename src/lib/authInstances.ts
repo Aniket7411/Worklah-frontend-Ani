@@ -2,14 +2,11 @@ import axios from 'axios'
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
-// Support environment-based API URLs
-// Use environment variable if available, otherwise default to localhost for development
-// Production URL: https://worklah-updated-dec.onrender.com (as per API documentation)
-// Development: http://localhost:3000/api
-
-// Production: https://worklah-updated-dec.onrender.com (append /api in base)
-const API_BASE_URL =  "https://worklah-updated-dec.onrender.com/api"
-// const API_BASE_URL = 'http://localhost:3000/api'; // For local development
+// Single source of truth: COMPLETE_API_DOCUMENTATIONupdate.md (v2.3)
+// Base URL: Production https://worklah-updated-dec.onrender.com/api | Dev http://localhost:3000/api
+const API_BASE_URL =
+  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
+  "http://localhost:3000/api";
 // ⚠️ IMPORTANT: Base URL already includes '/api'
 // When making requests, use endpoints WITHOUT '/api' prefix
 // ✅ Correct: '/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/admin/login

@@ -24,16 +24,16 @@ export default function OutletFilter() {
         setLoading(true);
         const response = await axiosInstance.get("/admin/outlets");
         const outletsData = response.data.data || response.data.outlets || [];
-        
+
         const formattedOutlets: Outlet[] = outletsData.map((outlet: any) => ({
           id: outlet._id || outlet.id || '',
           name: outlet.outletName || outlet.name || 'Unknown',
           location: outlet.outletAddress || outlet.location || 'N/A',
-          logo: outlet.outletImage 
+          logo: outlet.outletImage
             ? `${IMAGE_BASE_URL}${outlet.outletImage}`
             : '/assets/company.png',
         }));
-        
+
         setOutlets(formattedOutlets);
       } catch (error) {
         console.error('Error fetching outlets:', error);
@@ -79,22 +79,22 @@ export default function OutletFilter() {
           ) : (
             <div className="pr-8">
               {filteredOutlets.map((outlet) => (
-              <div
-                key={outlet.id}
-                className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer border-b"
-              >
-                <div className="w-6 h-6 relative flex-shrink-0">
-                  <img
-                    src={outlet.logo || "/placeholder.svg"}
-                    alt={outlet.name}
-                    className="object-contain"
-                  />
+                <div
+                  key={outlet.id}
+                  className="flex items-start gap-3 p-4 hover:bg-gray-50 cursor-pointer border-b"
+                >
+                  <div className="w-6 h-6 relative flex-shrink-0 rounded bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-600">
+                    {outlet.logo ? (
+                      <img src={outlet.logo} alt={outlet.name} className="w-full h-full object-contain rounded" />
+                    ) : (
+                      <span>{(outlet.name || "O").charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">{outlet.name}</div>
+                    <div className="text-xs text-gray-500">{outlet.location}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-sm font-medium">{outlet.name}</div>
-                  <div className="text-xs text-gray-500">{outlet.location}</div>
-                </div>
-              </div>
               ))}
             </div>
           )}
@@ -104,11 +104,10 @@ export default function OutletFilter() {
             {alphabet.map((letter) => (
               <button
                 key={letter}
-                className={`w-6 h-6 flex items-center justify-center hover:text-gray-600 ${
-                  selectedLetter === letter
+                className={`w-6 h-6 flex items-center justify-center hover:text-gray-600 ${selectedLetter === letter
                     ? "text-blue-600 font-bold"
                     : "text-gray-400"
-                }`}
+                  }`}
                 onClick={() => {
                   if (selectedLetter === letter) {
                     setSelectedLetter(null);

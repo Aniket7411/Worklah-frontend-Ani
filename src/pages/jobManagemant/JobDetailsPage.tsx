@@ -12,6 +12,7 @@ import {
   MoreVertical,
   PhoneCall,
   Plus,
+  RefreshCw,
   Settings,
   UserCheck,
 } from "lucide-react";
@@ -221,8 +222,18 @@ const JobDetailsPage = () => {
               <button
                 className="p-2 rounded-full shadow-md bg-white hover:bg-gray-50 transition-colors"
                 onClick={() => navigate(-1)}
+                aria-label="Back"
               >
                 <ArrowLeft className="w-6 h-6 text-gray-700" />
+              </button>
+              <button
+                type="button"
+                onClick={() => fetchJobDetails()}
+                className="p-2 rounded-full shadow-md bg-white hover:bg-gray-50 transition-colors"
+                aria-label="Refresh job data"
+                title="Refresh to get updated barcodes/QR"
+              >
+                <RefreshCw className="w-5 h-5 text-gray-600" />
               </button>
               <div className="flex-1">
                 <div className="flex flex-wrap items-center gap-3 mb-2">
@@ -282,8 +293,8 @@ const JobDetailsPage = () => {
                   </p>
                   {jobsData.postedBy && (
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${jobsData.postedBy === "admin"
-                        ? "bg-blue-100 text-blue-700 border border-blue-200"
-                        : "bg-green-100 text-green-700 border border-green-200"
+                      ? "bg-blue-100 text-blue-700 border border-blue-200"
+                      : "bg-green-100 text-green-700 border border-green-200"
                       }`}>
                       {jobsData.postedBy === "admin" ? "Admin Post" : "Employer Post"}
                     </span>
@@ -305,6 +316,31 @@ const JobDetailsPage = () => {
                 )}
               </div>
             </div>
+
+            {/* Barcodes / QR codes attached to this job (from API; refetch to get updated data) */}
+            {(jobsData.barcodes?.length > 0 || jobsData.qrCodes?.length > 0) && (
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-blue-900">Barcodes / QR codes for this job</h3>
+                  <button
+                    type="button"
+                    onClick={() => fetchJobDetails()}
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Refresh
+                  </button>
+                </div>
+                <ul className="space-y-1 text-sm">
+                  {(jobsData.barcodes || jobsData.qrCodes || []).map((item: any, i: number) => (
+                    <li key={i} className="font-mono text-blue-800">
+                      {typeof item === "string" ? item : (item?.barcode || item?.qrCodeId || item?.id || item?.value || "—")}
+                      {item?.outletName && <span className="text-gray-600 ml-2">({item.outletName})</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Key Info Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">

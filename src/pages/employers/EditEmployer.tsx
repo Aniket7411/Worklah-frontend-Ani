@@ -60,7 +60,7 @@ const EditEmployer = () => {
     serviceContract: "",
   });
 
-  const [outlets, setOutlets] = useState([{ name: "", managerName: "", contactNumber: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
+  const [outlets, setOutlets] = useState<Array<{ name: string; managerName: string; contactNumber: string; address: string; openingHours: string; closingHours: string; isActive: boolean; _id?: string; barcode?: string }>>([]);
   const [showAccountManager, setShowAccountManager] = useState(false);
 
   // Delete confirmation modal state
@@ -122,6 +122,7 @@ const EditEmployer = () => {
         });
 
         // Handle outlets - simplified structure (barcode is read-only from API for shift check-in)
+        // When no outlets: start with empty array so "Add Outlet" count matches what user expects (e.g. 2 clicks = 2 outlets)
         if (employer.outlets && Array.isArray(employer.outlets) && employer.outlets.length > 0) {
           // @ts-ignore - outlet type from API
           setOutlets(employer.outlets.map((outlet) => ({
@@ -136,7 +137,7 @@ const EditEmployer = () => {
             barcode: outlet.barcode || "",
           })));
         } else {
-          setOutlets([{ name: "", managerName: "", contactNumber: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
+          setOutlets([]);
         }
       }
     } catch (error) {
