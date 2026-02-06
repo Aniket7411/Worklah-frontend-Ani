@@ -231,35 +231,41 @@ export default function ProfileDashboard() {
         null
       );
 
+    const toggleRejectReason = (candidateId: string) => {
+      setShowRejectReasonId((prev) => (prev === candidateId ? null : candidateId));
+    };
 
-   const handleVerifyAction = (action: "Approve" | "Reject", id: string) => {
-      if (action === "Reject" && !rejectReasons[id]) {
-        alert("Please enter a rejection reason.");
+    const rejectReasonTemplates = [
+      "Resume required for this role",
+      "NRIC documents required",
+      "Incomplete profile",
+      "Documents do not meet requirements",
+      "Other (specify below)",
+    ];
+
+   const handleVerifyAction = (action: "Approve" | "Reject", candidateId: string) => {
+      if (action === "Reject" && !rejectReasons[candidateId]?.trim()) {
+        toast.error("Please enter a rejection reason.");
         return;
       }
       axiosInstance
-        .put(`/admin/verify-candidate/${id}`, {
+        .put(`/admin/verify-candidate/${candidateId}`, {
           action: action === "Approve" ? "approve" : "reject",
-          rejectionReason: rejectReasons[id] || "",
+          rejectionReason: action === "Reject" ? (rejectReasons[candidateId] || "").trim() : undefined,
         })
         .then(() => {
-          alert(`Candidate ${action}d`);
-          setEmployees((prev) =>
-            prev.map((emp) =>
-              emp.id === id
-                ? {
-                    ...emp,
-                    workPassStatus:
-                      action === "Approve" ? "Verified" : "Rejected",
-                  }
-                : emp
-            )
-          );
+          toast.success(`Candidate ${action === "Approve" ? "verified" : "rejected"}`);
           setShowRejectReasonId(null);
+          setRejectReasons((prev) => ({ ...prev, [candidateId]: "" }));
+          // Refetch candidate to show updated status
+          return axiosInstance.get(`/admin/candidates/${candidateId}`);
+        })
+        .then((res) => {
+          if (res?.data) setUserData(res.data);
         })
         .catch((err) => {
           console.error(err);
-          alert("Failed to update status.");
+          toast.error(err?.response?.data?.message || "Failed to update status.");
         });
     };
 
@@ -346,12 +352,18 @@ export default function ProfileDashboard() {
                       {userData?.candidateProfile?.employmentStatus || userData?.candidateProfile?.workPassStatus || "N/A"}
                     </span>
                   </p>
-                  <div className="flex flex-col gap-2">
+                  {userData?.candidateProfile?.rejectionReason && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+                      <span className="font-medium">Previous rejection reason: </span>
+                      {userData.candidateProfile.rejectionReason}
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2 mt-2">
                     <button
                       className="bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200"
                       onClick={() => handleVerifyAction("Approve", id || "")}
                     >
-                      Approve
+                      Verify (Approve)
                     </button>
                     <button
                       className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200"
@@ -361,22 +373,34 @@ export default function ProfileDashboard() {
                     </button>
                     {showRejectReasonId === id && (
                       <>
+                        <p className="text-xs text-gray-500">User will see this reason. Quick suggestions:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {rejectReasonTemplates.map((template) => (
+                            <button
+                              key={template}
+                              type="button"
+                              onClick={() => template !== "Other (specify below)" && setRejectReasons((prev) => ({ ...prev, [id || ""]: template }))}
+                              className="px-2 py-0.5 text-xs border border-gray-300 rounded hover:bg-gray-100"
+                            >
+                              {template}
+                            </button>
+                          ))}
+                        </div>
                         <textarea
                           className="mt-2 p-2 border rounded w-full text-sm"
-                          placeholder="Enter rejection reason..."
+                          placeholder="Rejection reason (required)..."
                           value={rejectReasons[id || ""] || ""}
                           onChange={(e) =>
-                            setRejectReasons({
-                              ...rejectReasons,
+                            setRejectReasons((prev) => ({
+                              ...prev,
                               [id || ""]: e.target.value,
-                            })
+                            }))
                           }
                         />
                         <button
-                          className="mt-2 bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800"
-                          onClick={() =>
-                            handleVerifyAction("Reject", id || "")
-                          }
+                          className="mt-2 bg-red-700 text-white px-3 py-1 rounded hover:bg-red-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={!rejectReasons[id || ""]?.trim()}
+                          onClick={() => handleVerifyAction("Reject", id || "")}
                         >
                           Reject Candidate
                         </button>
@@ -394,6 +418,44 @@ export default function ProfileDashboard() {
                   </span>
                 </p>
               </p>
+
+              {/* Documents cross-check per ADMIN_APPLICANT_REVIEW_AND_APPROVAL.md */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">Documents (cross-check)</h3>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">Resume: </span>
+                    {(userData?.candidateProfile?.resumeUrl ?? userData?.resumeUrl) ? (
+                      <a href={userData?.candidateProfile?.resumeUrl || userData?.resumeUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View resume</a>
+                    ) : (
+                      <span className="text-amber-600">Not uploaded</span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-gray-500">NRIC: </span>
+                    {(userData?.candidateProfile?.nricFront || userData?.candidateProfile?.nricFrontImage || userData?.candidateProfile?.nricBack || userData?.candidateProfile?.nricBackImage) ? (
+                      <span className="flex gap-2 flex-wrap">
+                        {(userData?.candidateProfile?.nricFront || userData?.candidateProfile?.nricFrontImage) && (
+                          <a href={userData?.candidateProfile?.nricFront || userData?.candidateProfile?.nricFrontImage} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Front</a>
+                        )}
+                        {(userData?.candidateProfile?.nricBack || userData?.candidateProfile?.nricBackImage) && (
+                          <a href={userData?.candidateProfile?.nricBack || userData?.candidateProfile?.nricBackImage} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Back</a>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-amber-600">Not uploaded</span>
+                    )}
+                  </div>
+                  {userData?.candidateProfile?.profileCompleted !== undefined && (
+                    <div>
+                      <span className="text-gray-500">Profile completed: </span>
+                      <span className={userData.candidateProfile.profileCompleted ? "text-green-600" : "text-amber-600"}>
+                        {userData.candidateProfile.profileCompleted ? "Yes" : "No"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="mt-6">

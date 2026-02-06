@@ -9,12 +9,18 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 
 interface Candidate {
   id: number;
+  _id?: string;
+  applicationId?: string;
   name: string;
+  fullName?: string;
   gender: string;
   age: number;
   mobile: string;
   dob: string;
   nric: string;
+  resumeUrl?: string | null;
+  employmentStatus?: string;
+  user?: { resumeUrl?: string | null; fullName?: string };
   startTime: string;
   endTime: string;
   clockedIn: string;
@@ -24,6 +30,10 @@ interface Candidate {
   jobStatus: string;
   wage: number;
   image: string;
+  approvedStatus?: string;
+  profilePicture?: string;
+  shift?: Record<string, unknown>;
+  confirmedOrStandby?: string;
 }
 
 
@@ -47,6 +57,13 @@ export default function CandidateManagement() {
   });
   const [rejectionReason, setRejectionReason] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  const rejectReasonTemplates = [
+    "Resume required for this role",
+    "NRIC documents required",
+    "Incomplete profile",
+    "Documents do not meet job requirements",
+  ];
 
 
 
@@ -152,7 +169,7 @@ export default function CandidateManagement() {
   };
 
   const handleApprovedStatusChange = async (
-    applicationId: string, // This is the applicationId from the candidate object
+    applicationIdOrCandidateId: string, // applicationId for approve/reject endpoints
     newStatus: string,
     reason: string | null = null
   ) => {
@@ -161,43 +178,40 @@ export default function CandidateManagement() {
       // According to API documentation:
       // - POST /api/admin/applications/:applicationId/approve (for approval)
       // - POST /api/admin/applications/:applicationId/reject (for rejection)
+      const appId = applicationIdOrCandidateId;
       if (newStatus === "Approved" || newStatus === "Confirmed") {
-        await axiosInstance.post(`/admin/applications/${applicationId}/approve`, {
+        await axiosInstance.post(`/admin/applications/${appId}/approve`, {
           notes: reason || undefined
         });
       } else if (newStatus === "Rejected") {
-        await axiosInstance.post(`/admin/applications/${applicationId}/reject`, {
+        await axiosInstance.post(`/admin/applications/${appId}/reject`, {
           reason: reason || undefined,
           notes: reason || undefined
         });
       } else {
-        // For other statuses (like "Pending"), use the status update endpoint
-        // PUT /api/admin/applications/status/:userId (requires userId and jobId)
-        // Note: This endpoint uses userId, not applicationId
-        const candidate = candidates.find(c => c.id === applicationId);
+        const candidate = candidates.find((c: any) => c.id === appId || c._id === appId || c.applicationId === appId);
         const userId = (candidate as any)?.userId || (candidate as any)?.user?._id || (candidate as any)?.user?.id;
         if (userId && jobId) {
           await axiosInstance.put(`/admin/applications/status/${userId}`, {
             status: newStatus,
             jobId: jobId,
-            notes: reason || undefined
+            rejectionReason: reason || undefined
           });
         } else {
-          // Fallback: try using applicationId as userId if structure is different
-          await axiosInstance.put(`/admin/applications/status/${applicationId}`, {
+          await axiosInstance.put(`/admin/applications/status/${appId}`, {
             status: newStatus,
             jobId: jobId,
-            notes: reason || undefined
+            rejectionReason: reason || undefined
           });
         }
       }
 
       setCandidates((prev) =>
         prev.map((c) =>
-          c.id === applicationId ? { 
+          (c.id === applicationIdOrCandidateId || (c as any)._id === applicationIdOrCandidateId || (c as any).applicationId === applicationIdOrCandidateId) ? { 
             ...c, 
             approvedStatus: newStatus === "Approved" ? "Confirmed" : newStatus, 
-            status: newStatus === "Approved" ? "Upcoming" : newStatus 
+            status: newStatus === "Approved" ? "Upcoming" : newStatus
           } : c
         )
       );
@@ -358,6 +372,9 @@ export default function CandidateManagement() {
               <th className="px-4 py-3 truncate capitalize tracking-wider text-center text-sm font-medium border text-gray-500">
                 NRIC
               </th>
+              <th className="px-4 py-3 truncate capitalize tracking-wider text-center text-sm font-medium border text-gray-500">
+                Resume
+              </th>
               {/* <th className="px-4 py-3 truncate capitalize tracking-wider text-center text-sm font-medium border text-gray-500">
                 Start Time
               </th>
@@ -448,6 +465,13 @@ export default function CandidateManagement() {
                 </td>
                 <td className="px-4 py-3 text-center truncate border capitalize text-[16px] leading-[20px] text-[#000000] font-medium">
                   {candidate.nric || "N/A"}
+                </td>
+                <td className="px-4 py-3 text-center truncate border text-[16px] leading-[20px] text-[#000000] font-medium">
+                  {(candidate.resumeUrl ?? candidate.user?.resumeUrl) ? (
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">Has resume</span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">No resume</span>
+                  )}
                 </td>
                 {/* <td className="px-4 py-3 text-center truncate border capitalize text-[16px] leading-[20px] text-[#000000] font-medium">
                   <span className="px-2 py-1 bg-[#048BE1] text-white rounded-full ">
@@ -603,6 +627,19 @@ export default function CandidateManagement() {
               <label className="block text-sm font-medium text-gray-700">
                 Rejection Reason <span className="text-red-500">*</span>
               </label>
+              <p className="text-xs text-gray-500 mb-1">User will see this so they know what to improve.</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {rejectReasonTemplates.map((template) => (
+                  <button
+                    key={template}
+                    type="button"
+                    onClick={() => setRejectionReason(template)}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700"
+                  >
+                    {template}
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}

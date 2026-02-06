@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, User, Briefcase, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, User, Briefcase, Clock, FileText, Image } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
 
@@ -13,6 +13,16 @@ interface ApplicationDetailData {
     phoneNumber?: string;
     profilePicture?: string;
     profileCompleted?: boolean;
+    employmentStatus?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    postalCode?: string;
+    address?: string;
+    nric?: string;
+    resumeUrl?: string | null;
+    nricFrontImage?: string | null;
+    nricBackImage?: string | null;
+    status?: string;
   };
   jobId: string;
   job?: {
@@ -88,12 +98,15 @@ export default function ApplicationDetail() {
   };
 
   const handleReject = async () => {
-    if (!applicationId) return;
+    if (!applicationId || !rejectReason.trim()) {
+      toast.error("Rejection reason is required");
+      return;
+    }
     setActionLoading(true);
     try {
       await axiosInstance.post(`/admin/applications/${applicationId}/reject`, {
-        reason: rejectReason || undefined,
-        notes: rejectReason || undefined,
+        reason: rejectReason.trim(),
+        notes: rejectReason.trim(),
       });
       toast.success("Application rejected");
       setRejectModal(false);
@@ -105,6 +118,14 @@ export default function ApplicationDetail() {
       setActionLoading(false);
     }
   };
+
+  const rejectReasonTemplates = [
+    "Resume required for this role",
+    "NRIC documents required",
+    "Incomplete profile",
+    "Documents do not meet job requirements",
+    "Other (specify below)",
+  ];
 
   if (loading) {
     return (
@@ -157,31 +178,74 @@ export default function ApplicationDetail() {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Applicant */}
+          {/* Applicant – cross-check details per ADMIN_APPLICANT_REVIEW_AND_APPROVAL.md */}
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 mb-3">
               <User className="w-5 h-5" />
               Applicant
             </h2>
-            <div className="bg-gray-50 rounded-xl p-4 flex flex-wrap gap-6">
-              {application.user?.profilePicture ? (
-                <img
-                  src={application.user.profilePicture}
-                  alt={application.user.fullName}
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl font-semibold">
-                  {application.user?.fullName?.charAt(0) || "?"}
+            <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+              <div className="flex flex-wrap gap-6">
+                {application.user?.profilePicture ? (
+                  <img
+                    src={application.user.profilePicture}
+                    alt={application.user.fullName}
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xl font-semibold">
+                    {application.user?.fullName?.charAt(0) || "?"}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900">{application.user?.fullName || "—"}</p>
+                  <p className="text-sm text-gray-600">{application.user?.email || "—"}</p>
+                  <p className="text-sm text-gray-600">{application.user?.phoneNumber || "—"}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Profile completed: {application.user?.profileCompleted ? "Yes" : "No"}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Status: {application.user?.status ?? "—"}
+                  </p>
                 </div>
-              )}
-              <div>
-                <p className="font-medium text-gray-900">{application.user?.fullName || "—"}</p>
-                <p className="text-sm text-gray-600">{application.user?.email || "—"}</p>
-                <p className="text-sm text-gray-600">{application.user?.phoneNumber || "—"}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Profile completed: {application.user?.profileCompleted ? "Yes" : "No"}
-                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm border-t border-gray-200 pt-3">
+                <p><span className="text-gray-500">Employment status:</span> {application.user?.employmentStatus || "—"}</p>
+                <p><span className="text-gray-500">DOB:</span> {application.user?.dateOfBirth ? new Date(application.user.dateOfBirth).toLocaleDateString() : "—"}</p>
+                <p><span className="text-gray-500">Gender:</span> {application.user?.gender || "—"}</p>
+                <p><span className="text-gray-500">Postal code:</span> {application.user?.postalCode || "—"}</p>
+                <p className="sm:col-span-2"><span className="text-gray-500">Address:</span> {application.user?.address || "—"}</p>
+                <p><span className="text-gray-500">NRIC:</span> {application.user?.nric || "—"}</p>
+              </div>
+              <div className="border-t border-gray-200 pt-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">Documents (cross-check)</p>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">Resume:</span>
+                    {application.user?.resumeUrl ? (
+                      <a href={application.user.resumeUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">View resume</a>
+                    ) : (
+                      <span className="text-amber-600 text-sm">Not uploaded</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Image className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">NRIC:</span>
+                    {application.user?.nricFrontImage || application.user?.nricBackImage ? (
+                      <span className="flex gap-2">
+                        {application.user.nricFrontImage && (
+                          <a href={application.user.nricFrontImage} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">Front</a>
+                        )}
+                        {application.user.nricBackImage && (
+                          <a href={application.user.nricBackImage} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">Back</a>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 text-sm">Not uploaded</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -251,16 +315,28 @@ export default function ApplicationDetail() {
         </div>
       </div>
 
-      {/* Reject modal */}
+      {/* Reject modal – reason required; templates per ADMIN_APPLICANT_REVIEW_AND_APPROVAL.md */}
       {rejectModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Reject Application</h3>
-            <p className="text-sm text-gray-600 mb-4">Optionally provide a reason (will be stored and can be shown to the user).</p>
+            <p className="text-sm text-gray-600 mb-3">Provide a reason for rejection (required). The user will see this so they know what to improve.</p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {rejectReasonTemplates.map((template) => (
+                <button
+                  key={template}
+                  type="button"
+                  onClick={() => template !== "Other (specify below)" && setRejectReason(template)}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700"
+                >
+                  {template}
+                </button>
+              ))}
+            </div>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="Reason for rejection..."
+              placeholder="Reason for rejection (required)..."
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
             />
@@ -273,8 +349,8 @@ export default function ApplicationDetail() {
               </button>
               <button
                 onClick={handleReject}
-                disabled={actionLoading}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"
+                disabled={actionLoading || !rejectReason.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Reject
