@@ -471,32 +471,56 @@ const QRCodeManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Selected QR Code Preview */}
+      {/* Selected QR Code Preview - modal with close option */}
       {selectedQRCode && (
-        <div className="mt-6 bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
-          <div className="flex justify-center mb-4" ref={qrRef}>
-            <QRCodeCanvas value={generateQRData(selectedQRCode)} size={200} />
-          </div>
-          <div className="text-center space-y-2 mb-4">
-            <p className="text-lg font-bold text-gray-900">QR Code: {selectedQRCode.qrCodeId}</p>
-            <p className="text-md font-semibold text-gray-700">{selectedQRCode.employerName}</p>
-            <p className="text-sm text-gray-600">Outlet: {selectedQRCode.outletName}</p>
-            <p className="text-xs text-gray-500">{selectedQRCode.outletAddress}</p>
-          </div>
-          <div className="flex gap-2">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setSelectedQRCode(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="QR Code preview"
+        >
+          <div
+            className="bg-white p-6 rounded-xl shadow-xl max-w-md w-full relative"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
-              onClick={() => downloadQRCode()}
-              className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              onClick={() => setSelectedQRCode(null)}
+              className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Close"
             >
-              <Download size={18} />
-              Download
+              <X size={24} />
             </button>
+            <div className="flex justify-center mb-4" ref={qrRef}>
+              <QRCodeCanvas value={generateQRData(selectedQRCode)} size={200} />
+            </div>
+            <div className="text-center space-y-2 mb-4">
+              <p className="text-lg font-bold text-gray-900">QR Code: {selectedQRCode.qrCodeId}</p>
+              <p className="text-md font-semibold text-gray-700">{selectedQRCode.employerName}</p>
+              <p className="text-sm text-gray-600">Outlet: {selectedQRCode.outletName}</p>
+              <p className="text-xs text-gray-500">{selectedQRCode.outletAddress}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => downloadQRCode()}
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Download size={18} />
+                Download
+              </button>
+              <button
+                onClick={handlePrint}
+                className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Printer size={18} />
+                Print
+              </button>
+            </div>
             <button
-              onClick={handlePrint}
-              className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors"
+              onClick={() => setSelectedQRCode(null)}
+              className="w-full mt-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
             >
-              <Printer size={18} />
-              Print
+              Close
             </button>
           </div>
         </div>

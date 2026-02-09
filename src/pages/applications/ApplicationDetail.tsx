@@ -44,6 +44,8 @@ interface ApplicationDetailData {
   };
   status?: string;
   adminStatus?: string;
+  /** true = candidate confirmed attendance; false = awaiting candidate confirm (native app) */
+  candidateConfirmed?: boolean;
   appliedAt?: string;
   adminNotes?: string;
   rejectionReason?: string;
@@ -164,7 +166,19 @@ export default function ApplicationDetail() {
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-xl font-bold text-gray-900">Application Detail</h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Application Detail</h1>
+            {(status === "Confirmed" || status === "Approved") && (
+              <p className="mt-1 text-sm text-gray-600">
+                Candidate confirmed:{" "}
+                {application.candidateConfirmed === true ? (
+                  <span className="font-medium text-emerald-700">Yes</span>
+                ) : (
+                  <span className="font-medium text-amber-700">Awaiting candidate confirm</span>
+                )}
+              </p>
+            )}
+          </div>
           <span
             className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${status === "Pending"
                 ? "bg-amber-100 text-amber-800"
@@ -277,6 +291,11 @@ export default function ApplicationDetail() {
 
           <p className="text-sm text-gray-500">
             Applied: {application.appliedAt ? new Date(application.appliedAt).toLocaleString() : "—"}
+          </p>
+
+          {/* Native app flow note */}
+          <p className="text-sm text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
+            After you approve, the candidate gets a notification in the app and must confirm or cancel. Only confirmed shifts appear in their Upcoming Shifts.
           </p>
 
           {/* Actions for Pending */}

@@ -34,6 +34,8 @@ interface Candidate {
   profilePicture?: string;
   shift?: Record<string, unknown>;
   confirmedOrStandby?: string;
+  /** true = candidate confirmed attendance; false = awaiting confirm (native app) */
+  candidateConfirmed?: boolean;
 }
 
 
@@ -358,6 +360,9 @@ export default function CandidateManagement() {
                 Approved Status
               </th>
               <th className="px-4 py-3 truncate capitalize tracking-wider text-center text-sm font-medium border text-gray-500">
+                Candidate confirmed
+              </th>
+              <th className="px-4 py-3 truncate capitalize tracking-wider text-center text-sm font-medium border text-gray-500">
                 Full Name
               </th>
               <th className="px-4 py-3 truncate capitalize tracking-wider text-center text-sm font-medium border text-gray-500">
@@ -449,6 +454,18 @@ export default function CandidateManagement() {
                     <option value="Rejected">Rejected</option>
                   </select>
                   <FiChevronDown className="absolute right-6 top-1/2 transform -translate-y-1/2 text-gray-600 pointer-events-none" />
+                </td>
+
+                <td className="px-4 py-3 text-center truncate border text-[16px] leading-[20px] text-[#000000] font-medium">
+                  {(candidate.approvedStatus === "Confirmed" || candidate.approvedStatus === "Approved") ? (
+                    candidate.candidateConfirmed === true ? (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs">Yes</span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">No</span>
+                    )
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </td>
 
                 <td className="px-4 py-3 text-center truncate border capitalize text-[16px] leading-[20px] text-[#000000] font-medium">

@@ -4,13 +4,18 @@ import toast from 'react-hot-toast';
 
 // Single source of truth: COMPLETE_API_DOCUMENTATIONupdate.md (v2.3)
 // Base URL: Production https://worklah-updated-dec.onrender.com/api | Dev http://localhost:3000/api
-const API_BASE_URL =
-  (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
-  "http://localhost:3000/api";
+// const API_BASE_URL =
+//   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
+//   "";
 // ⚠️ IMPORTANT: Base URL already includes '/api'
 // When making requests, use endpoints WITHOUT '/api' prefix
 // ✅ Correct: '/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/admin/login
 // ❌ Wrong: '/api/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/api/admin/login (404 Error)
+
+// const API_BASE_URL = "http://localhost:3000/api"
+const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
+
+
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,

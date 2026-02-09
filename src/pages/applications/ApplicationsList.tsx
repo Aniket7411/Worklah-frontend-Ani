@@ -23,6 +23,8 @@ interface Application {
   shift?: { startTime?: string; endTime?: string };
   status?: string;
   adminStatus?: string;
+  /** true = candidate confirmed attendance; false = awaiting candidate confirm (native app flow) */
+  candidateConfirmed?: boolean;
   appliedAt?: string;
 }
 
@@ -30,6 +32,7 @@ const statusOptions = [
   { value: "", label: "All" },
   { value: "Pending", label: "Pending" },
   { value: "Approved", label: "Approved" },
+  { value: "approved_not_confirmed", label: "Approved – not confirmed" },
   { value: "Rejected", label: "Rejected" },
 ];
 
@@ -50,7 +53,7 @@ export default function ApplicationsList() {
       const params = new URLSearchParams();
       params.set("page", String(currentPage));
       params.set("limit", String(limit));
-      if (statusFilter) {
+      if (statusFilter && statusFilter !== "approved_not_confirmed") {
         params.set("status", statusFilter);
       }
       if (searchQuery.trim()) params.set("search", searchQuery.trim());
@@ -59,10 +62,17 @@ export default function ApplicationsList() {
       if (response.data?.success === false) {
         throw new Error(response.data?.message || "Failed to fetch applications");
       }
-      setApplications(response.data?.applications || []);
+      let list = response.data?.applications || [];
+      if (statusFilter === "approved_not_confirmed") {
+        list = list.filter(
+          (a: Application) =>
+            (a.adminStatus === "Approved" || a.adminStatus === "Confirmed") && a.candidateConfirmed === false
+        );
+      }
+      setApplications(list);
       const pag = response.data?.pagination || {};
-      setTotalPages(pag.totalPages || 1);
-      setTotalItems(pag.totalItems || 0);
+      setTotalPages(statusFilter === "approved_not_confirmed" ? 1 : (pag.totalPages || 1));
+      setTotalItems(statusFilter === "approved_not_confirmed" ? list.length : (pag.totalItems || list.length));
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to load applications");
       setApplications([]);
@@ -91,6 +101,15 @@ export default function ApplicationsList() {
     );
   };
 
+  const isApproved = (adminStatus?: string) =>
+    adminStatus === "Approved" || adminStatus === "Confirmed";
+  const getCandidateConfirmLabel = (app: Application) => {
+    if (!isApproved(app.adminStatus)) return null;
+    return app.candidateConfirmed === true
+      ? "Confirmed"
+      : "Awaiting confirm";
+  };
+
   return (
     <div className="w-full bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
@@ -100,6 +119,9 @@ export default function ApplicationsList() {
               <h1 className="text-3xl font-bold text-gray-900">Applications</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {totalItems} application{totalItems !== 1 ? "s" : ""} total
+              </p>
+              <p className="mt-0.5 text-xs text-gray-400 max-w-xl">
+                After you approve, the candidate gets a notification in the app and must confirm or cancel. Only confirmed shifts appear in their Upcoming Shifts.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -155,6 +177,7 @@ export default function ApplicationsList() {
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Shift</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Applied</th>
                       <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Candidate confirmed</th>
                       <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                   </thead>
@@ -180,6 +203,19 @@ export default function ApplicationsList() {
                           {app.appliedAt ? new Date(app.appliedAt).toLocaleString() : "—"}
                         </td>
                         <td className="px-6 py-4">{getStatusBadge(app.adminStatus, app.status)}</td>
+                        <td className="px-6 py-4">
+                          {getCandidateConfirmLabel(app) === "Confirmed" && (
+                            <span className="inline-flex px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                              Yes
+                            </span>
+                          )}
+                          {getCandidateConfirmLabel(app) === "Awaiting confirm" && (
+                            <span className="inline-flex px-2.5 py-1 text-xs font-medium rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                              Awaiting confirm
+                            </span>
+                          )}
+                          {!getCandidateConfirmLabel(app) && <span className="text-gray-400">—</span>}
+                        </td>
                         <td className="px-6 py-4 text-center">
                           <Link to={`/applications/${app._id}`}>
                             <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
