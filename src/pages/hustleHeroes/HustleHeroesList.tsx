@@ -432,7 +432,9 @@ export default function HustleHeroesList() {
                       ? "M"
                       : employee?.gender === "Female"
                         ? "F"
-                        : "N/A"}
+                        : employee?.gender === "Other"
+                          ? "Other"
+                          : "N/A"}
                   </td>
                   <td className="p-4 truncate text-center border">
                     {employee?.mobile || employee?.phoneNumber || "N/A"}

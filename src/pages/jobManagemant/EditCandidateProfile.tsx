@@ -40,7 +40,7 @@ const EditCandidateProfile = () => {
     email: "",
     nric: "",
     dateOfBirth: "",
-    gender: "Male",
+    gender: "Male" as "Male" | "Female" | "Other",
     postalCode: "",
     streetAddress: "",
     profilePicture: null,
@@ -109,7 +109,7 @@ const EditCandidateProfile = () => {
         email: candidate.email || candidate.personalDetails?.email || "",
         nric: candidate.nric || candidate.personalDetails?.nric || candidate.icNumber || "",
         dateOfBirth: candidate.dob || candidate.personalDetails?.dob || "",
-        gender: candidate.gender || "Male",
+        gender: (candidate.gender === "Other" || candidate.gender === "Female" || candidate.gender === "Male") ? candidate.gender : "Male",
         postalCode: candidate.postalCode || candidate.personalDetails?.postalCode || "",
         streetAddress: candidate.streetAddress || candidate.personalDetails?.street || "",
         profilePicture: null,
@@ -465,12 +465,12 @@ const EditCandidateProfile = () => {
                   />
                 </div>
 
-                {/* Gender */}
+                {/* Gender – Male | Female | Other per ADMIN_PROFILE_AND_USER_UPDATE.md */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Gender <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-6">
+                  <div className="flex flex-wrap gap-6">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -492,6 +492,17 @@ const EditCandidateProfile = () => {
                         className="w-4 h-4 text-blue-600"
                       />
                       <span>Female</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="gender"
+                        value="Other"
+                        checked={formData.gender === "Other"}
+                        onChange={handleChange}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span>Other</span>
                     </label>
                   </div>
                 </div>
