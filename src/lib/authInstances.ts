@@ -2,7 +2,7 @@ import axios from 'axios'
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
-// Single source of truth: COMPLETE_API_DOCUMENTATIONupdate.md (v2.3)
+// API reference: NEW_END_TO_END_API_DOCUMENTATION.md (from backend developer)
 // Base URL: Production https://worklah-updated-dec.onrender.com/api | Dev http://localhost:3000/api
 // const API_BASE_URL =
 //   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
@@ -12,8 +12,8 @@ import toast from 'react-hot-toast';
 // ✅ Correct: '/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/admin/login
 // ❌ Wrong: '/api/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/api/admin/login (404 Error)
 
-// const API_BASE_URL = "http://localhost:3000/api"
-const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
+const API_BASE_URL = "http://localhost:3000/api"
+// const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
 
 
 

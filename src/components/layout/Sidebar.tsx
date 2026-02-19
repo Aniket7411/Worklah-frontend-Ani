@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode, FileCheck, CalendarDays } from "lucide-react";
+import { LogOut, Menu, X, LayoutDashboard, Briefcase, Users, Building2, CreditCard, MessageSquare, QrCode, FileCheck, CalendarDays, Scale } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext";
 
@@ -51,6 +51,12 @@ const menuItems: MenuItem[] = [
     description: "Financial records"
   },
   {
+    icon: <Building2 className="w-5 h-5" />,
+    text: "Employer Payments",
+    path: "/employer-payments",
+    description: "Payments made by employers"
+  },
+  {
     icon: <MessageSquare className="w-5 h-5" />,
     text: "Support & Feedback",
     path: "/support",
@@ -67,6 +73,12 @@ const menuItems: MenuItem[] = [
     text: "Timesheet",
     path: "/timesheet",
     description: "Generate & manage timesheets"
+  },
+  {
+    icon: <Scale className="w-5 h-5" />,
+    text: "Penalty Management",
+    path: "/settings/penalties",
+    description: "Shift cancellation penalties"
   },
 ];
 

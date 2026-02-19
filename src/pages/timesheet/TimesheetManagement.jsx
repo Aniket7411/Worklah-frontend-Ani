@@ -87,6 +87,10 @@ export default function TimesheetManagement() {
       toast.error("Please select employer and date range");
       return;
     }
+    if (generateForm.startDate > generateForm.endDate) {
+      toast.error("Start date must be on or before end date");
+      return;
+    }
     setGenerating(true);
     try {
       const res = await axiosInstance.post("/admin/timesheets/generate", {
@@ -99,6 +103,8 @@ export default function TimesheetManagement() {
         setShowGenerateModal(false);
         setGenerateForm({ employerId: "", startDate: "", endDate: "" });
         fetchTimesheets();
+      } else {
+        toast.error(res.data?.message || "Failed to generate timesheet");
       }
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to generate timesheet");
@@ -113,6 +119,8 @@ export default function TimesheetManagement() {
       const res = await axiosInstance.post(`/admin/timesheets/${timesheetId}/send-email`);
       if (res.data?.success !== false) {
         toast.success("Timesheet email sent successfully");
+      } else {
+        toast.error(res.data?.message || "Failed to send email");
       }
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to send email");

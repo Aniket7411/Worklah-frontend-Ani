@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { axiosInstance } from '../../lib/authInstances';
 import { Link } from 'react-router-dom';
+import { getProfilePicUrl } from '../../utils/avatarUtils';
 
 const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
@@ -87,9 +88,12 @@ const NewApplications = () => {
         <div className="space-y-4">
           {applications.map((application) => (
             <div key={application.id} className="flex items-center gap-4 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-              {application.candidate?.profilePicture ? (
+              {getProfilePicUrl(application.candidate?.profilePicture) ? (
                 <img
-                  src={`${IMAGE_BASE_URL}${application.candidate.profilePicture}`}
+                  src={(() => {
+                    const url = getProfilePicUrl(application.candidate?.profilePicture);
+                    return url?.startsWith("http") ? url : `${IMAGE_BASE_URL}${url}`;
+                  })()}
                   alt={application.candidate?.fullName || 'Candidate'}
                   className="w-10 h-10 rounded-full object-cover"
                 />

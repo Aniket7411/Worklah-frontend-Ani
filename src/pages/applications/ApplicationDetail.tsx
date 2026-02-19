@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, CheckCircle, XCircle, User, Briefcase, Clock, FileText, Image } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
+import { getProfilePicUrl } from "../../utils/avatarUtils";
 
 interface ApplicationDetailData {
   _id: string;
@@ -200,10 +201,10 @@ export default function ApplicationDetail() {
             </h2>
             <div className="bg-gray-50 rounded-xl p-4 space-y-4">
               <div className="flex flex-wrap gap-6">
-                {application.user?.profilePicture ? (
+                {getProfilePicUrl(application.user?.profilePicture) ? (
                   <img
-                    src={application.user.profilePicture}
-                    alt={application.user.fullName}
+                    src={getProfilePicUrl(application.user?.profilePicture)}
+                    alt={application.user?.fullName}
                     className="w-16 h-16 rounded-full object-cover"
                   />
                 ) : (

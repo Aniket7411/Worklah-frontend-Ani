@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
 import ConfirmationModal from "../../components/ConfirmationModal";
+import { getProfilePicUrl } from "../../utils/avatarUtils";
 // import Image from "next/image"
 
 interface Candidate {
@@ -43,11 +44,11 @@ export default function CandidateManagement() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [data, setData] = useState<any>(null)
   const [activeTime, setActiveTime] = useState<string | null>(null);
-  const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
+  const [isPopupOpen, setIsPopupOpen] = useState<string | null>(null);
   const [isEditTime, setIsEditTime] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"All" | "Confirmed" | "Pending">("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Confirmed" | "Pending" | "Rejected">("All");
   const [showConfirmModal, setShowConfirmModal] = useState<{ isOpen: boolean; userId: string | null; newStatus: string | null }>({
     isOpen: false,
     userId: null,
@@ -131,15 +132,15 @@ export default function CandidateManagement() {
 
 
 
-  const handleActionClick = (action: string, id: number) => {
-    // alert(`Action: ${action}, Row: ${index}`);
+  const getCandidateId = (c: Candidate) => String(c._id ?? c.applicationId ?? c.id);
+  const handleActionClick = (action: string, id: string | number) => {
     if (action === "View Candidate") {
       navigate(`/jobs/${jobId}/candidates/${id}`);
     }
     setIsPopupOpen(null);
   };
-  const handlePopupToggle = (index: number) => {
-    setIsPopupOpen(isPopupOpen === index ? null : index);
+  const handlePopupToggle = (candidateId: string) => {
+    setIsPopupOpen(isPopupOpen === candidateId ? null : candidateId);
   };
 
   const handleStatusSelection = (userId: string, newStatus: string) => {
@@ -193,18 +194,18 @@ export default function CandidateManagement() {
       } else {
         const candidate = candidates.find((c: any) => c.id === appId || c._id === appId || c.applicationId === appId);
         const userId = (candidate as any)?.userId || (candidate as any)?.user?._id || (candidate as any)?.user?.id;
+        // NEW_END_TO_END_API_DOCUMENTATION.md §5.6: PUT applications/status – body: status, newStatus?, notes?
+        const statusBody = {
+          status: newStatus,
+          newStatus: newStatus,
+          notes: reason || undefined,
+          jobId: jobId,
+          rejectionReason: reason || undefined
+        };
         if (userId && jobId) {
-          await axiosInstance.put(`/admin/applications/status/${userId}`, {
-            status: newStatus,
-            jobId: jobId,
-            rejectionReason: reason || undefined
-          });
+          await axiosInstance.put(`/admin/applications/status/${userId}`, statusBody);
         } else {
-          await axiosInstance.put(`/admin/applications/status/${appId}`, {
-            status: newStatus,
-            jobId: jobId,
-            rejectionReason: reason || undefined
-          });
+          await axiosInstance.put(`/admin/applications/status/${appId}`, statusBody);
         }
       }
 
@@ -227,107 +228,132 @@ export default function CandidateManagement() {
   };
 
   const filteredCandidates = candidates.filter((candidate) => {
-  const shiftRange = `${candidate.shift?.startTime} - ${candidate.shift?.endTime}`;
-
+  const shiftRange = `${candidate.shift?.startTime ?? ""} - ${candidate.shift?.endTime ?? ""}`.trim();
   const matchesStatus =
-    statusFilter === "All" || candidate.approvedStatus === statusFilter;
-
-  const matchesTime =
-    !activeTime || shiftRange === activeTime;
-
+    statusFilter === "All" || (candidate.approvedStatus ?? candidate.status) === statusFilter;
+  const matchesTime = !activeTime || shiftRange === activeTime;
   return matchesStatus && matchesTime;
 });
+
+  const job = data?.job;
+  const employer = job?.employer;
+  const employerName = employer?.companyLegalName ?? job?.employerName ?? "—";
+  const companyLogo = employer?.companyLogo;
+  const jobTitle = job?.jobTitle ?? job?.jobName ?? "—";
+  const jobDate = job?.jobDate ?? job?.date;
+  const formattedDate = jobDate
+    ? new Date(jobDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : "—";
+  const location = job?.shortAddress ?? job?.location ?? "—";
+  const headCount = job?.currentHeadCount ?? `${data?.totalCandidates ?? 0}/${job?.totalPositions ?? 0}`;
+  const pagination = data?.pagination ?? {};
 
   
 
 
   return (
-    <div className="p-4 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-2">
-          <button className="rounded-full hover:bg-gray-100 cursor-pointer" onClick={() => navigate(-1)}>
-            <ArrowLeft className="rounded-full p-2 shadow-lg w-10 h-10" />
+          <button
+            type="button"
+            className="rounded-full hover:bg-gray-100 cursor-pointer p-2 transition-colors"
+            onClick={() => navigate(-1)}
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-8 h-8 sm:w-10 sm:h-10 text-gray-700" />
           </button>
-          <h1 className="text-xl font-semibold">Candidates</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Candidates</h1>
         </div>
-
-        <div>
-          <button className="text-gray-500 hover:text-black mx-2">
-            <Settings className="rounded-full p-2 shadow-lg w-10 h-10" />
-          </button>
-        </div>
+        <button
+          type="button"
+          className="self-start sm:self-center px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+        >
+          Export
+        </button>
       </div>
 
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex flex-col gap-2 text-sm">
-            <div className="flex gap-1">
-              <span className="text-base font-semibold text-[#4C4C4C]">
-                Job:
-              </span>
-              <span className="text-base font-semibold">{data.job?.jobName}</span>
-              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
-                Active
-              </span>
+      {/* Job summary card */}
+      {job && (
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+              {companyLogo && (
+                <img
+                  src={companyLogo}
+                  alt={employerName}
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover border border-gray-200 flex-shrink-0"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">{jobTitle}</h2>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      job.jobStatus === "Active"
+                        ? "bg-green-100 text-green-700"
+                        : job.jobStatus === "Filled"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-gray-100 text-gray-700"
+                    }`}
+                  >
+                    {job.jobStatus ?? "—"}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mb-2">{employerName}</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
+                  <span title="Date">📅 {formattedDate}</span>
+                  <span title="Headcount">👥 {headCount}</span>
+                </div>
+                {location && location !== "—" && (
+                  <p className="text-sm text-gray-500 mt-2 truncate" title={location}>
+                    📍 {location}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex gap-1">
-              <span className="text-base font-semibold text-[#4C4C4C]">
-                Employer:
-              </span>
-              <span className="text-base font-semibold">
-                {data.job?.employer}
-              </span>
-            </div>
-            <div className="flex gap-1">
-              <span className="text-base font-semibold text-[#4C4C4C]">
-                Date:
-              </span>
-              <span className="text-base font-semibold ">{data.job?.date}</span>
-            </div>
-            <div className="flex gap-1">
-              <span className="text-base font-semibold text-[#4C4C4C]">
-              Current Headcounts:
-              </span>
-              <span className="text-base font-semibold">{data.job?.currentHeadCount}</span>
-            </div>
-
+          </div>
+          {/* Status counts */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-gray-100 bg-gray-50/50">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("All")}
+              className={`px-4 py-3 text-center transition-colors ${statusFilter === "All" ? "bg-gray-900 text-white font-medium" : "hover:bg-gray-100"}`}
+            >
+              <span className="block text-lg font-semibold">{data?.totalCandidates ?? 0}</span>
+              <span className="text-xs opacity-90">All</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("Confirmed")}
+              className={`px-4 py-3 text-center transition-colors ${statusFilter === "Confirmed" ? "bg-green-600 text-white font-medium" : "hover:bg-green-50"}`}
+            >
+              <span className="block text-lg font-semibold">{data?.confirmedCount ?? 0}</span>
+              <span className="text-xs opacity-90">Confirmed</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("Pending")}
+              className={`px-4 py-3 text-center transition-colors ${statusFilter === "Pending" ? "bg-amber-500 text-white font-medium" : "hover:bg-amber-50"}`}
+            >
+              <span className="block text-lg font-semibold">{data?.pendingCount ?? 0}</span>
+              <span className="text-xs opacity-90">Pending</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("Rejected")}
+              className={`px-4 py-3 text-center transition-colors ${statusFilter === "Rejected" ? "bg-red-600 text-white font-medium" : "hover:bg-red-50"}`}
+            >
+              <span className="block text-lg font-semibold">{data?.rejectedCount ?? 0}</span>
+              <span className="text-xs opacity-90">Rejected</span>
+            </button>
           </div>
         </div>
-        <div>
-          <button className="px-4 py-2 bg-black text-white rounded-md hover:bg-black/90">
-            Export
-          </button>
-        </div>
-      </div>
+      )}
 
-      <div className="flex mb-6 gap-2">
-  <button
-    onClick={() => setStatusFilter("All")}
-    className={`px-4 py-2 text-base font-medium rounded-full ${
-      statusFilter === "All" ? "bg-black text-white" : "bg-[#F4F4F4]"
-    }`}
-  >
-    All Candidates ({data?.totalCandidates || 0})
-  </button>
-  <button
-    onClick={() => setStatusFilter("Confirmed")}
-    className={`px-4 py-2 text-base font-medium rounded-full ${
-      statusFilter === "Confirmed" ? "bg-black text-white" : "bg-[#F4F4F4]"
-    }`}
-  >
-    Confirmed Candidates ({data?.confirmedCount || 0})
-  </button>
-  <button
-    onClick={() => setStatusFilter("Pending")}
-    className={`px-4 py-2 text-base font-medium rounded-full ${
-      statusFilter === "Pending" ? "bg-black text-white" : "bg-[#F4F4F4]"
-    }`}
-  >
-    Pending Candidates ({data?.pendingCount || 0})
-  </button>
-</div>
-
-
+      {/* Shift time filters (only when we have candidates with shifts) */}
       <div className="flex gap-2 mb-6 flex-wrap">
         {Array.from(
           new Set(
@@ -351,7 +377,53 @@ export default function CandidateManagement() {
 
 
 
-      <div className="overflow-x-auto">
+      {/* Mobile: card list */}
+      <div className="lg:hidden space-y-3 mb-6">
+        {filteredCandidates.map((candidate) => {
+          const status = (candidate.approvedStatus ?? candidate.status) ?? "Pending";
+          return (
+            <div
+              key={getCandidateId(candidate)}
+              className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex items-start gap-3">
+                {getProfilePicUrl(candidate.profilePicture) ? (
+                  <img
+                    src={getProfilePicUrl(candidate.profilePicture)}
+                    alt=""
+                    className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold flex-shrink-0">
+                    {(candidate.fullName ?? candidate.name ?? "?").charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 truncate">{candidate.fullName ?? candidate.name ?? "—"}</p>
+                  <p className="text-sm text-gray-500">{candidate.mobile ?? "—"}</p>
+                  <span
+                    className={`inline-block mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      status === "Confirmed" ? "bg-green-100 text-green-700" : status === "Rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {status}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleActionClick("View Candidate", getCandidateId(candidate))}
+                  className="px-3 py-1.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800"
+                >
+                  View
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden lg:block overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="min-w-full divide-y divide-gray-200 ">
           <thead>
             <tr className="border-b bg-gray-50">
@@ -411,11 +483,11 @@ export default function CandidateManagement() {
           <tbody>
             
           {filteredCandidates.map((candidate) => (
-              <tr key={candidate.id} className="border-b last:border-b-0 relative">
+              <tr key={getCandidateId(candidate)} className="border-b last:border-b-0 relative">
                 <td className="px-4 py-4 text-center truncate border text-[16px] leading-[20px] text-[#000000] font-medium">
-                  {candidate.profilePicture ? (
+                  {getProfilePicUrl(candidate.profilePicture) ? (
                     <img
-                      src={candidate.profilePicture}
+                      src={getProfilePicUrl(candidate.profilePicture)}
                       alt={candidate.name || "Candidate Image"}
                       className="rounded-full max-w-none"
                       style={{
@@ -440,7 +512,7 @@ export default function CandidateManagement() {
                   <select
                     value={candidate.approvedStatus}
                     onChange={(e) =>
-                      handleStatusSelection(candidate.id, e.target.value)
+                      handleStatusSelection(getCandidateId(candidate), e.target.value)
                     }
                     className={`px-3 py-1 pr-6 rounded-full text-sm font-medium appearance-none w-full cursor-pointer ${candidate.approvedStatus === "Confirmed"
                       ? "bg-green-100 text-green-700"
@@ -573,14 +645,14 @@ export default function CandidateManagement() {
                 </td>
                 <td className="px-4 py-3 text-center truncate border capitalize text-[16px] leading-[20px] text-[#000000] font-medium ">
                   <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-full hover:bg-gray-100" onClick={() => handlePopupToggle(candidate.id)}>
+                    <button className="p-2 rounded-full hover:bg-gray-100" onClick={() => handlePopupToggle(getCandidateId(candidate))}>
                       <MoreVertical className="h-4 w-4" />
                     </button>
-                    {isPopupOpen === candidate.id && (
+                    {isPopupOpen === getCandidateId(candidate) && (
                       <div className="absolute top-[40%] right-12 mt-1 w-40 bg-white shadow-md border border-gray-300 rounded-md z-10">
                         <button
                           className="flex items-center gap-2 p-2 w-full text-left text-gray-700 hover:bg-gray-100"
-                          onClick={() => handleActionClick("View Candidate", candidate.id)}
+                          onClick={() => handleActionClick("View Candidate", getCandidateId(candidate))}
                         >
                           <Eye size={16} />
                           View Candidate
@@ -596,16 +668,29 @@ export default function CandidateManagement() {
       </div>
 
       {filteredCandidates.length === 0 && !loading && !error && (
-        <div className="flex flex-col items-center justify-center py-16">
-          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-            <View className="w-8 h-8 text-gray-400" />
+        <div className="flex flex-col items-center justify-center py-12 sm:py-16 px-4 rounded-xl border border-gray-200 bg-gray-50/50">
+          <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center mb-4">
+            <View className="w-8 h-8 text-gray-500" />
           </div>
-          <p className="text-gray-600 font-medium text-lg">No candidates found</p>
-          <p className="text-gray-400 text-sm mt-1">
-            {statusFilter !== "All" 
-              ? `No ${statusFilter.toLowerCase()} candidates for this filter.`
+          <p className="text-gray-800 font-semibold text-lg">No candidates found</p>
+          <p className="text-gray-500 text-sm mt-1 text-center max-w-sm">
+            {statusFilter !== "All"
+              ? `No ${statusFilter.toLowerCase()} candidates. Try another filter.`
               : "No candidates have applied for this job yet."}
           </p>
+          {job && (
+            <p className="text-gray-400 text-xs mt-3">
+              Job: {jobTitle} · {employerName}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Pagination info (when API provides it) */}
+      {pagination.totalPages > 0 && (
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-500">
+          <span>Page {pagination.currentPage} of {pagination.totalPages}</span>
+          {pagination.totalItems != null && <span>({pagination.totalItems} total)</span>}
         </div>
       )}
 

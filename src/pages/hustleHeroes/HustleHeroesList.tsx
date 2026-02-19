@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
 import {
   Ban,
+  CheckCircle,
   ChevronDown,
   Edit,
   Eye,
   Filter,
   MoreHorizontal,
+  PauseCircle,
   Plus,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { CustomScrollbar } from "../../components/layout/CustomScrollbar";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -19,8 +22,8 @@ import { MdOutlineAccountBalanceWallet } from "react-icons/md";
 import { CgProfile } from "react-icons/cg";
 import { FaRegIdCard } from "react-icons/fa";
 import { BiDonateBlood, BiSolidDonateBlood } from "react-icons/bi";
-import { CiFlag1 } from "react-icons/ci";
 import { FaLocationDot } from "react-icons/fa6";
+import { getProfilePicUrl } from "../../utils/avatarUtils";
 
 // User/Employee interface for Hustle Heroes (users registered via mobile app)
 interface Employee {
@@ -40,7 +43,7 @@ interface Employee {
   createdAt?: string;
   role?: string;
   status?: string;
-  workPassStatus?: "Verified" | "Approved" | "Pending" | "Rejected";
+  workPassStatus?: "Verified" | "Approved" | "Pending" | "Rejected" | "Suspended";
   verificationStatus?: string;
   profileCompleted?: boolean;
   turnUpRate?: string;
@@ -72,6 +75,8 @@ export default function HustleHeroesList() {
         return "Pending Verifications";
       case "verified":
         return "Verified Hustle Heroes";
+      case "suspended":
+        return "Suspended Users";
       case "no-show":
         return "No Show Hustle Heroes";
       default:
@@ -83,11 +88,11 @@ export default function HustleHeroesList() {
     const fetchEmployees = async () => {
       try {
         // Use /admin/users endpoint with role=USER filter to get ONLY users (not admins or employers)
-        // According to API documentation: GET /api/admin/users?role=USER
+        // Backend: GET /api/admin/users supports role, status (e.g. status=Pending for verification)
         const response = await axiosInstance.get("/admin/users", {
           params: {
-            role: "USER", // Only fetch users, exclude ADMIN and EMPLOYER roles
-            limit: 1000 // Get all users (adjust if pagination is needed)
+            role: "USER",
+            limit: 1000
           }
         });
         
@@ -158,15 +163,32 @@ export default function HustleHeroesList() {
         );
         break;
       case "pending-verification":
-        // Filter for pending verification (workPassStatus: Pending)
+        // Filter for pending verification (backend: user.status === 'Pending' or verificationStatus)
         filtered = allEmployees.filter(
-          (emp) => emp.workPassStatus === "Pending" || emp.verificationStatus === "Pending"
+          (emp) =>
+            emp.status === "Pending" ||
+            emp.workPassStatus === "Pending" ||
+            emp.verificationStatus === "Pending"
         );
         break;
       case "verified":
-        // Filter for verified heroes (workPassStatus: Verified)
+        // Filter for verified heroes (backend: status Verified, Activated, or Approved)
         filtered = allEmployees.filter(
-          (emp) => emp.workPassStatus === "Verified" || emp.verificationStatus === "Verified"
+          (emp) =>
+            emp.status === "Verified" ||
+            emp.status === "Activated" ||
+            emp.status === "Approved" ||
+            emp.workPassStatus === "Verified" ||
+            emp.verificationStatus === "Verified" ||
+            emp.verificationStatus === "Approved"
+        );
+        break;
+      case "suspended":
+        filtered = allEmployees.filter(
+          (emp) =>
+            emp.status === "Suspended" ||
+            emp.workPassStatus === "Suspended" ||
+            emp.verificationStatus === "Suspended"
         );
         break;
       case "no-show":
@@ -264,21 +286,25 @@ export default function HustleHeroesList() {
   };
 
   const handleActionClick = (action: string, id: string) => {
+    const candidate = employees.find((emp) => (emp.id || emp._id) === id);
+    const name = candidate?.fullName || "this user";
     if (action === "View") {
-      // Fix navigation - need to find a job or use a different route
-      // For now, navigate to edit page which shows profile
       navigate(`/edit-candidate-profile/${id}`);
     }
     if (action === "Edit") {
       navigate(`/edit-candidate-profile/${id}`);
     }
+    if (action === "Approve") {
+      setActionModal({ open: true, type: "approve", userId: id, userName: name, reason: "" });
+    }
+    if (action === "Reject") {
+      setActionModal({ open: true, type: "reject", userId: id, userName: name, reason: "" });
+    }
+    if (action === "Suspend") {
+      setActionModal({ open: true, type: "suspend", userId: id, userName: name, reason: "" });
+    }
     if (action === "Delete") {
-      const candidate = employees.find(emp => (emp.id || emp._id) === id);
-      setShowDeleteModal({
-        isOpen: true,
-        candidateId: id,
-        candidateName: candidate?.fullName || "this user",
-      });
+      setShowDeleteModal({ isOpen: true, candidateId: id, candidateName: name });
     }
     setIsPopupOpen(null);
   };
@@ -310,17 +336,82 @@ export default function HustleHeroesList() {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    const s = status || "";
+    switch (s) {
       case "Verified":
-        return "bg-green-50 text-green-600";
       case "Approved":
-        return "bg-blue-50 text-blue-600";
+      case "Activated":
+        return "bg-green-50 text-green-600";
       case "Pending":
-        return "bg-orange-50 text-orange-600";
+        return "bg-amber-50 text-amber-600";
       case "Rejected":
         return "bg-red-50 text-red-600";
+      case "Suspended":
+        return "bg-orange-50 text-orange-600";
       default:
         return "bg-gray-50 text-gray-600";
+    }
+  };
+
+  // VERIFICATION_AND_ADMIN_ACTIONS.md: Approve, Reject, Suspend, Delete with confirmations
+  const [actionModal, setActionModal] = useState<{
+    open: boolean;
+    type: "approve" | "reject" | "suspend";
+    userId: string;
+    userName: string;
+    reason: string;
+  }>({ open: false, type: "approve", userId: "", userName: "", reason: "" });
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  const handleVerifyUser = async (userId: string, action: "Approved" | "Rejected" | "Suspended", reason?: string) => {
+    setIsVerifying(true);
+    try {
+      const body: { action: string; reason?: string } = { action };
+      if (reason && reason.trim()) body.reason = reason.trim();
+      const response = await axiosInstance.put(`/admin/users/${userId}/verify`, body);
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Action failed");
+        return;
+      }
+      const msg =
+        action === "Approved"
+          ? "User verified successfully"
+          : action === "Rejected"
+            ? "User rejected"
+            : "User suspended";
+      toast.success(response.data?.message || msg);
+      setActionModal((m) => ({ ...m, open: false }));
+      const list = await axiosInstance.get("/admin/users", { params: { role: "USER", limit: 1000 } });
+      const users = list?.data?.users || [];
+      const valid = users.filter((u: any) => u.role === "USER" || u.role === "user");
+      const mapped: Employee[] = valid.map((user: any) => ({
+        id: user._id || user.id,
+        _id: user._id || user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        mobile: user.phoneNumber || user.mobile,
+        gender: user.gender,
+        dob: user.dob,
+        nric: user.nric || user.icNumber,
+        icNumber: user.nric || user.icNumber,
+        profilePicture: user.profilePicture,
+        avatarUrl: user.profilePicture,
+        registrationDate: user.createdAt || user.registrationDate,
+        createdAt: user.createdAt,
+        role: user.role,
+        status: user.status,
+        workPassStatus: user.workPassStatus || user.verificationStatus,
+        verificationStatus: user.verificationStatus || user.workPassStatus,
+        profileCompleted: user.profileCompleted,
+        turnUpRate: user.turnUpRate,
+        attendanceStatus: user.attendanceStatus,
+      }));
+      setAllEmployees(mapped);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Action failed");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -402,17 +493,20 @@ export default function HustleHeroesList() {
                   </td>
                   <td className="p-3 md:p-4 text-left border-b border-gray-200">
                     <div className="flex items-center gap-2 justify-center">
-                      {employee?.profilePicture || employee?.avatarUrl ? (
-                        <img
-                          src={employee.profilePicture || employee.avatarUrl}
-                          alt={employee?.fullName || "Profile"}
-                          className="h-8 w-8 rounded-full bg-gray-200 object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      ) : null}
-                      {(!employee?.profilePicture && !employee?.avatarUrl) && (
+                      {(() => {
+                        const picUrl = getProfilePicUrl(employee?.profilePicture || employee?.avatarUrl);
+                        return picUrl ? (
+                          <img
+                            src={picUrl}
+                            alt={employee?.fullName || "Profile"}
+                            className="h-8 w-8 rounded-full bg-gray-200 object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : null;
+                      })()}
+                      {!getProfilePicUrl(employee?.profilePicture || employee?.avatarUrl) && (
                         <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
                           {employee?.fullName?.charAt(0)?.toUpperCase() || "?"}
                         </div>
@@ -473,15 +567,15 @@ export default function HustleHeroesList() {
                   <td className="p-4 truncate text-center border">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(
-                        employee?.workPassStatus
+                        employee?.verificationStatus ?? employee?.status ?? employee?.workPassStatus
                       )}`}
                     >
-                      {employee?.workPassStatus || "Pending"}
+                      {employee?.verificationStatus ?? employee?.status ?? employee?.workPassStatus ?? "Pending"}
                     </span>
                   </td>
                   <td className="p-4 truncate text-center border">
                     <span className="text-xs text-gray-500">
-                      {employee?.workPassStatus || "Pending"}
+                      {employee?.verificationStatus ?? employee?.workPassStatus ?? employee?.status ?? "Pending"}
                     </span>
                   </td>
                   <td className="p-3 md:p-4 text-center border-b border-gray-200 sticky right-0 bg-white relative">
@@ -493,7 +587,7 @@ export default function HustleHeroesList() {
                         <MoreHorizontal className="h-5 w-5" />
                       </button>
                       {isPopupOpen === index && (
-                        <div className="absolute right-0 top-full mt-1 w-36 bg-white shadow-lg border border-gray-200 rounded-lg z-20">
+                        <div className="absolute right-0 top-full mt-1 w-40 bg-white shadow-lg border border-gray-200 rounded-lg z-20">
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                             onClick={() => handleActionClick("View", employee?.id || employee?._id || "")}
@@ -503,19 +597,38 @@ export default function HustleHeroesList() {
                           </button>
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                            onClick={() =>
-                              handleActionClick("Edit", employee?.id || employee?._id || "")
-                            }
+                            onClick={() => handleActionClick("Edit", employee?.id || employee?._id || "")}
                           >
                             <Edit size={16} />
                             Edit
                           </button>
+                          {(() => {
+                            const vs = (employee?.verificationStatus || "").toLowerCase();
+                            const st = (employee?.status || "").toLowerCase();
+                            const isVerified = ["approved", "verified", "activated", "active"].includes(vs) || ["approved", "verified", "activated", "active"].includes(st);
+                            return !isVerified && (
+                              <button
+                                className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-green-600 hover:bg-green-50 transition-colors"
+                                onClick={() => handleActionClick("Approve", employee?.id || employee?._id || "")}
+                              >
+                                <CheckCircle size={16} />
+                                Approve
+                              </button>
+                            );
+                          })()}
                           <button
-                            className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
-                            onClick={() => handleActionClick("Block", employee?.id || employee?._id || "")}
+                            className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-amber-600 hover:bg-amber-50 transition-colors"
+                            onClick={() => handleActionClick("Reject", employee?.id || employee?._id || "")}
                           >
-                            <Ban size={16} color="#E34E30" />
-                            Block
+                            <XCircle size={16} />
+                            Reject
+                          </button>
+                          <button
+                            className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-orange-600 hover:bg-orange-50 transition-colors"
+                            onClick={() => handleActionClick("Suspend", employee?.id || employee?._id || "")}
+                          >
+                            <PauseCircle size={16} />
+                            Suspend
                           </button>
                           <button
                             className="flex items-center gap-2 px-3 py-2 w-full text-left text-sm text-[#E34E30] hover:bg-red-50 transition-colors"
@@ -548,6 +661,70 @@ export default function HustleHeroesList() {
         type="danger"
         isLoading={isDeleting}
       />
+
+      {/* Approve / Reject / Suspend confirmation modal (VERIFICATION_AND_ADMIN_ACTIONS.md) */}
+      {actionModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              {actionModal.type === "approve" && "Approve user"}
+              {actionModal.type === "reject" && "Reject user"}
+              {actionModal.type === "suspend" && "Suspend user"}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {actionModal.type === "approve" &&
+                `Approve ${actionModal.userName}? They will be able to apply to jobs in the app.`}
+              {actionModal.type === "reject" &&
+                `Reject ${actionModal.userName}? They will not be able to apply until approved.`}
+              {actionModal.type === "suspend" &&
+                `Suspend ${actionModal.userName}? They will not be able to apply until you approve again.`}
+            </p>
+            {(actionModal.type === "reject" || actionModal.type === "suspend") && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
+                <input
+                  type="text"
+                  value={actionModal.reason}
+                  onChange={(e) => setActionModal((m) => ({ ...m, reason: e.target.value }))}
+                  placeholder={actionModal.type === "reject" ? "e.g. Incomplete documents" : "e.g. Policy violation"}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setActionModal((m) => ({ ...m, open: false }))}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isVerifying}
+                onClick={() => {
+                  const action =
+                    actionModal.type === "approve"
+                      ? "Approved"
+                      : actionModal.type === "reject"
+                        ? "Rejected"
+                        : "Suspended";
+                  handleVerifyUser(actionModal.userId, action, actionModal.reason);
+                }}
+                className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 ${
+                  actionModal.type === "approve"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : actionModal.type === "reject"
+                      ? "bg-amber-600 hover:bg-amber-700"
+                      : "bg-orange-600 hover:bg-orange-700"
+                }`}
+              >
+                {isVerifying ? "..." : actionModal.type === "approve" ? "Approve" : actionModal.type === "reject" ? "Reject" : "Suspend"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

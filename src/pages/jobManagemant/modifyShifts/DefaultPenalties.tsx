@@ -98,8 +98,9 @@ const DefaultPenalties = () => {
           <div className="">
             {penalties.map((item, index) => {
               const penaltyValue = parseInt(
-                item.penalty.replace("$", "").replace(" Penalty", "")
-              );
+                String(item.penalty || "0").replace("$", "").replace(" Penalty", "").replace("No Penalty", "0"),
+                10
+              ) || 0;
 
               // Determine penalty text color
               const penaltyColor =
@@ -120,7 +121,7 @@ const DefaultPenalties = () => {
                 >
                   <div className="flex items-center gap-16">
                     <p className="text-[16px] leading-[22px] font-normal text-[#000000]">
-                      {item.frame}
+                      {item.frame ?? item.condition}
                     </p>
                   </div>
                   <p

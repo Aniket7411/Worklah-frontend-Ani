@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MoreVertical, CheckCircle, XCircle, RotateCcw, Eye, Download } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
+import { getProfilePicUrl } from "../../utils/avatarUtils";
 
 const IMAGE_BASE_URL = "https://worklah.onrender.com";
 
@@ -297,21 +298,20 @@ export default function Payments({ data }: PaymentsProps) {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        {payment.worker?.avatar ? (
-                          <img
-                            src={
-                              payment.worker.avatar.startsWith("http")
-                                ? payment.worker.avatar
-                                : `${IMAGE_BASE_URL}${payment.worker.avatar}`
-                            }
-                            alt={payment.worker.name}
-                            className="h-8 w-8 rounded-full object-cover"
-                          />
-                        ) : (
+                        {(() => {
+                          const av = getProfilePicUrl(payment.worker?.avatar || payment.worker?.profilePicture);
+                          return av ? (
+                            <img
+                              src={av.startsWith("http") ? av : `${IMAGE_BASE_URL}${av}`}
+                              alt={payment.worker?.name}
+                              className="h-8 w-8 rounded-full object-cover"
+                            />
+                          ) : (
                           <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold text-gray-500">
                             {payment.worker?.name?.charAt(0)?.toUpperCase() || "?"}
                           </div>
-                        )}
+                          );
+                        })()}
                         <span className="text-sm font-medium text-gray-900">{payment.worker?.name || "Unknown"}</span>
                       </div>
                     </td>

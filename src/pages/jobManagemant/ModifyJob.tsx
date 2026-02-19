@@ -38,6 +38,19 @@ interface Shift {
   standbyVacancy?: number; // Optional: default 0 (matches backend spec)
 }
 
+// Convert ISO date/datetime to local YYYY-MM-DDTHH:mm for datetime-local input
+function toLocalDateTimeString(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${day}T${h}:${min}`;
+}
+
 // Normalize and deduplicate outlets from API (avoid showing duplicate entries)
 function normalizeOutlets(raw: any[]): Array<{ id: string; address: string; name?: string }> {
   if (!Array.isArray(raw) || raw.length === 0) return [];
@@ -119,6 +132,16 @@ const ModifyJob: React.FC = () => {
     }
   }, [jobId]);
 
+  // When editing, resolve employer id so company name/logo display works (match by id or _id)
+  useEffect(() => {
+    if (jobId && formData.employerId && employers.length > 0) {
+      const matched = employers.find(
+        (e) => e.id === formData.employerId || (e as any)._id === formData.employerId
+      );
+      if (matched && selectedEmployer !== matched.id) setSelectedEmployer(matched.id);
+    }
+  }, [jobId, formData.employerId, employers]);
+
   useEffect(() => {
     if (selectedEmployer) {
       const employer = employers.find((e) => e.id === selectedEmployer);
@@ -189,21 +212,24 @@ const ModifyJob: React.FC = () => {
       const job = response.data?.job || response.data;
 
       if (job) {
-        const hasOutletId = !!(job.outlet?.id || job.outletId);
+        const jobDate = job.jobDate || job.date || new Date().toISOString().split("T")[0];
+        const employerId = job.employerId || job.employer?.employerId || job.employer?._id || job.employer?.id || "";
+        const outletId = job.outlet?._id || job.outlet?.id || job.outletId || "";
+        const hasOutletId = !!outletId;
         setFormData({
-          jobDate: job.jobDate || job.date || new Date().toISOString().split("T")[0],
+          jobDate,
           jobTitle: job.jobTitle || job.jobName || "",
           jobDescription: job.jobDescription || job.jobScope || "",
           jobRoles: job.jobRoles || "",
-          employerId: job.employer?.id || job.employerId || "",
-          employerName: job.employerName || job.employer?.name || "",
-          outletId: job.outlet?.id || job.outletId || "",
+          employerId,
+          employerName: job.employerName || job.employer?.name || job.employer?.companyLegalName || "",
+          outletId,
           outletAddress: job.outletAddress || job.outlet?.address || "",
           useManualOutlet: !hasOutletId && !!(job.outletAddress || job.outlet?.address),
           totalPositions: job.totalPositions || job.totalPositionsNeeded || 1,
           foodHygieneCertRequired: job.foodHygieneCertRequired || false,
           jobStatus: job.jobStatus || job.status || "Active",
-          applicationDeadline: job.applicationDeadline || "",
+          applicationDeadline: job.applicationDeadline ? toLocalDateTimeString(job.applicationDeadline) : "",
           jobRequirements: Array.isArray(job.skills) ? job.skills.join(", ") : Array.isArray(job.requirements) ? job.requirements.join(", ") : job.jobRequirements || "",
           locationDetails: job.locationDetails || job.location || "",
           contactPhone: job.contactInfo?.phone || "",
@@ -211,24 +237,29 @@ const ModifyJob: React.FC = () => {
           currentFulfilment: job.currentFulfilment || { filled: 0, total: job.totalPositions || 1 },
         });
 
-        setSelectedEmployer(job.employer?.id || job.employerId || "");
+        setSelectedEmployer(employerId);
 
-        // Handle shifts - match backend spec
+        // Pre-fill outlets from job's employer if available (so outlet dropdown is populated before useEffect)
+        if (job.employer?.outlets && Array.isArray(job.employer.outlets) && job.employer.outlets.length > 0) {
+          setAvailableOutlets(normalizeOutlets(job.employer.outlets));
+        }
+
+        // Handle shifts - pre-select all existing shifts from job (multiple shifts supported)
         if (job.shifts && Array.isArray(job.shifts) && job.shifts.length > 0) {
           setShifts(
             job.shifts.map((shift: any, index: number) => ({
               id: Date.now() + index,
-              shiftDate: shift.shiftDate || job.jobDate || formData.jobDate,
+              shiftDate: shift.shiftDate || shift.date || jobDate,
               startTime: shift.startTime || "09:00",
               endTime: shift.endTime || "17:00",
-              breakDuration: shift.breakDuration || shift.breakHours || 0,
-              totalWorkingHours: shift.totalWorkingHours || shift.duration || 8,
+              breakDuration: shift.breakDuration ?? shift.breakHours ?? 0,
+              totalWorkingHours: shift.totalWorkingHours ?? shift.duration ?? 8,
               rateType: shift.rateType || "Hourly",
-              rates: shift.rates || shift.payPerHour || shift.payRate || 0,
-              payPerHour: shift.rates || shift.payPerHour || shift.payRate || 0, // Legacy support
-              totalWages: shift.totalWages || shift.totalWage || 0,
-              vacancy: shift.vacancy || 1, // Required: minimum 1
-              standbyVacancy: shift.standbyVacancy || 0, // Optional: default 0
+              rates: shift.rates ?? shift.payPerHour ?? shift.payRate ?? 0,
+              payPerHour: shift.rates ?? shift.payPerHour ?? shift.payRate ?? 0,
+              totalWages: shift.totalWages ?? shift.totalWage ?? 0,
+              vacancy: shift.vacancy ?? 1,
+              standbyVacancy: shift.standbyVacancy ?? 0,
             }))
           );
         }
@@ -287,9 +318,15 @@ const ModifyJob: React.FC = () => {
             );
           }
 
-          // Calculate total wages using rates or payPerHour (legacy)
-          const rate = updated.rates || updated.payPerHour || 0;
-          updated.totalWages = rate * updated.totalWorkingHours;
+          // Calculate total wages by rate type (Hourly / Weekly / Monthly)
+          const rate = updated.rates ?? updated.payPerHour ?? 0;
+          if (updated.rateType === "Hourly") {
+            updated.totalWages = rate * updated.totalWorkingHours;
+          } else if (updated.rateType === "Weekly" || updated.rateType === "Monthly") {
+            updated.totalWages = rate;
+          } else {
+            updated.totalWages = rate * updated.totalWorkingHours;
+          }
 
           return updated;
         }
@@ -301,19 +338,26 @@ const ModifyJob: React.FC = () => {
   const addShift = () => {
     const defaultRateType = rateTypes.length > 0 ? rateTypes[0] : "Hourly";
     const defaultPayRate = defaultPayRates[defaultRateType] || 0;
+    const defaultDate = shifts.length > 0 && shifts[shifts.length - 1].shiftDate
+      ? (() => {
+          const lastDate = new Date(shifts[shifts.length - 1].shiftDate!);
+          lastDate.setDate(lastDate.getDate() + 1);
+          return lastDate.toISOString().split("T")[0];
+        })()
+      : formData.jobDate || new Date().toISOString().split("T")[0];
     const newShift: Shift = {
       id: Date.now(),
-      shiftDate: formData.jobDate || new Date().toISOString().split("T")[0],
+      shiftDate: defaultDate,
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: 0,
       totalWorkingHours: 8,
       rateType: defaultRateType as "Hourly" | "Weekly" | "Monthly",
       rates: defaultPayRate,
-      payPerHour: defaultPayRate, // Legacy support
-      totalWages: defaultPayRate * 8,
-      vacancy: 1, // Required: minimum 1 (matches backend spec)
-      standbyVacancy: 0, // Optional: default 0 (matches backend spec)
+      payPerHour: defaultPayRate,
+      totalWages: defaultRateType === "Hourly" ? defaultPayRate * 8 : defaultPayRate,
+      vacancy: 1,
+      standbyVacancy: 0,
     };
     setShifts([...shifts, newShift]);
   };
@@ -446,8 +490,10 @@ const ModifyJob: React.FC = () => {
 
       if (statusCode === 400) {
         // Validation errors
-        if (errorMessage.includes("date") || errorMessage.includes("Date")) {
-          displayMessage = `Date Validation Error: ${errorMessage}. Please select a valid date (today or future).`;
+        if (errorMessage.includes("date") || errorMessage.includes("Date") || errorMessage.includes("deadline")) {
+          displayMessage = errorMessage.toLowerCase().includes("deadline")
+            ? `Date validation: ${errorMessage}`
+            : `Date validation: ${errorMessage}. When editing, ensure application deadline is on or after job date.`;
         } else if (errorMessage.includes("jobRequirements") || errorMessage.includes("array") || errorMessage.includes("skills")) {
           displayMessage = `Data Format Error: ${errorMessage}. Skills/Requirements must be provided as an array.`;
         } else if (errorMessage.includes("required") || errorMessage.includes("missing")) {
@@ -528,7 +574,7 @@ const ModifyJob: React.FC = () => {
                     name="jobDate"
                     value={formData.jobDate}
                     onChange={handleChange}
-                    min={new Date().toISOString().split("T")[0]}
+                    min={jobId ? undefined : new Date().toISOString().split("T")[0]}
                     required
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
@@ -592,12 +638,33 @@ const ModifyJob: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Employer */}
+                {/* Employer - fixed when editing; no re-selection required */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Employer <span className="text-red-500">*</span>
                   </label>
-                  {employers.length > 0 ? (
+                  {jobId && formData.employerId ? (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        {companyLogo && selectedEmployerData && (
+                          <img
+                            src={companyLogo.startsWith("http") ? companyLogo : `${IMAGE_BASE_URL}${companyLogo}`}
+                            alt="Company Logo"
+                            className="w-12 h-12 rounded-lg object-cover border border-gray-300"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {companyName || formData.employerName || "Employer"}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">Employer is fixed for this job (cannot be changed when editing).</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : employers.length > 0 ? (
                     <>
                       <select
                         name="employerId"
@@ -621,8 +688,6 @@ const ModifyJob: React.FC = () => {
                           </option>
                         ))}
                       </select>
-
-                      {/* Display Company Logo and Name when employer is selected */}
                       {selectedEmployer && selectedEmployerData && (
                         <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-3">
                           {companyLogo ? (
@@ -641,9 +706,6 @@ const ModifyJob: React.FC = () => {
                           )}
                           <div>
                             <p className="text-sm font-semibold text-gray-900">Company: {companyName}</p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {companyLogo ? "Company logo displayed (optional)" : "Company logo not available (optional)"}
-                            </p>
                           </div>
                         </div>
                       )}
@@ -659,30 +721,6 @@ const ModifyJob: React.FC = () => {
                         placeholder="Enter employer name"
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
-                    </div>
-                  )}
-                  {employers.length > 0 && !selectedEmployer && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedEmployer("");
-                          setFormData((prev) => ({ ...prev, employerId: "", employerName: "" }));
-                        }}
-                        className="text-xs text-blue-600 hover:text-blue-800 underline"
-                      >
-                        Or enter employer name manually
-                      </button>
-                      {!selectedEmployer && (
-                        <input
-                          type="text"
-                          name="employerName"
-                          value={formData.employerName}
-                          onChange={handleChange}
-                          placeholder="Enter employer name manually"
-                          className="w-full mt-2 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      )}
                     </div>
                   )}
                 </div>
@@ -768,11 +806,11 @@ const ModifyJob: React.FC = () => {
                     name="applicationDeadline"
                     value={formData.applicationDeadline}
                     onChange={handleChange}
-                    min={`${formData.jobDate || new Date().toISOString().split("T")[0]}T00:00`}
+                    min={formData.jobDate ? `${formData.jobDate}T00:00` : undefined}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Deadline must be on or after job date ({formData.jobDate || new Date().toISOString().split("T")[0]})
+                    {formData.jobDate ? `Deadline must be on or after job date (${formData.jobDate})` : "Set job date first if you want a deadline"}
                   </p>
                 </div>
 
@@ -910,6 +948,20 @@ const ModifyJob: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {/* Shift Date */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Shift Date <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={shift.shiftDate ?? formData.jobDate}
+                          onChange={(e) => updateShift(shift.id, "shiftDate", e.target.value)}
+                          min={formData.jobDate || (jobId ? undefined : new Date().toISOString().split("T")[0])}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
                       {/* Shift Timing */}
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -980,41 +1032,37 @@ const ModifyJob: React.FC = () => {
                         <select
                           value={shift.rateType}
                           onChange={(e) => {
-                            const newRateType = e.target.value;
-                            updateShift(shift.id, "rateType", newRateType as "Weekend" | "Weekday" | "Public Holiday");
-                            // Auto-update pay rate if default exists for this rate type
-                            if (defaultPayRates[newRateType]) {
+                            const newRateType = e.target.value as "Hourly" | "Weekly" | "Monthly";
+                            updateShift(shift.id, "rateType", newRateType);
+                            if (defaultPayRates[newRateType] != null) {
+                              updateShift(shift.id, "rates", defaultPayRates[newRateType]);
                               updateShift(shift.id, "payPerHour", defaultPayRates[newRateType]);
                             }
                           }}
                           required
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         >
-                          {rateTypes.length > 0 ? (
-                            rateTypes.map((rateType) => (
-                              <option key={rateType} value={rateType}>{rateType}</option>
-                            ))
-                          ) : (
-                            <>
-                              <option value="Weekday">Weekday</option>
-                              <option value="Weekend">Weekend</option>
-                              <option value="Public Holiday">Public Holiday</option>
-                            </>
-                          )}
+                          <option value="Hourly">Hourly</option>
+                          <option value="Weekly">Weekly</option>
+                          <option value="Monthly">Monthly</option>
                         </select>
                       </div>
 
-                      {/* Pay/Hr */}
+                      {/* Rates (Pay/Hr, Pay/Week, or Pay/Month) */}
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Pay/Hr (SGD) <span className="text-red-500">*</span>
+                          {shift.rateType === "Hourly" ? "Rate/Hr (SGD)" : shift.rateType === "Weekly" ? "Rate/Week (SGD)" : "Rate/Month (SGD)"} <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="number"
                           min="0"
                           step="0.01"
-                          value={shift.payPerHour}
-                          onChange={(e) => updateShift(shift.id, "payPerHour", parseFloat(e.target.value) || 0)}
+                          value={shift.rates ?? shift.payPerHour ?? 0}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value) || 0;
+                            updateShift(shift.id, "rates", v);
+                            updateShift(shift.id, "payPerHour", v);
+                          }}
                           required
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />

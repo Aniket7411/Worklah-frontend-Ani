@@ -8,10 +8,8 @@ import {
   Edit,
   FileX2,
   MapPin,
-  Minus,
   MoreVertical,
   PhoneCall,
-  Plus,
   RefreshCw,
   Settings,
   UserCheck,
@@ -40,7 +38,7 @@ const JobDetailsPage = () => {
   const [shifts, setShifts] = useState<any[]>([]);
   const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [outlet, setOutet] = useState(null);
+  const [outlet, setOutlet] = useState(null);
   const [penalties, setPenalties] = useState<Array<{ condition: string; penalty: string }>>([]);
 
 
@@ -79,9 +77,9 @@ const JobDetailsPage = () => {
 
       if (response?.data?.success !== false) {
         const job = response?.data?.job || response?.data;
-        const outletId = job?.outlet?._id || job?.outlet?.id || job?.outletId;
+        const outletId = job?.outlet?._id || job?.outlet?.id || job?.outletId || job?.barcodes?.[0]?.outletId || job?.qrCodes?.[0]?.outletId;
         if (outletId) {
-          setOutet(outletId);
+          setOutlet(outletId);
         }
         setJobsData(job);
         // Handle both old and new API structures
@@ -131,25 +129,6 @@ const JobDetailsPage = () => {
     }
   }, [jobsData]);
 
-  const handleIncrease = (id, key, maxValue) => {
-    setShifts((prevShifts) =>
-      prevShifts.map((shift) =>
-        shift.id === id
-          ? { ...shift, [key]: Math.min(shift[key] + 1, maxValue) }
-          : shift
-      )
-    );
-  };
-
-  const handleDecrease = (id, key) => {
-    setShifts((prevShifts) =>
-      prevShifts.map((shift) =>
-        shift.id === id
-          ? { ...shift, [key]: Math.max(shift[key] - 1, 0) }
-          : shift
-      )
-    );
-  };
   const handlePopupToggle = (index: number) => {
     setIsPopupOpen(isPopupOpen === index ? null : index);
   };
@@ -317,7 +296,7 @@ const JobDetailsPage = () => {
               </div>
             </div>
 
-            {/* Barcodes / QR codes attached to this job (from API; refetch to get updated data) */}
+            {/* Barcodes / QR codes for this job (QR_CODE_SPEC: GET job returns qrCodes with qrCodeImage as full URL) */}
             {(jobsData.barcodes?.length > 0 || jobsData.qrCodes?.length > 0) && (
               <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
                 <div className="flex items-center justify-between mb-2">
@@ -331,160 +310,174 @@ const JobDetailsPage = () => {
                     Refresh
                   </button>
                 </div>
-                <ul className="space-y-1 text-sm">
-                  {(jobsData.barcodes || jobsData.qrCodes || []).map((item: any, i: number) => (
-                    <li key={i} className="font-mono text-blue-800">
-                      {typeof item === "string" ? item : (item?.barcode || item?.qrCodeId || item?.id || item?.value || "—")}
-                      {item?.outletName && <span className="text-gray-600 ml-2">({item.outletName})</span>}
-                    </li>
+                <div className="flex flex-wrap gap-4">
+                  {(jobsData.qrCodes ?? []).map((item: any, i: number) => (
+                    <div key={item._id ?? i} className="flex flex-col items-center gap-1">
+                      {item.qrCodeImage && (
+                        <img
+                          src={item.qrCodeImage.startsWith("http") ? item.qrCodeImage : `${companyImage}/${item.qrCodeImage}`}
+                          alt={`QR ${item.barcode ?? item.outletName ?? i}`}
+                          className="w-20 h-20 object-contain border border-gray-200 rounded-lg bg-white"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      )}
+                      <span className="font-mono text-xs text-blue-800">{item.barcode ?? item.qrCodeId ?? "—"}</span>
+                      {item.outletName && <span className="text-xs text-gray-600">{item.outletName}</span>}
+                    </div>
                   ))}
-                </ul>
+                  {(jobsData.barcodes ?? []).map((item: any, i: number) => (
+                    <div key={item._id ?? i} className="flex flex-col items-center gap-1">
+                      <span className="font-mono text-sm text-blue-800">{item.barcode ?? "—"}</span>
+                      {item.outletName && <span className="text-xs text-gray-600">{item.outletName}</span>}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Key Info Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">Job ID</p>
-                <p className="text-sm font-bold text-gray-900">
-                  {jobsData.jobId ? `#${jobsData.jobId.slice(-4)}` : (jobsData._id ? `#${convertIdToFourDigits(jobsData._id)}` : "N/A")}
-                </p>
-              </div>
-              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">Job Date</p>
-                <p className="text-sm font-bold text-gray-900">
-                  {jobsData.jobDate ? formatDate(jobsData.jobDate) : (jobsData.date ? formatDate(jobsData.date) : "N/A")}
-                </p>
-              </div>
-              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">Vacancy</p>
-                <p className="text-sm font-bold text-blue-600">
-                  {jobsData.currentFulfilment?.display || `${jobsData.currentFulfilment?.filled || 0}/${jobsData.currentFulfilment?.total || jobsData.totalPositions || 0}` || jobsData.vacancyUsers || "0"}
-                </p>
-              </div>
-              <Link to={`/jobs/${jobId}/candidates`} className="bg-purple-50 p-3 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer">
-                <p className="text-xs text-gray-500 mb-1">Applicants</p>
-                <p className="text-sm font-bold text-purple-600">
-                  {jobsData.applicantCount || jobsData.totalCandidates || jobsData.applicantsCount || 0}
-                </p>
-              </Link>
-              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                <p className="text-xs text-gray-500 mb-1">Total Wage</p>
-                <p className="text-sm font-bold text-green-600">
-                  ${jobsData.totalWages ? parseFloat(jobsData.totalWages.toString()).toFixed(2) : (jobsData.totalWage || "0.00")}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col items-end lg:items-start gap-4">
-            {/* Action Buttons */}
-            <div className="flex flex-wrap gap-3">
-              <Link to={`/jobs/${jobId}/candidates`}>
-                <button className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-semibold shadow-md transition-colors">
-                  <UserCheck className="w-5 h-5" />
-                  View Candidates
-                  <ArrowRight className="w-5 h-5" />
-                </button>
-              </Link>
-              {outlet && (
-                <Link to={`/jobs/${outlet}/outlate-attendnce`}>
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-semibold shadow-md transition-colors">
-                    <Clock className="w-5 h-5" />
-                    Attendance Rate
-                    <ArrowRight className="w-5 h-5" />
-                  </button>
-                </Link>
-              )}
-              <div className="relative">
-                <button
-                  className="p-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors"
-                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                >
-                  <Settings className="w-5 h-5 text-gray-700" />
-                </button>
-                {isSettingsOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
-                    <ul className="py-1">
-                      <li>
-                        <Link to={`/jobs/${jobId}/modify`}>
-                          <button className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors">
-                            <Edit className="w-4 h-4 mr-2 text-blue-600" />
-                            Edit Job
-                          </button>
-                        </Link>
-                      </li>
-                      <li className="border-t border-gray-100">
-                        <button
-                          className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                          onClick={async () => {
-                            try {
-                              const response = await axiosInstance.delete(`/admin/jobs/${jobId}`);
-                              if (response.data?.success === false) {
-                                alert(response.data?.message || "Failed to cancel job");
-                                return;
-                              }
-                              navigate(-1);
-                            } catch (error: any) {
-                              console.error("Error cancelling job:", error);
-                              alert(error?.response?.data?.message || "Failed to cancel job");
-                            }
-                          }}
-                        >
-                          <Ban className="w-4 h-4 mr-2" />
-                          Cancel Job
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Additional Info */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 w-full lg:w-auto lg:min-w-[200px]">
-              <div className="space-y-3">
-                {jobsData.totalWorkingHours && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Working Hours</p>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {parseFloat(jobsData.totalWorkingHours.toString()).toFixed(2)} hrs
+            {/* Job overview: metrics + actions in one block (max-width for large screens) */}
+            <div className="flex flex-col lg:flex-row lg:items-start gap-4 w-full max-w-5xl">
+              <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 flex-1 min-w-0">
+                <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Job ID</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {jobsData.jobId ?? (jobsData._id ? `#${convertIdToFourDigits(jobsData._id)}` : "N/A")}
                     </p>
                   </div>
-                )}
-                {jobsData.shiftTiming?.display && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Shift Timing</p>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {jobsData.shiftTiming.display}
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Job Date</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {jobsData.jobDate ? formatDate(jobsData.jobDate) : (jobsData.date ? formatDate(jobsData.date) : "N/A")}
                     </p>
                   </div>
-                )}
-                {jobsData.applicationDeadline && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Application Deadline</p>
-                    <p className="text-sm font-semibold text-orange-600">
-                      {new Date(jobsData.applicationDeadline).toLocaleDateString('en-GB', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric'
-                      })}
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Vacancy</p>
+                    <p className="text-sm font-semibold text-blue-600 truncate">
+                      {jobsData.currentFulfilment?.display || `${jobsData.currentFulfilment?.filled || 0}/${jobsData.currentFulfilment?.total || jobsData.totalPositions || 0}` || jobsData.vacancyUsers || "0"}
                     </p>
                   </div>
-                )}
-                {jobsData.rateType && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Rate Type</p>
-                    <p className="text-sm font-semibold text-gray-900">{jobsData.rateType}</p>
-                  </div>
-                )}
-                {jobsData.payPerHour && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Pay Rate</p>
-                    <p className="text-sm font-semibold text-green-600">
-                      ${parseFloat(jobsData.payPerHour.toString()).toFixed(2)}/hr
+                  <Link to={`/jobs/${jobId}/candidates`} className="min-w-0 block hover:bg-gray-100 rounded-lg -m-1 p-1 transition-colors">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Applicants</p>
+                    <p className="text-sm font-semibold text-purple-600 truncate">
+                      {jobsData.applicantCount || jobsData.totalCandidates || jobsData.applicantsCount || 0}
+                    </p>
+                  </Link>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Total Wage</p>
+                    <p className="text-sm font-semibold text-green-600 truncate">
+                      ${Number(jobsData.totalWages ?? jobsData.totalWage ?? (Array.isArray(jobsData.shifts) && jobsData.shifts.length
+                        ? jobsData.shifts.reduce((sum: number, sh: any) => sum + parseFloat(String(sh.totalWage ?? sh.totalWages ?? 0)), 0)
+                        : 0)).toFixed(2)}
                     </p>
                   </div>
-                )}
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Industry</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{jobsData.industry || "—"}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 mb-0.5 truncate">Application Deadline</p>
+                    <p className="text-sm font-semibold text-orange-600 truncate">
+                      {jobsData.applicationDeadline
+                        ? new Date(jobsData.applicationDeadline).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                        : "Not set"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 mt-4 pt-4 border-t border-gray-200">
+                  <Link to={`/jobs/${jobId}/candidates`}>
+                    <button className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold shadow-sm transition-colors">
+                      <UserCheck className="w-4 h-4" />
+                      View Candidates
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </Link>
+                  {outlet && (
+                    <Link to={`/jobs/${outlet}/outlet-attendance`}>
+                      <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold shadow-sm transition-colors">
+                        <Clock className="w-4 h-4" />
+                        Attendance Rate
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </Link>
+                  )}
+                  <div className="relative">
+                    <button
+                      className="p-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition-colors"
+                      onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                    >
+                      <Settings className="w-4 h-4 text-gray-700" />
+                    </button>
+                    {isSettingsOpen && (
+                      <div className="absolute left-0 top-full mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                        <ul className="py-1">
+                          <li>
+                            <Link to={`/jobs/${jobId}/modify`}>
+                              <button className="flex items-center w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors">
+                                <Edit className="w-4 h-4 mr-2 text-blue-600" />
+                                Edit Job
+                              </button>
+                            </Link>
+                          </li>
+                          <li className="border-t border-gray-100">
+                            <button
+                              className="flex items-center w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              onClick={async () => {
+                                try {
+                                  const response = await axiosInstance.delete(`/admin/jobs/${jobId}`);
+                                  if (response.data?.success === false) {
+                                    alert(response.data?.message || "Failed to cancel job");
+                                    return;
+                                  }
+                                  navigate(-1);
+                                } catch (error: any) {
+                                  console.error("Error cancelling job:", error);
+                                  alert(error?.response?.data?.message || "Failed to cancel job");
+                                }
+                              }}
+                            >
+                              <Ban className="w-4 h-4 mr-2" />
+                              Cancel Job
+                            </button>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* Additional Info (Working Hours, Shift, Rate, Pay) */}
+              <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 w-full lg:w-52 flex-shrink-0">
+                <div className="space-y-3">
+                  {jobsData.totalWorkingHours != null && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Working Hours</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {parseFloat(jobsData.totalWorkingHours.toString()).toFixed(2)} hrs
+                      </p>
+                    </div>
+                  )}
+                  {jobsData.shiftTiming?.display && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Shift Timing</p>
+                      <p className="text-sm font-semibold text-gray-900">{jobsData.shiftTiming.display}</p>
+                    </div>
+                  )}
+                  {jobsData.rateType && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Rate Type</p>
+                      <p className="text-sm font-semibold text-gray-900">{jobsData.rateType}</p>
+                    </div>
+                  )}
+                  {jobsData.payPerHour != null && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Pay Rate</p>
+                      <p className="text-sm font-semibold text-green-600">
+                        ${parseFloat(jobsData.payPerHour.toString()).toFixed(2)}/hr
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -503,6 +496,9 @@ const JobDetailsPage = () => {
               <thead>
                 <tr className="bg-gradient-to-r from-[#EDF8FF] to-[#E0F0FF]">
                   <th className="p-4 text-center whitespace-nowrap"></th>
+                  <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-r border-gray-200">
+                    Date
+                  </th>
                   <th className="p-4 text-center text-sm font-semibold text-gray-800 whitespace-nowrap border-r border-gray-200">
                     Start Time
                   </th>
@@ -539,8 +535,10 @@ const JobDetailsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {shifts.map((shift: any, index: number) => (
-                  <tr key={shift.shiftId || shift.id || index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors relative">
+                {shifts.map((shift: any, index: number) => {
+                const shiftId = shift._id ?? shift.shiftId ?? shift.id;
+                return (
+                  <tr key={shiftId ?? index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors relative">
                     <td className="p-4 text-center border-l border-gray-200">
                       <div className="relative">
                         <button
@@ -553,7 +551,7 @@ const JobDetailsPage = () => {
                           <div className="absolute left-0 top-full mt-1 w-36 bg-white shadow-xl border border-gray-200 rounded-lg z-10 overflow-hidden">
                             <button
                               className="flex items-center gap-2 px-4 py-2 w-full text-left text-sm text-gray-700 hover:bg-blue-50 transition-colors"
-                              onClick={() => handleActionClick("Edit Shift", shift.shiftId || shift.id || index)}
+                              onClick={() => handleActionClick("Edit Shift", shiftId ?? index)}
                             >
                               <Edit size={16} className="text-blue-600" />
                               Edit Shift
@@ -561,6 +559,11 @@ const JobDetailsPage = () => {
                           </div>
                         )}
                       </div>
+                    </td>
+                    <td className="p-4 text-center border-r border-gray-200">
+                      <span className="text-sm font-medium text-gray-700">
+                        {shift.shiftDate ? formatDate(shift.shiftDate) : "—"}
+                      </span>
                     </td>
                     <td className="p-4 text-center border-r border-gray-200">
                       {shift.startTime || shift.shiftTiming?.startTime ? (
@@ -582,50 +585,22 @@ const JobDetailsPage = () => {
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
                       <span className="text-sm font-medium text-gray-700">
-                        {shift.shiftId ? `#${shift.shiftId.slice(-4)}` : (shift.id ? convertIdToFourDigits(shift.id.toString()) : "N/A")}
+                        {shift.shiftId ? `#${String(shift.shiftId).slice(-6)}` : (shift._id || shift.id) ? convertIdToFourDigits(String(shift._id ?? shift.id)) : "—"}
                       </span>
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
-                          onClick={() => handleDecrease(shift.id || shift.shiftId, "vacancyFilled")}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm font-semibold min-w-[40px]">
-                          {shift.vacancy || shift.vacancyFilled || 0}/{maxVacancy}
-                        </span>
-                        <button
-                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
-                          onClick={() => handleIncrease(shift.id || shift.shiftId, "vacancyFilled", maxVacancy)}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {shift.vacancyFilled ?? shift.vacancy ?? 0}/{shift.vacancy ?? maxVacancy}
+                      </span>
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
-                          onClick={() => handleDecrease(shift.id || shift.shiftId, "standbyFilled")}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm font-semibold min-w-[40px]">
-                          {shift.standbyVacancy || shift.standbyFilled || 0}/{maxStandby}
-                        </span>
-                        <button
-                          className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
-                          onClick={() => handleIncrease(shift.id || shift.shiftId, "standbyFilled", maxStandby)}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
+                      <span className="text-sm font-semibold text-gray-900">
+                        {shift.standbyFilled ?? shift.standbyVacancy ?? shift.standby ?? 0}/{shift.standbyVacancy ?? shift.standby ?? maxStandby}
+                      </span>
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
                       <span className="text-sm font-medium text-gray-700">
-                        {shift.totalDuration || shift.totalWorkingHours ? `${parseFloat((shift.totalDuration || shift.totalWorkingHours).toString()).toFixed(2)} hrs` : "N/A"}
+                        {shift.duration ?? shift.totalWorkingHours ?? shift.totalDuration ? `${parseFloat(String(shift.duration ?? shift.totalWorkingHours ?? shift.totalDuration)).toFixed(2)} hrs` : "—"}
                       </span>
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
@@ -634,12 +609,12 @@ const JobDetailsPage = () => {
                           {shift.rateType}
                         </span>
                       ) : (
-                        <span className="text-gray-400 text-sm">N/A</span>
+                        <span className="text-gray-400 text-sm">—</span>
                       )}
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
                       <span className="text-sm text-gray-700">
-                        {shift.breakIncluded || shift.breakDuration ? `${parseFloat((shift.breakIncluded || shift.breakDuration).toString()).toFixed(2)} hrs` : "N/A"}
+                        {shift.breakDuration ?? shift.breakHours != null ? `${parseFloat(String(shift.breakDuration ?? shift.breakHours)).toFixed(2)} hrs` : "—"}
                       </span>
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
@@ -653,16 +628,17 @@ const JobDetailsPage = () => {
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
                       <span className="text-sm font-semibold text-gray-700">
-                        ${shift.payRate || shift.payPerHour ? parseFloat((shift.payRate || shift.payPerHour).toString()).toFixed(2) : "0.00"}
+                        ${parseFloat(String(shift.payRate ?? shift.payPerHour ?? shift.rates ?? 0)).toFixed(2)}
                       </span>
                     </td>
                     <td className="p-4 text-center border-x border-gray-200">
                       <span className="text-sm font-bold text-green-600">
-                        ${shift.totalWage || shift.totalWages ? parseFloat((shift.totalWage || shift.totalWages).toString()).toFixed(2) : "0.00"}
+                        ${parseFloat(String(shift.totalWage ?? shift.totalWages ?? 0)).toFixed(2)}
                       </span>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>
@@ -704,19 +680,19 @@ const JobDetailsPage = () => {
           </div>
         )}
 
-        {jobsData.jobRequirements && Array.isArray(jobsData.jobRequirements) && jobsData.jobRequirements.length > 0 && (
+        {((jobsData.skills && Array.isArray(jobsData.skills) && jobsData.skills.length > 0) || (jobsData.jobRequirements && Array.isArray(jobsData.jobRequirements) && jobsData.jobRequirements.length > 0)) && (
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
               <AiOutlineFileDone className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Job Requirements & Skills</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Skills & Requirements</h2>
             </div>
             <div className="flex flex-wrap gap-2">
-              {jobsData.jobRequirements.map((requirement: string, index: number) => (
+              {(jobsData.skills ?? jobsData.jobRequirements ?? []).map((item: string, index: number) => (
                 <span
                   key={index}
                   className="px-3 py-1.5 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium border border-blue-200"
                 >
-                  {requirement}
+                  {item}
                 </span>
               ))}
             </div>
@@ -754,9 +730,11 @@ const JobDetailsPage = () => {
             </div>
           ) : (
             penalties.map((item, index) => {
+              const penaltyStr = item.penalty ?? "";
               const penaltyValue = parseInt(
-                item.penalty.replace("$", "").replace(" Penalty", "").replace("No Penalty", "0")
-              );
+                String(penaltyStr).replace("$", "").replace(" Penalty", "").replace("No Penalty", "0"),
+                10
+              ) || 0;
 
               // Determine penalty text color
               const penaltyColor =
@@ -776,7 +754,7 @@ const JobDetailsPage = () => {
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
                 >
                   <p className="text-sm font-medium text-gray-900">
-                    {item.condition}
+                    {item.condition ?? (item as { frame?: string }).frame}
                   </p>
                   <p
                     className={`py-1.5 px-4 rounded-lg text-sm font-semibold border ${penaltyColor}`}

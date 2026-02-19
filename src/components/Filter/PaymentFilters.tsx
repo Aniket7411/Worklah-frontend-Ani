@@ -1,14 +1,14 @@
-'use client'
-
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 interface PaymentFiltersProps {
   onApply?: (filters: any) => void
   onClose?: () => void
+  /** Base path for filter navigation (e.g. /payments or /employer-payments). Default: /payments */
+  basePath?: string
 }
 
-export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps) {
+export default function PaymentFilters({ onApply, onClose, basePath = '/payments' }: PaymentFiltersProps) {
   const navigate = useNavigate()
   const [isStatusOpen, setIsStatusOpen] = useState(true)
   const [isDateRangeOpen, setIsDateRangeOpen] = useState(true)
@@ -18,7 +18,10 @@ export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps
     status: {
       rejected: false,
       pending: false,
-      approved: false
+      approved: false,
+      refunded: false,
+      processing: false,
+      completed: false
     },
     dateRange: {
       startDate: '',
@@ -74,11 +77,11 @@ export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps
         </button>
         {isStatusOpen && (
           <div className="space-y-2">
-            {['rejected', 'pending', 'approved'].map((status) => (
+            {['pending', 'approved', 'completed', 'rejected', 'refunded', 'processing'].map((status) => (
               <label key={status} className="flex items-center space-x-2">
                 <input
                   type="checkbox"
-                  checked={filters.status[status]}
+                  checked={filters.status[status as keyof typeof filters.status]}
                   onChange={() => handleCheckboxChange('status', status)}
                   className="w-4 h-4 rounded border-gray-300"
                 />
@@ -173,19 +176,20 @@ export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps
             // Build query params
             const params = new URLSearchParams()
             
-            // Add status filters
+            // Add status filters (API: Pending | Approved | Rejected | Refunded | Processing | Completed)
             const selectedStatuses = Object.entries(filters.status)
               .filter(([_, checked]) => checked)
-              .map(([key, _]) => key.charAt(0).toUpperCase() + key.slice(1))
+              .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
             if (selectedStatuses.length > 0) {
               params.append('status', selectedStatuses.join(','))
             }
-            
-            // Add date range
+            // Date range: API uses startDate, endDate
             if (filters.dateRange.startDate) {
+              params.append('startDate', filters.dateRange.startDate)
               params.append('dateFrom', filters.dateRange.startDate)
             }
             if (filters.dateRange.endDate) {
+              params.append('endDate', filters.dateRange.endDate)
               params.append('dateTo', filters.dateRange.endDate)
             }
             
@@ -217,9 +221,9 @@ export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps
             // Update URL
             const queryString = params.toString()
             if (queryString) {
-              navigate(`/payments?${queryString}`)
+              navigate(`${basePath}?${queryString}`)
             } else {
-              navigate('/payments')
+              navigate(basePath)
             }
             
             if (onClose) {
@@ -237,7 +241,10 @@ export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps
               status: {
                 rejected: false,
                 pending: false,
-                approved: false
+                approved: false,
+                refunded: false,
+                processing: false,
+                completed: false
               },
               dateRange: {
                 startDate: '',
@@ -250,7 +257,7 @@ export default function PaymentFilters({ onApply, onClose }: PaymentFiltersProps
                 publicHolidayRate: false
               }
             })
-            navigate('/payments')
+            navigate(basePath)
             if (onClose) {
               onClose()
             }

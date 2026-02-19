@@ -117,7 +117,18 @@ const ActiveJobPosting = () => {
         }
 
         setData({ employer: employerData });
-        setJobs(Array.isArray(employerData.jobs) ? employerData.jobs : []);
+        let jobsList = Array.isArray(employerData.jobs) ? employerData.jobs : [];
+        if (jobsList.length === 0 && (employerData._id || employerData.employerId || id)) {
+          try {
+            const jobsRes = await axiosInstance.get("/admin/jobs", {
+              params: { employerId: employerData._id || employerData.employerId || id, limit: 100 },
+            });
+            jobsList = Array.isArray(jobsRes?.data?.jobs) ? jobsRes.data.jobs : [];
+          } catch {
+            // Keep empty if fetch fails
+          }
+        }
+        setJobs(jobsList);
         setOutlets(Array.isArray(employerData.outlets) ? employerData.outlets : []);
       } catch (err: any) {
         const errorMessage = err?.response?.data?.message || err?.message || "Failed to fetch data. Please try again.";
@@ -141,17 +152,25 @@ const ActiveJobPosting = () => {
     const job = jobs[index];
     if (!job) return;
 
-    const jobId = job._id || job.jobId || String(index);
+    const jobId = job._id || job.jobId || job.id;
+    const isValidId = jobId && String(jobId) !== "0" && String(jobId).length >= 4;
 
     if (action === "View") {
-      // Outlets are already shown in the outlets tab
       setActiveTab("outlets");
     } else if (action === "Show Job Details") {
+      if (!isValidId) {
+        toast.error("Job ID not available. The job may not be fully loaded.");
+        return;
+      }
       navigate(`/jobs/${jobId}`);
     } else if (action === "Edit") {
+      if (!isValidId) {
+        toast.error("Job ID not available. The job may not be fully loaded.");
+        return;
+      }
       navigate(`/jobs/${jobId}/modify`);
     } else if (action === "Duplicate") {
-      // Handle duplicate action
+      // Handle duplicate - would need valid jobId
     }
     setIsJobMenuOpen(null);
   };
@@ -456,11 +475,11 @@ const ActiveJobPosting = () => {
                     <tr key={index} className="hover:bg-gray-50 transition-colors group">
                       <td className="py-4 px-6">
                         <div className="flex items-center gap-3">
-                          {job?.titleimage && (
+                          {(job?.titleimage || job?.employer?.companyLogo) && (
                             <img
                               className="w-10 h-10 rounded-lg object-cover"
-                              src={job.titleimage}
-                              alt={job.jobName || "Job"}
+                              src={(job?.titleimage || job?.employer?.companyLogo || "").startsWith("http") ? (job?.titleimage || job?.employer?.companyLogo) : `${images}${job?.titleimage || job?.employer?.companyLogo || ""}`}
+                              alt={job?.jobName || job?.jobTitle || "Job"}
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 target.style.display = 'none';
@@ -469,10 +488,10 @@ const ActiveJobPosting = () => {
                           )}
                           <div>
                             <div className="text-sm font-semibold text-gray-900">{job?.jobName || job?.jobTitle || "N/A"}</div>
-                            {job?.companyimage && (
+                            {(job?.companyimage || job?.employer?.companyLogo) && (
                               <img
                                 className="h-4 mt-1"
-                                src={job.companyimage}
+                                src={((job?.companyimage || job?.employer?.companyLogo) || "").startsWith("http") ? (job?.companyimage || job?.employer?.companyLogo) : `${images}${job?.companyimage || job?.employer?.companyLogo || ""}`}
                                 alt="Company"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
@@ -489,27 +508,27 @@ const ActiveJobPosting = () => {
                         </span>
                       </td>
                       <td className="py-4 px-6">
-                        <div className="text-sm text-gray-900 max-w-xs truncate">{job?.address || "N/A"}</div>
+                        <div className="text-sm text-gray-900 max-w-xs truncate">{job?.address || job?.outlet?.address || job?.outlet?.outletAddress || job?.location || job?.outletAddress || "N/A"}</div>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className="text-sm text-gray-700">{job?.date || job?.jobDate || "N/A"}</span>
                       </td>
                       <td className="py-4 px-6 text-center">
-                        <span className="text-sm font-medium text-gray-900">{job?.availableShifts || 0}</span>
+                        <span className="text-sm font-medium text-gray-900">{job?.availableShifts ?? (Array.isArray(job?.shifts) ? job.shifts.length : 0)}</span>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className="text-sm font-medium text-gray-900">
-                          {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.vacancyFilled || 0), 0) : 0}
+                          {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.vacancy ?? shift.vacancyFilled ?? 0), 0) : (job?.totalPositions ?? job?.vacancy ?? 0)}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className="text-sm font-medium text-gray-900">
-                          {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.standbyFilled || 0), 0) : 0}
+                          {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.standbyVacancy ?? shift.standbyFilled ?? 0), 0) : (job?.standbyLimit ?? 0)}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-center">
                         <div className="text-sm font-medium text-gray-900">
-                          {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.duration || 0), 0) : 0} hrs
+                          {Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.duration ?? shift.totalWorkingHours ?? 0), 0) : 0} hrs
                         </div>
                         {Array.isArray(job?.shifts) && job.shifts.reduce((total: number, shift: any) => total + (shift.breakHours || 0), 0) > 0 && (
                           <div className="text-xs text-gray-500 mt-1">
@@ -519,10 +538,10 @@ const ActiveJobPosting = () => {
                       </td>
                       <td className="py-4 px-6 text-center">
                         <div className="text-sm text-gray-900">
-                          {Array.isArray(job?.shifts) && job.shifts.length > 0 ? job.shifts[0].rateType : "N/A"}
+                          {Array.isArray(job?.shifts) && job.shifts.length > 0 ? (job.shifts[0].rateType || job.shifts[0].rates ? "Hourly" : "N/A") : "N/A"}
                         </div>
                         <div className="text-xs text-gray-600 mt-1">
-                          ${Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.payRate || 0), 0) : 0}
+                          ${Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.payRate ?? shift.rates ?? 0), 0) : 0}
                         </div>
                       </td>
                       <td className="py-4 px-6 text-center">
@@ -538,7 +557,7 @@ const ActiveJobPosting = () => {
                       </td>
                       <td className="py-4 px-6 text-center">
                         <span className="text-sm font-semibold text-gray-900">
-                          ${Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.totalWage || 0), 0) : 0}
+                          ${Array.isArray(job?.shifts) ? job.shifts.reduce((total: number, shift: any) => total + (shift.totalWage ?? shift.totalWages ?? 0), 0) : 0}
                         </span>
                       </td>
                       <td className="py-4 px-6 text-center">

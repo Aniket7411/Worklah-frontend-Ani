@@ -12,6 +12,7 @@ import ActiveJobPosting from "./pages/employers/ActiveJobPosting";
 import HustleHeroesList from "./pages/hustleHeroes/HustleHeroesList";
 import EditCandidateProfile from "./pages/jobManagemant/EditCandidateProfile";
 import EmployeePayments from "./pages/payments/EmployeePayments";
+import EmployerPayments from "./pages/payments/EmployerPayments";
 import SignIn from "./pages/auth/SignIn";
 import PrivateRoute from "./components/PrivateRoute"; // Import PrivateRoute
 import { AuthProvider } from "./context/AuthContext";
@@ -30,6 +31,7 @@ import TimesheetManagement from "./pages/timesheet/TimesheetManagement";
 import CreateUser from "./pages/admin/CreateUser";
 import ApplicationsList from "./pages/applications/ApplicationsList";
 import ApplicationDetail from "./pages/applications/ApplicationDetail";
+import PenaltyManagement from "./pages/settings/PenaltyManagement";
 
 const AppContent: React.FC = () => {
   return (
@@ -44,7 +46,7 @@ const AppContent: React.FC = () => {
           {/* Job Management */}
           <Route path="jobs/job-management" element={<JobManagement />} />
           <Route path="jobs/create-job" element={<NewJob />} />
-          <Route path="jobs/:jobId/outlate-attendnce" element={<EmployerDetailPage />} />
+          <Route path="jobs/:jobId/outlet-attendance" element={<EmployerDetailPage />} />
           <Route path="jobs/:jobId/candidates" element={<CandidatesTable />} />
           <Route path="jobs/:jobId" element={<JobDetailsPage />} />
           <Route path="jobs/:jobId/modify" element={<ModifyJob />} />
@@ -61,11 +63,13 @@ const AppContent: React.FC = () => {
 
           <Route path="hustle-heroes" element={<HustleHeroesList />} />
           <Route path="payments" element={<EmployeePayments />} />
+          <Route path="employer-payments" element={<EmployerPayments />} />
           <Route path="support" element={<SupportFeedback />} />
           <Route path="qrCode" element={<QRCodeManagement />} />
           <Route path="notifications/send" element={<SendNotification />} />
           <Route path="timesheet" element={<TimesheetManagement />} />
           <Route path="admin/create-user" element={<CreateUser />} />
+          <Route path="settings/penalties" element={<PenaltyManagement />} />
 
         </Route>
       </Route>

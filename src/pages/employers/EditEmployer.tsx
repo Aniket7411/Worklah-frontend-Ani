@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { axiosInstance, axiosFileInstance } from "../../lib/authInstances";
 import {
@@ -19,10 +19,17 @@ import {
   AlertTriangle
 } from "lucide-react";
 import toast from "react-hot-toast";
+import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
 // @ts-ignore - Loader is a JSX file without types
 import Loader from "../../components/Loader";
 import { buildEmployerUpdateFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
 import { validatePhone, getPlaceholder } from "../../utils/phoneValidation";
+
+declare global {
+  interface Window {
+    google: any;
+  }
+}
 
 // Images come as complete URLs from backend - no base URL needed
 
@@ -78,12 +85,65 @@ const EditEmployer = () => {
     outletName: "",
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
+  const hqAddressRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (id) {
       fetchEmployerData();
     }
   }, [id]);
+
+  // Load Google Maps script for Places autocomplete
+  useEffect(() => {
+    if (window.google?.maps) {
+      setIsGoogleMapsLoaded(true);
+      return;
+    }
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return;
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setIsGoogleMapsLoaded(true);
+    script.onerror = () => {
+      if (apiKey) toast.error("Failed to load Google Maps API");
+    };
+    document.head.appendChild(script);
+  }, []);
+
+  const hasGoogleMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const {
+    ready: hqAddressReady = false,
+    value: hqAddressValue = "",
+    suggestions: { status: hqAddressStatus = "", data: hqAddressSuggestions = [] } = { status: "", data: [] },
+    setValue: setHqAddressValue,
+    clearSuggestions: clearHqSuggestions,
+  } = usePlacesAutocomplete({
+    requestOptions: { componentRestrictions: { country: "sg" } },
+    debounce: 300,
+    initOnMount: hasGoogleMapsKey && isGoogleMapsLoaded,
+  });
+
+  // Sync loaded employer HQ address into Places value once data is fetched
+  useEffect(() => {
+    if (!loading && formData.hqAddress && isGoogleMapsLoaded) {
+      setHqAddressValue(formData.hqAddress, false);
+    }
+  }, [loading, isGoogleMapsLoaded]);
+
+  const handleHqAddressSelect = async (description: string) => {
+    setHqAddressValue(description, false);
+    clearHqSuggestions();
+    setFormData((prev) => ({ ...prev, hqAddress: description }));
+    try {
+      const results = await getGeocode({ address: description });
+      await getLatLng(results[0]);
+    } catch (err) {
+      console.error("Geocode error:", err);
+    }
+  };
 
   const fetchEmployerData = async () => {
     try {
@@ -504,19 +564,45 @@ const EditEmployer = () => {
                     </select>
                   </div>
 
-                  {/* HQ Address */}
+                  {/* HQ Address with Google Places Autocomplete */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       HQ Address <span className="text-gray-400 text-xs">(Optional)</span>
+                      {hasGoogleMapsKey && isGoogleMapsLoaded && (
+                        <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses)</span>
+                      )}
                     </label>
-                    <textarea
-                      name="hqAddress"
-                      value={formData.hqAddress}
-                      onChange={handleChange}
-                      placeholder="Enter headquarters address"
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-                    />
+                    <div className="relative">
+                      <textarea
+                        ref={hqAddressRef}
+                        name="hqAddress"
+                        value={hasGoogleMapsKey && isGoogleMapsLoaded ? (hqAddressValue || formData.hqAddress) ?? "" : formData.hqAddress ?? ""}
+                        onChange={(e) => {
+                          if (hasGoogleMapsKey && isGoogleMapsLoaded) setHqAddressValue(e.target.value);
+                          setFormData((prev) => ({ ...prev, hqAddress: e.target.value }));
+                        }}
+                        placeholder={hasGoogleMapsKey && isGoogleMapsLoaded
+                          ? "Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                          : "Enter headquarters address"}
+                        rows={3}
+                        disabled={hasGoogleMapsKey && (!hqAddressReady || !isGoogleMapsLoaded)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                      />
+                      {hasGoogleMapsKey && isGoogleMapsLoaded && hqAddressStatus === "OK" && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {hqAddressSuggestions.map(({ place_id, description }) => (
+                            <button
+                              key={place_id}
+                              type="button"
+                              onClick={() => handleHqAddressSelect(description)}
+                              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm"
+                            >
+                              {description}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </section>

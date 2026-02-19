@@ -10,6 +10,7 @@ import {
 } from "recharts";
 import { axiosInstance } from "../../lib/authInstances";
 import { Loader2 } from "lucide-react";
+import { getProfilePicUrl } from "../../utils/avatarUtils";
 
 const RevenueChart = () => {
   const [revenueData, setRevenueData] = useState<any[]>([]);
@@ -198,9 +199,9 @@ const RevenueChart = () => {
             <ul className="">
               {applicants.map((applicant, index) => (
                 <li key={applicant.id || index} className="flex items-center my-8">
-                  {applicant.avatar && (
+                  {getProfilePicUrl(applicant.avatar) && (
                     <img
-                      src={applicant.avatar}
+                      src={getProfilePicUrl(applicant.avatar)}
                       alt={applicant.name}
                       className="w-10 h-10 rounded-full mr-4 border object-cover"
                       onError={(e) => {

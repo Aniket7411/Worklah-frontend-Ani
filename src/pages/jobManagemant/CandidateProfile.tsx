@@ -37,6 +37,7 @@ import OverViewTable from "./OverViewTable";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import toast from "react-hot-toast";
 import { Trash2 } from "lucide-react";
+import { getProfilePicUrl } from "../../utils/avatarUtils";
 
 interface PersonalDetails {
   candidateId: string;
@@ -327,9 +328,9 @@ export default function ProfileDashboard() {
             <div className="flex justify-between items-start  pb-6 border-b border-[#DDDDDD]">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  {userData?.candidateProfile?.profilePicture ? (
+                  {getProfilePicUrl(userData?.candidateProfile?.profilePicture) ? (
                     <img
-                      src={userData.candidateProfile.profilePicture}
+                      src={getProfilePicUrl(userData?.candidateProfile?.profilePicture)}
                       alt="Profile"
                       width={80}
                       height={80}

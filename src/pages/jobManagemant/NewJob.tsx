@@ -36,6 +36,15 @@ interface Shift {
   standbyVacancy: number; // Optional: default 0 (matches backend spec)
 }
 
+/** Format date in local timezone (YYYY-MM-DD) - avoids UTC shifting to past date */
+function formatLocalDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/** Get today's date in local timezone */
+function getLocalDateString(): string {
+  return formatLocalDate(new Date());
+}
+
 // Normalize and deduplicate outlets from API (may use _id or id; avoid showing duplicate entries)
 function normalizeOutlets(raw: any[]): Array<{ id: string; address: string; name?: string }> {
   if (!Array.isArray(raw) || raw.length === 0) return [];
@@ -63,7 +72,7 @@ const NewJob: React.FC = () => {
   const employerIdFromState = (location.state as any)?.employerId;
 
   const [formData, setFormData] = useState({
-    jobDate: new Date().toISOString().split("T")[0],
+    jobDate: getLocalDateString(),
     jobTitle: "",
     jobDescription: "",
     employerId: "",
@@ -72,7 +81,6 @@ const NewJob: React.FC = () => {
     outletId: "",
     outletAddress: "", // Auto-filled from outlet
     useManualOutlet: false, // Toggle between dropdown and manual entry
-    totalPositions: 1,
     foodHygieneCertRequired: false,
     jobStatus: "Active",
     applicationDeadline: "",
@@ -84,7 +92,7 @@ const NewJob: React.FC = () => {
   const [shifts, setShifts] = useState<Shift[]>([
     {
       id: Date.now(),
-      shiftDate: new Date().toISOString().split("T")[0], // Default to job posting date
+      shiftDate: getLocalDateString(),
       startTime: "09:00",
       endTime: "17:00",
       breakDuration: 0,
@@ -206,7 +214,7 @@ const NewJob: React.FC = () => {
           // Set default shift with today's date
           setShifts([{
             id: Date.now(),
-            shiftDate: new Date().toISOString().split("T")[0],
+            shiftDate: getLocalDateString(),
             startTime: "09:00",
             endTime: "17:00",
             breakDuration: 0,
@@ -294,9 +302,9 @@ const NewJob: React.FC = () => {
       ? (() => {
         const lastDate = new Date(shifts[shifts.length - 1].shiftDate);
         lastDate.setDate(lastDate.getDate() + 1);
-        return lastDate.toISOString().split("T")[0];
+        return formatLocalDate(lastDate);
       })()
-      : formData.jobDate || new Date().toISOString().split("T")[0];
+      : formData.jobDate || getLocalDateString();
 
     const newShift: Shift = {
       id: Date.now(),
@@ -424,8 +432,17 @@ const NewJob: React.FC = () => {
         user?.employerId
       );
 
-      // Backend endpoint: POST /api/admin/jobs/create (as per API documentation)
-      const response = await axiosInstance.post("/admin/jobs/create", jobData);
+      // NEW_END_TO_END_API_DOCUMENTATION.md: POST /admin/jobs or /admin/jobs/create – try both for backend compatibility
+      let response: any;
+      try {
+        response = await axiosInstance.post("/admin/jobs", jobData);
+      } catch (err: any) {
+        if (err?.response?.status === 404) {
+          response = await axiosInstance.post("/admin/jobs/create", jobData);
+        } else {
+          throw err;
+        }
+      }
 
       // Check for success field according to API spec
       if (response.data?.success === false) {
@@ -506,11 +523,8 @@ const NewJob: React.FC = () => {
 
   const totalWages = shifts.reduce((sum, shift) => sum + shift.totalWages, 0);
 
-  // Get today's date in YYYY-MM-DD format for min date validation
-  const getTodayDateString = () => {
-    const today = new Date();
-    return today.toISOString().split("T")[0];
-  };
+  // Get today's date in YYYY-MM-DD format (local timezone) for min date validation
+  const getTodayDateString = () => getLocalDateString();
 
   // Get minimum date for application deadline (should be >= job date or today)
   const getMinDeadlineDate = () => {
@@ -546,15 +560,15 @@ const NewJob: React.FC = () => {
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Job Posting Date - Autofilled */}
+                {/* Job Date - Today's date (local timezone) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Posting Date <span className="text-gray-400 text-xs">(Auto-filled)</span>
+                    Job Posting Date
                   </label>
                   <input
                     type="date"
                     name="jobDate"
-                    value={formData.jobDate ?? new Date().toISOString().split("T")[0]}
+                    value={formData.jobDate ?? getLocalDateString()}
                     readOnly
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-600 cursor-not-allowed"
                   />
@@ -576,22 +590,6 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-
-                {/* Total Vacancies */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Total Vacancies <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="totalPositions"
-                    value={formData.totalPositions ?? 1}
-                    onChange={handleChange}
-                    min={1}
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
 
                 {/* Employer */}
                 <div>
@@ -921,7 +919,7 @@ const NewJob: React.FC = () => {
                           type="date"
                           value={shift.shiftDate}
                           onChange={(e) => updateShift(shift.id, "shiftDate", e.target.value)}
-                          min={formData.jobDate || new Date().toISOString().split("T")[0]}
+                          min={formData.jobDate || getLocalDateString()}
                           required
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
@@ -1079,7 +1077,7 @@ const NewJob: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-gray-600">Total Positions:</span>
-                    <span className="ml-2 font-semibold text-gray-900">{formData.totalPositions}</span>
+                    <span className="ml-2 font-semibold text-gray-900">{shifts.reduce((s, sh) => s + (sh.vacancy ?? 1), 0)}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Total Wages:</span>

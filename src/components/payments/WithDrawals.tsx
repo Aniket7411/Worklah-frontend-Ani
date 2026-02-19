@@ -1,9 +1,11 @@
-"use client";
-
 import React, { useState } from "react";
 import { ChevronDown, Plus, X, DollarSign, ArrowUpCircle, ArrowDownCircle, Filter, Download } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
+import {
+  validateSingaporeAccountNumber,
+  SINGAPORE_BANK_OPTIONS,
+} from "../../utils/bankValidation";
 
 interface WithDrawalsProps {
   data?: any;
@@ -70,6 +72,8 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
     amount: "",
     cashOutMethod: "PayNow" as "PayNow" | "Bank Account",
     description: "",
+    accountNumber: "",
+    bankName: "",
   });
 
   // Transform API data to component format
@@ -142,6 +146,23 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
       toast.error("Please select a cash out method");
       return;
     }
+    if (
+      newTransaction.transactionType === "Cash Out" &&
+      newTransaction.cashOutMethod === "Bank Account"
+    ) {
+      const accountValidation = validateSingaporeAccountNumber(
+        newTransaction.accountNumber,
+        newTransaction.bankName || undefined
+      );
+      if (!accountValidation.valid) {
+        toast.error(accountValidation.message || "Invalid bank account");
+        return;
+      }
+      if (!newTransaction.bankName?.trim()) {
+        toast.error("Please select a bank");
+        return;
+      }
+    }
     if (newTransaction.detailsType === "Job ID" && !newTransaction.jobId) {
       toast.error("Please enter Job ID");
       return;
@@ -161,6 +182,15 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
         },
         amount: parseFloat(newTransaction.amount),
         cashOutMethod: newTransaction.transactionType === "Cash Out" ? newTransaction.cashOutMethod : null,
+        ...(newTransaction.transactionType === "Cash Out" &&
+          newTransaction.cashOutMethod === "Bank Account" &&
+          newTransaction.accountNumber &&
+          newTransaction.bankName && {
+            accountDetails: {
+              accountNumber: newTransaction.accountNumber.replace(/\s/g, ""),
+              bankName: newTransaction.bankName.trim(),
+            },
+          }),
       };
 
       // Use admin cashout endpoint for creating withdrawal requests
@@ -184,6 +214,8 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
           amount: "",
           cashOutMethod: "PayNow",
           description: "",
+          accountNumber: "",
+          bankName: "",
         });
         window.location.reload();
       }
@@ -449,21 +481,71 @@ export default function WithDrawals({ data }: WithDrawalsProps) {
               </div>
 
               {newTransaction.transactionType === "Cash Out" && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cash Out Method <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={newTransaction.cashOutMethod}
-                    onChange={(e) =>
-                      setNewTransaction((prev) => ({ ...prev, cashOutMethod: e.target.value as "PayNow" | "Bank Account" }))
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="PayNow">PayNow</option>
-                    <option value="Bank Account">Bank Account</option>
-                  </select>
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Cash Out Method <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={newTransaction.cashOutMethod}
+                      onChange={(e) =>
+                        setNewTransaction((prev) => ({
+                          ...prev,
+                          cashOutMethod: e.target.value as "PayNow" | "Bank Account",
+                          accountNumber: "",
+                          bankName: "",
+                        }))
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="PayNow">PayNow</option>
+                      <option value="Bank Account">Bank Account</option>
+                    </select>
+                  </div>
+                  {newTransaction.cashOutMethod === "Bank Account" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Bank <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={newTransaction.bankName}
+                          onChange={(e) =>
+                            setNewTransaction((prev) => ({ ...prev, bankName: e.target.value }))
+                          }
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {SINGAPORE_BANK_OPTIONS.map((opt) => (
+                            <option key={opt.value || "blank"} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Account Number <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="7–14 digits (e.g. DBS 9–10, OCBC 10–12)"
+                          value={newTransaction.accountNumber}
+                          onChange={(e) =>
+                            setNewTransaction((prev) => ({
+                              ...prev,
+                              accountNumber: e.target.value.replace(/\D/g, "").slice(0, 14),
+                            }))
+                          }
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Singapore: DBS/POSB 9–10, OCBC 10–12, UOB 10, others 7–14 digits
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </>
               )}
 
               <div className="flex gap-4 justify-end pt-4">

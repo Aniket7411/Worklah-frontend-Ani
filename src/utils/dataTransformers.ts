@@ -172,10 +172,12 @@ export const buildJobData = (formData: any, shifts: any[], userRole: string, use
     location,
     locationDetails: formData.locationDetails || null,
     jobScope,
-    totalPositions: formData.totalPositions || 1,
+    totalPositions: formData.totalPositions ?? (shifts?.reduce((s, sh) => s + (sh.vacancy ?? 1), 0) || 1),
     foodHygieneCertRequired: formData.foodHygieneCertRequired || false,
     jobStatus: formData.jobStatus || "Active",
-    applicationDeadline: formData.applicationDeadline || null,
+    applicationDeadline: formData.applicationDeadline
+      ? (new Date(formData.applicationDeadline).toISOString?.() ?? formData.applicationDeadline)
+      : null,
     dressCode: formData.dressCode || null,
     skills: Array.isArray(formData.skills) ? formData.skills : [],
     shifts: shifts.map((shift) => ({
@@ -249,18 +251,18 @@ export const buildEmployerUpdateFormData = (formData: any, outlets: any[], indus
     }))
   };
 
-  // Append files separately
-  if (formData.companyLogo instanceof File) {
-    formDataToSend.append('companyLogo', formData.companyLogo);
+  // Append files separately - backend expects these field names for file upload
+  if (formData.companyLogo && typeof formData.companyLogo === "object" && formData.companyLogo instanceof File) {
+    formDataToSend.append('companyLogo', formData.companyLogo, formData.companyLogo.name || 'companyLogo');
   }
   if (formData.acraBizfileCert instanceof File) {
-    formDataToSend.append('acraBizfileCert', formData.acraBizfileCert);
+    formDataToSend.append('acraBizfileCert', formData.acraBizfileCert, formData.acraBizfileCert.name || 'acraBizfileCert');
   }
   if (formData.serviceContract instanceof File) {
-    formDataToSend.append('serviceContract', formData.serviceContract);
+    formDataToSend.append('serviceContract', formData.serviceContract, formData.serviceContract.name || 'serviceContract');
   }
 
-  // Append all other data as JSON string
+  // Append JSON data - backend may expect 'data' or parse from multipart
   formDataToSend.append('data', JSON.stringify(employerData));
 
   return formDataToSend;

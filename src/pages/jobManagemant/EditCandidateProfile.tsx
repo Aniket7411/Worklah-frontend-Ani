@@ -12,6 +12,10 @@ import {
   UploadCloud,
   Eye,
   EyeOff,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  PauseCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 // @ts-ignore - Loader is a JSX file without types
@@ -22,6 +26,7 @@ import ConfirmationModal from "../../components/ConfirmationModal";
 import { Trash2 } from "lucide-react";
 
 // Images come as complete URLs from backend - no base URL needed
+import { isPlaceholderProfilePic } from "../../utils/avatarUtils";
 
 const EditCandidateProfile = () => {
   const { id } = useParams();
@@ -33,6 +38,16 @@ const EditCandidateProfile = () => {
   const [schoolsList, setSchoolsList] = useState<string[]>([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  // User verification (backend: status, verificationStatus, verificationAction)
+  const [verificationState, setVerificationState] = useState<{
+    status?: string;
+    verificationStatus?: string;
+    verificationAction?: string | null;
+  }>({});
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [showRejectReason, setShowRejectReason] = useState(false);
+  const [showSuspendReason, setShowSuspendReason] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -69,8 +84,71 @@ const EditCandidateProfile = () => {
     if (id) {
       fetchEmployeeData();
       fetchSchoolsList();
+      fetchUserVerification();
     }
   }, [id]);
+
+  const fetchUserVerification = async () => {
+    if (!id) return;
+    try {
+      const response = await axiosInstance.get(`/admin/users/${id}`);
+      if (response.data?.success === false) return;
+      const user = response.data?.user || response.data;
+      setVerificationState({
+        status: user.status,
+        verificationStatus: user.verificationStatus ?? user.status,
+        verificationAction: user.verificationAction ?? null,
+      });
+    } catch {
+      // User might be candidate-only; verification section will not show or show unknown
+    }
+  };
+
+  const mapCandidateToForm = (candidate: any) => {
+    let registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)" = "Singaporean/PR";
+    if (candidate.workPassStatus === "LTVP" || candidate.workPassStatus === "Long Term Visit Pass Holder" || candidate.employmentStatus === "LTVP") {
+      registrationType = "LTVP";
+    } else if (candidate.workPassStatus === "Student Pass" || candidate.workPassStatus === "Student Pass (Foreigner)" || candidate.employmentStatus === "Student Pass") {
+      registrationType = "Student Pass (Foreigner)";
+    }
+
+    return {
+      formData: {
+        fullName: candidate.fullName || candidate.name || "",
+        mobile: candidate.mobile || candidate.phoneNumber || candidate.personalDetails?.contactNumber || "",
+        email: candidate.email || candidate.personalDetails?.email || "",
+        nric: candidate.nric || candidate.personalDetails?.nric || candidate.icNumber || "",
+        dateOfBirth: candidate.dateOfBirth || candidate.dob || candidate.personalDetails?.dob || "",
+        gender: (candidate.gender === "Other" || candidate.gender === "Female" || candidate.gender === "Male") ? candidate.gender : "Male",
+        postalCode: candidate.postalCode || candidate.personalDetails?.postalCode || "",
+        streetAddress: candidate.streetAddress || candidate.address || candidate.personalDetails?.street || "",
+        profilePicture: null,
+        nricFront: null,
+        nricBack: null,
+        plocImage: null,
+        plocExpiryDate: candidate.plocExpiryDate || candidate.plocExpiry || "",
+        foodHygieneCert: null,
+        schools: candidate.schools || "",
+        studentPassImage: null,
+        studentIdNo: candidate.studentIdNo || candidate.studentId || "",
+        eWalletAmount: candidate.eWalletAmount ?? candidate.walletBalance ?? candidate.personalDetails?.eWalletAmount ?? 0,
+        registrationType,
+      },
+      existingFiles: {
+        profilePicture: isPlaceholderProfilePic(candidate.profilePicture || candidate.selfie || "") ? "" : (candidate.profilePicture || candidate.selfie || ""),
+        nricFront: candidate.nricFront || candidate.nricFrontImage || "",
+        nricBack: candidate.nricBack || candidate.nricBackImage || "",
+        plocImage: candidate.plocImage || "",
+        foodHygieneCert: candidate.foodHygieneCert || "",
+        studentPassImage: candidate.studentPassImage || candidate.studentCard || "",
+      },
+      verificationState: (candidate.status != null || candidate.verificationStatus != null) ? {
+        status: candidate.status,
+        verificationStatus: candidate.verificationStatus ?? candidate.status,
+        verificationAction: candidate.verificationAction ?? null,
+      } : undefined,
+    };
+  };
 
   const fetchEmployeeData = async () => {
     try {
@@ -81,63 +159,36 @@ const EditCandidateProfile = () => {
         return;
       }
 
-      const response = await axiosInstance.get(`/admin/candidates/${id}`);
+      let data: any;
+      let candidate: any;
 
-      // Check for success field according to API spec
-      if (response.data?.success === false) {
-        throw new Error(response.data?.message || "Failed to fetch candidate data");
+      try {
+        const response = await axiosInstance.get(`/admin/candidates/${id}`);
+        if (response.data?.success === false) throw new Error(response.data?.message || "Failed to fetch");
+        data = response.data;
+        candidate = data.candidate || data.candidateProfile || data.user || data;
+      } catch {
+        const fallback = await axiosInstance.get(`/admin/users/${id}`);
+        if (fallback.data?.success === false) throw new Error(fallback.data?.message || "Failed to fetch");
+        data = fallback.data;
+        candidate = data.user || data;
       }
-
-      const data = response.data;
-      const candidate = data.candidate || data.candidateProfile || data;
 
       if (!candidate) {
         throw new Error("Candidate data not found");
       }
 
-      // Determine registration type
-      let registrationType: "Singaporean/PR" | "LTVP" | "Student Pass (Foreigner)" = "Singaporean/PR";
-      if (candidate.workPassStatus === "LTVP" || candidate.workPassStatus === "Long Term Visit Pass Holder") {
-        registrationType = "LTVP";
-      } else if (candidate.workPassStatus === "Student Pass" || candidate.workPassStatus === "Student Pass (Foreigner)") {
-        registrationType = "Student Pass (Foreigner)";
-      }
-
-      setFormData({
-        fullName: candidate.fullName || candidate.name || "",
-        mobile: candidate.mobile || candidate.personalDetails?.contactNumber || "",
-        email: candidate.email || candidate.personalDetails?.email || "",
-        nric: candidate.nric || candidate.personalDetails?.nric || candidate.icNumber || "",
-        dateOfBirth: candidate.dob || candidate.personalDetails?.dob || "",
-        gender: (candidate.gender === "Other" || candidate.gender === "Female" || candidate.gender === "Male") ? candidate.gender : "Male",
-        postalCode: candidate.postalCode || candidate.personalDetails?.postalCode || "",
-        streetAddress: candidate.streetAddress || candidate.personalDetails?.street || "",
-        profilePicture: null,
-        nricFront: null,
-        nricBack: null,
-        plocImage: null,
-        plocExpiryDate: candidate.plocExpiryDate || candidate.plocExpiry || "",
-        foodHygieneCert: null,
-        schools: candidate.schools || "",
-        studentPassImage: null,
-        studentIdNo: candidate.studentIdNo || candidate.studentId || "",
-        eWalletAmount: candidate.eWalletAmount || candidate.personalDetails?.eWalletAmount || 0,
-        registrationType,
-      });
-
-      setExistingFiles({
-        profilePicture: candidate.profilePicture || candidate.selfie || "",
-        nricFront: candidate.nricFront || "",
-        nricBack: candidate.nricBack || "",
-        plocImage: candidate.plocImage || "",
-        foodHygieneCert: candidate.foodHygieneCert || candidate.foodHygieneCert || "",
-        studentPassImage: candidate.studentPassImage || candidate.studentCard || "",
-      });
-
+      const mapped = mapCandidateToForm(candidate);
+      setFormData(mapped.formData);
+      setExistingFiles(mapped.existingFiles);
       setUserData(data);
-    } catch (error) {
+      if (mapped.verificationState) {
+        setVerificationState(mapped.verificationState);
+      }
+    } catch (error: unknown) {
       console.error("Error fetching employee data:", error);
-      const errorMessage = error?.response?.data?.message || error?.message || "Failed to load employee data";
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      const errorMessage = err?.response?.data?.message || err?.message || "Failed to load employee data";
       toast.error(errorMessage);
       // Don't navigate immediately, let user see the error
       setTimeout(() => {
@@ -164,7 +215,7 @@ const EditCandidateProfile = () => {
     }
   };
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
 
@@ -255,8 +306,8 @@ const EditCandidateProfile = () => {
 
       // Append all text fields
       Object.entries(formData).forEach(([key, value]) => {
-        if (value instanceof File) {
-          formDataToSend.append(key, value);
+        if ((value as unknown) instanceof File) {
+          formDataToSend.append(key, value as unknown as File);
         } else if (key !== "eWalletAmount" && value !== null && value !== undefined) {
           formDataToSend.append(key, String(value));
         }
@@ -311,12 +362,46 @@ const EditCandidateProfile = () => {
 
       toast.success("Candidate deleted successfully");
       navigate("/hustle-heroes");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error deleting candidate:", error);
-      toast.error(error?.response?.data?.message || "Failed to delete candidate. Please try again.");
+      const err = error as { response?: { data?: { message?: string } } };
+      toast.error(err?.response?.data?.message || "Failed to delete candidate. Please try again.");
     } finally {
       setIsDeleting(false);
       setShowDeleteModal(false);
+    }
+  };
+
+  const handleVerifyUser = async (action: "Approved" | "Rejected" | "Suspended") => {
+    if (!id) return;
+    setIsVerifying(true);
+    setShowRejectReason(false);
+    setShowSuspendReason(false);
+    try {
+      const body: { action: string; reason?: string } = { action };
+      const reason = rejectionReason.trim();
+      if (reason && (action === "Rejected" || action === "Suspended")) {
+        body.reason = reason;
+      }
+      const response = await axiosInstance.put(`/admin/users/${id}/verify`, body);
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Action failed");
+        return;
+      }
+      const msg =
+        action === "Approved"
+          ? "User verified successfully"
+          : action === "Rejected"
+            ? "User rejected"
+            : "User suspended";
+      toast.success(response.data?.message || msg);
+      setRejectionReason("");
+      await fetchUserVerification();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || "Request failed";
+      toast.error(msg);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -339,7 +424,7 @@ const EditCandidateProfile = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <div className="relative">
-                {existingFiles.profilePicture ? (
+                {existingFiles.profilePicture && !isPlaceholderProfilePic(existingFiles.profilePicture) ? (
                   <img
                     src={existingFiles.profilePicture}
                     alt="Profile"
@@ -357,6 +442,121 @@ const EditCandidateProfile = () => {
                 <p className="text-sm text-gray-600">E-Wallet: ${formData.eWalletAmount.toFixed(2)}</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Verification (backend: PUT /api/admin/users/:userId/verify) */}
+        {id && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Account verification</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Status:{" "}
+              <span
+                className={`font-medium ${
+                  verificationState.status === "Verified" ||
+                  verificationState.verificationStatus === "Verified" ||
+                  verificationState.status === "Activated" ||
+                  verificationState.verificationStatus === "Approved"
+                    ? "text-green-600"
+                    : verificationState.status === "Rejected" || verificationState.verificationStatus === "Rejected"
+                    ? "text-red-600"
+                    : verificationState.status === "Suspended" || verificationState.verificationStatus === "Suspended"
+                    ? "text-orange-600"
+                    : "text-amber-600"
+                }`}
+              >
+                {verificationState.verificationStatus ?? verificationState.status ?? "Pending"}
+              </span>
+            </p>
+            {(() => {
+              const s = (v: string | undefined) => (v || "").toLowerCase();
+              const st = s(verificationState.status);
+              const vs = s(verificationState.verificationStatus);
+              const isVerified = ["verified", "approved", "activated", "active"].includes(st) || ["verified", "approved", "activated", "active"].includes(vs);
+              const isRejected = st === "rejected" || vs === "rejected";
+              const isSuspended = st === "suspended" || vs === "suspended";
+              return (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {!isVerified && (
+                      <button
+                        type="button"
+                        disabled={isVerifying}
+                        onClick={() => handleVerifyUser("Approved")}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Approve
+                      </button>
+                    )}
+                    {!isRejected && (
+                      <button
+                        type="button"
+                        disabled={isVerifying}
+                        onClick={() => { setShowRejectReason((v) => !v); setShowSuspendReason(false); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Reject
+                      </button>
+                    )}
+                    {!isSuspended && (
+                      <button
+                        type="button"
+                        disabled={isVerifying}
+                        onClick={() => { setShowSuspendReason((v) => !v); setShowRejectReason(false); }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <PauseCircle className="w-4 h-4" />
+                        Suspend
+                      </button>
+                    )}
+                  </div>
+                {showRejectReason && (
+                  <div className="flex flex-col gap-2 max-w-md">
+                    <label className="text-sm font-medium text-gray-700">Rejection reason (optional)</label>
+                    <input
+                      type="text"
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="e.g. Incomplete documents"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      disabled={isVerifying}
+                      onClick={() => handleVerifyUser("Rejected")}
+                      className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Confirm reject
+                    </button>
+                  </div>
+                )}
+                {showSuspendReason && (
+                  <div className="flex flex-col gap-2 max-w-md">
+                    <label className="text-sm font-medium text-gray-700">Suspend reason (optional)</label>
+                    <input
+                      type="text"
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="e.g. Policy violation"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      disabled={isVerifying}
+                      onClick={() => handleVerifyUser("Suspended")}
+                      className="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+                    >
+                      {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      Confirm suspend
+                    </button>
+                  </div>
+                )}
+              </div>
+              );
+            })()}
           </div>
         )}
 
@@ -569,12 +769,12 @@ const EditCandidateProfile = () => {
                       <Camera className="w-5 h-5 text-blue-600" />
                       <span className="text-sm font-medium text-blue-600">Upload Selfie</span>
                     </label>
-                    {(formData.profilePicture || existingFiles.profilePicture) && (
+                    {(formData.profilePicture || (existingFiles.profilePicture && !isPlaceholderProfilePic(existingFiles.profilePicture))) && (
                       <div className="flex items-center gap-2">
                         <img
                           src={
-                            formData.profilePicture instanceof File
-                              ? URL.createObjectURL(formData.profilePicture)
+                            formData.profilePicture && typeof formData.profilePicture === "object" && "size" in formData.profilePicture
+                              ? URL.createObjectURL(formData.profilePicture as File)
                               : existingFiles.profilePicture
                           }
                           alt="Profile preview"
@@ -618,8 +818,8 @@ const EditCandidateProfile = () => {
                           <div className="flex items-center gap-2">
                             <img
                               src={
-                                formData.nricFront instanceof File
-                                  ? URL.createObjectURL(formData.nricFront)
+                                formData.nricFront && typeof formData.nricFront === "object" && "size" in formData.nricFront
+                                  ? URL.createObjectURL(formData.nricFront as File)
                                   : existingFiles.nricFront
                               }
                               alt="NRIC Front"
@@ -660,8 +860,8 @@ const EditCandidateProfile = () => {
                           <div className="flex items-center gap-2">
                             <img
                               src={
-                                formData.nricBack instanceof File
-                                  ? URL.createObjectURL(formData.nricBack)
+                                formData.nricBack && typeof formData.nricBack === "object" && "size" in formData.nricBack
+                                  ? URL.createObjectURL(formData.nricBack as File)
                                   : existingFiles.nricBack
                               }
                               alt="NRIC Back"
@@ -707,8 +907,8 @@ const EditCandidateProfile = () => {
                           <div className="flex items-center gap-2">
                             <img
                               src={
-                                formData.plocImage instanceof File
-                                  ? URL.createObjectURL(formData.plocImage)
+                                formData.plocImage && typeof formData.plocImage === "object" && "size" in formData.plocImage
+                                  ? URL.createObjectURL(formData.plocImage as File)
                                   : existingFiles.plocImage
                               }
                               alt="PLOC"
@@ -788,8 +988,8 @@ const EditCandidateProfile = () => {
                           <div className="flex items-center gap-2">
                             <img
                               src={
-                                formData.studentPassImage instanceof File
-                                  ? URL.createObjectURL(formData.studentPassImage)
+                                formData.studentPassImage && typeof formData.studentPassImage === "object" && "size" in formData.studentPassImage
+                                  ? URL.createObjectURL(formData.studentPassImage as File)
                                   : existingFiles.studentPassImage
                               }
                               alt="Student Pass"

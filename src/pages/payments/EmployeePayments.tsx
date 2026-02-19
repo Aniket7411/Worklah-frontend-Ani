@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { Filter } from "lucide-react";
 import Payments from "../../components/payments/Payments";
@@ -105,6 +103,11 @@ export default function EmployeePayments() {
         // Rate type filter
         const rateType = urlParams.get('rateType');
         if (rateType) params.rateType = rateType;
+        // Worker and job filters (PAYMENT_INTEGRATION_REACT_ADMIN)
+        const userId = urlParams.get('userId');
+        const jobId = urlParams.get('jobId');
+        if (userId) params.userId = userId;
+        if (jobId) params.jobId = jobId;
 
         const queryString = new URLSearchParams(params).toString();
         if (queryString) {
@@ -119,13 +122,24 @@ export default function EmployeePayments() {
         }
 
         let responseData = response?.data || null;
+        // PAYMENT_INTEGRATION_REACT_ADMIN: response may be data: { transactions }, pagination
+        const rawTransactions = responseData?.data?.transactions ?? responseData?.transactions ?? responseData?.payments ?? [];
+        const pagination = responseData?.pagination ?? {};
+        responseData = {
+          ...responseData,
+          transactions: rawTransactions,
+          payments: rawTransactions,
+          pagination: {
+            currentPage: pagination.currentPage ?? 1,
+            totalPages: pagination.totalPages ?? 1,
+            totalItems: pagination.totalItems ?? rawTransactions.length,
+            itemsPerPage: pagination.itemsPerPage ?? pagination.limit ?? 50,
+          },
+        };
 
-        // Update: Use transactions array instead of withdrawals for withdrawals endpoint
-        if (activeTab === "withdrawals" && responseData && responseData.transactions) {
-          responseData = {
-            ...responseData,
-            transactions: responseData.transactions, // Already in correct format
-          };
+        // Update: Use transactions array for withdrawals tab
+        if (activeTab === "withdrawals" && responseData.transactions) {
+          responseData = { ...responseData, transactions: responseData.transactions };
         }
 
         // If filter is applied, filter the data on frontend if backend doesn't support it

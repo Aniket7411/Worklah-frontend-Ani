@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^2.4.0",
+    "@stripe/stripe-js": "^2.4.0",
     "@react-google-maps/api": "^2.19.3",
     "ag-charts-community": "^11.0.4",
     "ag-charts-react": "^11.0.4",
