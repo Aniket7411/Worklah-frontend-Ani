@@ -19,6 +19,8 @@ export const axiosInstance = axios.create({
   timeout: 30000, // 30 seconds timeout for regular requests
 })
 
+console.log("ahaghga")
+
 // Separate instance for file uploads with longer timeout
 export const axiosFileInstance = axios.create({
   baseURL: API_BASE_URL,
