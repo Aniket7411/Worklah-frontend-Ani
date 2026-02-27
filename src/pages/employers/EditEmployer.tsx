@@ -11,19 +11,17 @@ import {
   MapPin,
   User,
   FileText,
-  Eye,
-  EyeOff,
   Save,
   ArrowLeft,
   Clock,
   AlertTriangle
 } from "lucide-react";
 import toast from "react-hot-toast";
-import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
 // @ts-ignore - Loader is a JSX file without types
 import Loader from "../../components/Loader";
 import { buildEmployerUpdateFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
 import { validatePhone, getPlaceholder } from "../../utils/phoneValidation";
+import { AddressAutocomplete } from "../../components/location";
 
 declare global {
   interface Window {
@@ -47,16 +45,12 @@ const EditEmployer = () => {
     employerId: "",
     companyLogo: null as File | null,
     companyLegalName: "",
-    companyNumber: "", // ACRA Company Number (Optional)
+    companyNumber: "",
     hqAddress: "",
     contactPersonName: "",
     jobPosition: "",
     mainContactNumber: "",
-    mainContactExtension: "",
-    alternateContactNumber: "",
-    alternateContactExtension: "",
     emailAddress: "",
-    accountManager: "",
     acraBizfileCert: null as File | null,
     industry: "",
     serviceAgreement: "",
@@ -64,6 +58,7 @@ const EditEmployer = () => {
     contractExpiryDate: "",
     phoneCountry: "SG" as "SG" | "MY" | "IN",
   });
+  const [additionalContacts, setAdditionalContacts] = useState<Array<{ extension: string; number: string }>>([]);
 
   const [existingFiles, setExistingFiles] = useState({
     companyLogo: "",
@@ -72,7 +67,6 @@ const EditEmployer = () => {
   });
 
   const [outlets, setOutlets] = useState<Array<{ name: string; managerName: string; contactNumber: string; contactExtension?: string; address: string; openingHours: string; closingHours: string; isActive: boolean; _id?: string; barcode?: string }>>([]);
-  const [showAccountManager, setShowAccountManager] = useState(false);
 
   // Delete confirmation modal state
   const [deleteModal, setDeleteModal] = useState<{
@@ -85,65 +79,12 @@ const EditEmployer = () => {
     outletName: "",
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
-  const hqAddressRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (id) {
       fetchEmployerData();
     }
   }, [id]);
-
-  // Load Google Maps script for Places autocomplete
-  useEffect(() => {
-    if (window.google?.maps) {
-      setIsGoogleMapsLoaded(true);
-      return;
-    }
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return;
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setIsGoogleMapsLoaded(true);
-    script.onerror = () => {
-      if (apiKey) toast.error("Failed to load Google Maps API");
-    };
-    document.head.appendChild(script);
-  }, []);
-
-  const hasGoogleMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const {
-    ready: hqAddressReady = false,
-    value: hqAddressValue = "",
-    suggestions: { status: hqAddressStatus = "", data: hqAddressSuggestions = [] } = { status: "", data: [] },
-    setValue: setHqAddressValue,
-    clearSuggestions: clearHqSuggestions,
-  } = usePlacesAutocomplete({
-    requestOptions: { componentRestrictions: { country: "sg" } },
-    debounce: 300,
-    initOnMount: hasGoogleMapsKey && isGoogleMapsLoaded,
-  });
-
-  // Sync loaded employer HQ address into Places value once data is fetched
-  useEffect(() => {
-    if (!loading && formData.hqAddress && isGoogleMapsLoaded) {
-      setHqAddressValue(formData.hqAddress, false);
-    }
-  }, [loading, isGoogleMapsLoaded]);
-
-  const handleHqAddressSelect = async (description: string) => {
-    setHqAddressValue(description, false);
-    clearHqSuggestions();
-    setFormData((prev) => ({ ...prev, hqAddress: description }));
-    try {
-      const results = await getGeocode({ address: description });
-      await getLatLng(results[0]);
-    } catch (err) {
-      console.error("Geocode error:", err);
-    }
-  };
 
   const fetchEmployerData = async () => {
     try {
@@ -169,11 +110,7 @@ const EditEmployer = () => {
           contactPersonName: employer.contactPersonName || employer.mainContactPersonName || (employer.mainContactPersons && Array.isArray(employer.mainContactPersons) && employer.mainContactPersons.length > 0 ? employer.mainContactPersons[0].name : "") || "",
           jobPosition: employer.jobPosition || employer.mainContactPersonPosition || "",
           mainContactNumber: employer.mainContactNumber || employer.mainContactPersonNumber || "",
-          mainContactExtension: employer.mainContactExtension || "",
-          alternateContactNumber: employer.alternateContactNumber || "",
-          alternateContactExtension: employer.alternateContactExtension || "",
           emailAddress: employer.emailAddress || employer.companyEmail || "",
-          accountManager: employer.accountManager || "",
           industry: employer.industry || "",
           serviceAgreement: employer.serviceAgreement || employer.contractStatus || "",
           contractExpiryDate: employer.contractExpiryDate || employer.contractEndDate || "",
@@ -182,6 +119,11 @@ const EditEmployer = () => {
           serviceContract: null,
           phoneCountry: country,
         });
+        if (employer.additionalContacts && Array.isArray(employer.additionalContacts)) {
+          setAdditionalContacts(employer.additionalContacts.map((c: any) => ({ extension: c.extension || "", number: c.number || "" })));
+        } else {
+          setAdditionalContacts([]);
+        }
 
         // Images come as complete URLs from backend
         setExistingFiles({
@@ -311,11 +253,14 @@ const EditEmployer = () => {
         return;
       }
     }
-    if (formData.alternateContactNumber?.trim()) {
-      const altResult = validatePhone(formData.alternateContactNumber.trim(), phoneCountry);
-      if (!altResult.valid) {
-        toast.error(altResult.message || "Invalid alternate contact number");
-        return;
+    for (let i = 0; i < additionalContacts.length; i++) {
+      const entry = additionalContacts[i];
+      if (entry.number?.trim()) {
+        const altResult = validatePhone(entry.number.trim(), phoneCountry);
+        if (!altResult.valid) {
+          toast.error(`Additional number ${i + 1}: ${altResult.message || "Invalid number"}`);
+          return;
+        }
       }
     }
     for (let i = 0; i < outlets.length; i++) {
@@ -343,7 +288,7 @@ const EditEmployer = () => {
 
     try {
       const industryToSend = formData.industry || "";
-      const formDataToSend = buildEmployerUpdateFormData(formData, outlets, industryToSend);
+      const formDataToSend = buildEmployerUpdateFormData({ ...formData, additionalContacts }, outlets, industryToSend);
 
       // Use file instance with longer timeout
       const response = await axiosFileInstance.put(`/admin/employers/${id}`, formDataToSend);
@@ -361,11 +306,11 @@ const EditEmployer = () => {
             ...prev,
             companyLegalName: updated.companyLegalName ?? prev.companyLegalName,
             mainContactNumber: updated.mainContactNumber ?? prev.mainContactNumber,
-            mainContactExtension: updated.mainContactExtension ?? prev.mainContactExtension,
-            alternateContactNumber: updated.alternateContactNumber ?? prev.alternateContactNumber,
-            alternateContactExtension: updated.alternateContactExtension ?? prev.alternateContactExtension,
             phoneCountry: (updated.phoneCountry === "MY" || updated.phoneCountry === "IN") ? updated.phoneCountry : "SG",
           }));
+          if (Array.isArray(updated.additionalContacts)) {
+            setAdditionalContacts(updated.additionalContacts.map((c: any) => ({ extension: c.extension || "", number: c.number || "" })));
+          }
           if (Array.isArray(updated.outlets)) {
             setOutlets(updated.outlets.map((o: any) => ({
               name: o.name || o.outletName || "",
@@ -564,45 +509,20 @@ const EditEmployer = () => {
                     </select>
                   </div>
 
-                  {/* HQ Address with Google Places Autocomplete */}
+                  {/* HQ Address – Google Places: type and select to auto-fill */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       HQ Address <span className="text-gray-400 text-xs">(Optional)</span>
-                      {hasGoogleMapsKey && isGoogleMapsLoaded && (
-                        <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses)</span>
-                      )}
+                      <span className="text-gray-400 text-xs font-normal ml-2">(Singapore – type to fetch from Google)</span>
                     </label>
-                    <div className="relative">
-                      <textarea
-                        ref={hqAddressRef}
-                        name="hqAddress"
-                        value={hasGoogleMapsKey && isGoogleMapsLoaded ? (hqAddressValue || formData.hqAddress) ?? "" : formData.hqAddress ?? ""}
-                        onChange={(e) => {
-                          if (hasGoogleMapsKey && isGoogleMapsLoaded) setHqAddressValue(e.target.value);
-                          setFormData((prev) => ({ ...prev, hqAddress: e.target.value }));
-                        }}
-                        placeholder={hasGoogleMapsKey && isGoogleMapsLoaded
-                          ? "Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
-                          : "Enter headquarters address"}
-                        rows={3}
-                        disabled={hasGoogleMapsKey && (!hqAddressReady || !isGoogleMapsLoaded)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-                      />
-                      {hasGoogleMapsKey && isGoogleMapsLoaded && hqAddressStatus === "OK" && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                          {hqAddressSuggestions.map(({ place_id, description }) => (
-                            <button
-                              key={place_id}
-                              type="button"
-                              onClick={() => handleHqAddressSelect(description)}
-                              className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm"
-                            >
-                              {description}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    <AddressAutocomplete
+                      value={formData.hqAddress ?? ""}
+                      onChange={(val) => setFormData((prev) => ({ ...prev, hqAddress: val ?? "" }))}
+                      placeholder="Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                      country="sg"
+                      multiline
+                      rows={3}
+                    />
                   </div>
                 </div>
               </section>
@@ -630,7 +550,7 @@ const EditEmployer = () => {
                       <option value="MY">+60 Malaysia</option>
                       <option value="IN">+91 India</option>
                     </select>
-                    <p className="mt-1 text-xs text-gray-500">Used for contact number validation and format.</p>
+                    <p className="mt-1 text-xs text-gray-500">Contact numbers below use this country’s format.</p>
                   </div>
 
                   {/* Name */}
@@ -664,8 +584,8 @@ const EditEmployer = () => {
                     />
                   </div>
 
-                  {/* Contact Number + Extension */}
-                  <div>
+                  {/* Contact Number (required) */}
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Contact Number <span className="text-red-500">*</span>
                     </label>
@@ -676,49 +596,63 @@ const EditEmployer = () => {
                       onChange={handleChange}
                       placeholder={getPlaceholder(formData.phoneCountry)}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Extension <span className="text-gray-400 text-xs">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="mainContactExtension"
-                      value={formData.mainContactExtension}
-                      onChange={handleChange}
-                      placeholder="e.g. 101"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                   </div>
 
-                  {/* Alternate Contact Number + Extension */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
-                    </label>
-                    <input
-                      type="tel"
-                      name="alternateContactNumber"
-                      value={formData.alternateContactNumber}
-                      onChange={handleChange}
-                      placeholder={getPlaceholder(formData.phoneCountry)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Alternate Extension <span className="text-gray-400 text-xs">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="alternateContactExtension"
-                      value={formData.alternateContactExtension}
-                      onChange={handleChange}
-                      placeholder="e.g. 102"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                    />
+                  {/* Additional numbers */}
+                  <div className="md:col-span-2 space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-sm font-medium text-gray-700">Additional numbers</span>
+                      <button
+                        type="button"
+                        onClick={() => setAdditionalContacts((prev) => [...prev, { extension: "", number: "" }])}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add number
+                      </button>
+                    </div>
+                    {additionalContacts.map((entry, index) => (
+                      <div key={index} className="flex flex-wrap items-end gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1 min-w-[120px]">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Extension (optional)</label>
+                          <input
+                            type="text"
+                            value={entry.extension}
+                            onChange={(e) => {
+                              const next = [...additionalContacts];
+                              next[index] = { ...next[index], extension: e.target.value };
+                              setAdditionalContacts(next);
+                            }}
+                            placeholder="e.g. 101"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-[160px]">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Number</label>
+                          <input
+                            type="tel"
+                            value={entry.number}
+                            onChange={(e) => {
+                              const next = [...additionalContacts];
+                              next[index] = { ...next[index], number: e.target.value };
+                              setAdditionalContacts(next);
+                            }}
+                            placeholder={getPlaceholder(formData.phoneCountry)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAdditionalContacts((prev) => prev.filter((_, i) => i !== index))}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove number"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
 
                   {/* Email Address */}
@@ -739,36 +673,14 @@ const EditEmployer = () => {
                 </div>
               </section>
 
-              {/* Section 3: Account & Service Details */}
+              {/* Section 3: Service Details */}
               <section className="space-y-6 border-t border-gray-200 pt-8">
                 <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                   <User className="w-5 h-5 text-blue-600" />
-                  Account & Service Details
+                  Service Details
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Account Manager - Read Only, Masked */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Account Manager <span className="text-gray-400 text-xs">(Assigned by Admin)</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showAccountManager ? "text" : "password"}
-                        value={formData.accountManager || "Not assigned"}
-                        disabled
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAccountManager(!showAccountManager)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showAccountManager ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
                   {/* Service Agreement */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -968,16 +880,16 @@ const EditEmployer = () => {
                           Outlet Address <span className="text-red-500">*</span>
                           <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses only)</span>
                         </label>
-                        <textarea
+                        <AddressAutocomplete
                           value={outlet.address || ""}
-                          onChange={(e) => handleOutletChange(index, "address", e.target.value)}
-                          placeholder="Enter outlet address"
+                          onChange={(val) => handleOutletChange(index, "address", val)}
+                          placeholder="Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                          country="sg"
+                          multiline
                           rows={3}
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                         />
                         <p className="mt-1 text-xs text-gray-500">
-                          Format: Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123
+                          Type and select a Singapore address, or enter manually.
                         </p>
                       </div>
                       <div>

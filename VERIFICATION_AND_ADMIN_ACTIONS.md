@@ -192,6 +192,12 @@ Authorization: Bearer <adminToken>
 
 **Display:** Use `verificationStatus` for badges/filters. Allowed values: `"Pending"` | `"Approved"` | `"Rejected"` | `"Suspended"`.
 
+**Filtering by verification status:** You can pass `status` in the query to filter the list:
+- `status=Approved` – users who can apply (Verified / Activated / or verificationAction Approved)
+- `status=Pending` – users not yet verified (no Approved/Rejected/Suspended)
+- `status=Rejected` – rejected users
+- `status=Suspended` – suspended users
+
 ---
 
 ### 5.2 Get one user (for detail page)
@@ -355,5 +361,52 @@ Authorization: Bearer <adminToken>
 After any action, refresh the user list (or user detail) and show `message` from the response, or the backend `message` on error.
 
 ---
+
+---
+
+## 6. Backend implementation status (for reference)
+
+The backend has been implemented to match this document:
+
+| Requirement | Status |
+|-------------|--------|
+| User model has `status` (Verified, Pending, Rejected, Suspended, Activated, etc.) and `verificationAction` (Approved, Rejected). | Done |
+| **GET /user/me** returns `verificationStatus`, `status`, `verificationAction`, and `rejectionReason` (for Native to show rejection reason). | Done |
+| **POST /jobs/:jobId/apply** and **POST /jobs/:jobId/apply-multi** return **403** with `code: "VerificationPendingError"` when user is not approved/verified. | Done |
+| **PUT /admin/users/:userId/verify** accepts `action`: `Approved` \| `Rejected` \| `Suspended` and optional `reason`; updates user and returns the response shapes in §5.3–5.5. | Done |
+| **DELETE /admin/users/:userId** implemented; returns 403 for admin users, 404 if user not found, 200 with message on success. | Done |
+| **GET /admin/users** returns each user with `verificationStatus` and supports query `status` = `Approved` \| `Pending` \| `Rejected` \| `Suspended` for filtering. | Done |
+| **GET /admin/users/:userId** returns `verificationStatus`, `verificationAction`, `rejectionReason`. | Done |
+
+---
+
+## 7. React Admin implementation guide (frontend)
+
+Use **§5 API reference** and the table in **§5.7** to wire the UI:
+
+1. **Users / Hustle Heroes list**
+   - Call **GET** `{baseURL}/admin/users` with optional `page`, `limit`, `search`, `role=USER`, `status` (use `status=Pending` for “Pending verification” filter).
+   - Display each user’s `verificationStatus` (badge or column): Pending | Approved | Rejected | Suspended.
+   - Show actions: Approve, Reject, Suspend, Delete (with confirmation for Reject, Suspend, Delete).
+
+2. **Approve**
+   - **PUT** `{baseURL}/admin/users/:userId/verify` with body `{ "action": "Approved" }` (optional `"reason"`).
+   - On success, refresh list/detail and show `message` from response.
+
+3. **Reject**
+   - **PUT** `{baseURL}/admin/users/:userId/verify` with body `{ "action": "Rejected", "reason": "..." }`.
+   - Show confirmation modal; optionally collect `reason` in the modal.
+
+4. **Suspend**
+   - **PUT** `{baseURL}/admin/users/:userId/verify` with body `{ "action": "Suspended", "reason": "..." }`.
+   - Show confirmation. To unsuspend, call the same endpoint with `{ "action": "Approved" }`.
+
+5. **Delete**
+   - **DELETE** `{baseURL}/admin/users/:userId`.
+   - Always show a confirmation dialog. On 403, show “Cannot delete an admin user”; on 404, “User not found”.
+
+6. **Error handling**
+   - All responses have `success: true | false`. On failure, show `message` to the user.
+   - Use `error` (or `code`) in the response for logic (e.g. 404 → NotFound, 400 → ValidationError).
 
 Use this document to align Backend, React Admin, and Native App behaviour for verification and admin actions.

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { buildJobData } from "../../utils/dataTransformers";
+import { AddressAutocomplete } from "../../components/location";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import Loader from "../../components/Loader.jsx";
@@ -732,14 +733,12 @@ const ModifyJob: React.FC = () => {
                   </label>
                   {formData.useManualOutlet || availableOutlets.length === 0 ? (
                     <div className="space-y-2">
-                      <input
-                        type="text"
-                        name="outletAddress"
+                      <AddressAutocomplete
                         value={formData.outletAddress}
-                        onChange={handleChange}
-                        placeholder="Enter outlet address"
-                        required={formData.useManualOutlet}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onChange={(val) => setFormData((prev) => ({ ...prev, outletAddress: val, locationDetails: val }))}
+                        onPlaceSelect={(result) => setFormData((prev) => ({ ...prev, outletAddress: result.address, locationDetails: result.address }))}
+                        placeholder="Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                        country="sg"
                       />
                       {selectedEmployer && availableOutlets.length > 0 && (
                         <button
@@ -814,19 +813,18 @@ const ModifyJob: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Location Details */}
+                {/* Location Details – Google Places: type and select to auto-fill */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Location Details <span className="text-red-500">*</span>
+                    <span className="text-gray-400 text-xs font-normal ml-2">(Singapore – type to fetch from Google)</span>
                   </label>
-                  <input
-                    type="text"
-                    name="locationDetails"
+                  <AddressAutocomplete
                     value={formData.locationDetails}
-                    onChange={handleChange}
-                    placeholder="Auto-filled from outlet or enter manually"
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onChange={(val) => setFormData((prev) => ({ ...prev, locationDetails: val }))}
+                    onPlaceSelect={(result) => setFormData((prev) => ({ ...prev, locationDetails: result.address }))}
+                    placeholder="Start typing address or use outlet above"
+                    country="sg"
                   />
                 </div>
 

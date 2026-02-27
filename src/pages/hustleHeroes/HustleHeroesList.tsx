@@ -50,11 +50,27 @@ interface Employee {
   attendanceStatus?: string;
 }
 
+// VERIFICATION_AND_ADMIN_ACTIONS.md §5.1: status query = Approved | Pending | Rejected | Suspended
+const FILTER_TO_STATUS: Record<string, string> = {
+  "pending-verification": "Pending",
+  verified: "Approved",
+  rejected: "Rejected",
+  suspended: "Suspended",
+};
+
+// REACT_ADMIN_HANDOVER.md: GET /admin/users with optional page, limit, search, role=USER, status
+const DEFAULT_PAGE_SIZE = 20;
+
 export default function HustleHeroesList() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const filter = searchParams.get("filter") || "";
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // controlled input; submit sets searchQuery
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState<{ currentPage: number; totalPages: number; totalItems: number; itemsPerPage: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isPopupOpen, setIsPopupOpen] = useState<number | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<{ isOpen: boolean; candidateId: string | null; candidateName: string }>({
@@ -63,10 +79,9 @@ export default function HustleHeroesList() {
     candidateName: "",
   });
   const [isDeleting, setIsDeleting] = useState(false);
-  // const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Get page title based on filter
+  // Get page title based on filter (VERIFICATION_AND_ADMIN_ACTIONS.md §2.1)
   const getPageTitle = () => {
     switch (filter) {
       case "activated":
@@ -75,6 +90,8 @@ export default function HustleHeroesList() {
         return "Pending Verifications";
       case "verified":
         return "Verified Hustle Heroes";
+      case "rejected":
+        return "Rejected Users";
       case "suspended":
         return "Suspended Users";
       case "no-show":
@@ -84,130 +101,72 @@ export default function HustleHeroesList() {
     }
   };
 
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        // Use /admin/users endpoint with role=USER filter to get ONLY users (not admins or employers)
-        // Backend: GET /api/admin/users supports role, status (e.g. status=Pending for verification)
-        const response = await axiosInstance.get("/admin/users", {
-          params: {
-            role: "USER",
-            limit: 1000
-          }
-        });
-        
-        // Check for success field according to API spec
-        if (response.data?.success === false) {
-          console.error("Failed to fetch users:", response.data?.message);
-          toast.error(response.data?.message || "Failed to fetch users");
-          return;
-        }
-        
-        // API returns 'users' array for /admin/users endpoint
-        const users = response?.data?.users || [];
-        if (Array.isArray(users)) {
-          // Additional safety check: filter to ensure only USER role
-          const validUsers = users.filter(user => {
-            const role = user.role || "";
-            return role === "USER" || role === "user";
-          });
-          
-          // Map API user data to Employee interface format
-          const mappedUsers: Employee[] = validUsers.map(user => ({
-            id: user._id || user.id, // Use _id from API as id
-            _id: user._id || user.id,
-            fullName: user.fullName,
-            email: user.email,
-            phoneNumber: user.phoneNumber,
-            mobile: user.phoneNumber || user.mobile, // Map phoneNumber to mobile
-            gender: user.gender,
-            dob: user.dob,
-            nric: user.nric || user.icNumber,
-            icNumber: user.nric || user.icNumber,
-            profilePicture: user.profilePicture,
-            avatarUrl: user.profilePicture,
-            registrationDate: user.createdAt || user.registrationDate,
-            createdAt: user.createdAt,
-            role: user.role,
-            status: user.status,
-            workPassStatus: user.workPassStatus || user.verificationStatus,
-            verificationStatus: user.verificationStatus || user.workPassStatus,
-            profileCompleted: user.profileCompleted,
-            turnUpRate: user.turnUpRate,
-            attendanceStatus: user.attendanceStatus
-          }));
-          
-          setAllEmployees(mappedUsers);
-        } else {
-          console.error('Invalid users data format');
-          setAllEmployees([]);
-        }
-      } catch (error: any) {
-        console.error("Error fetching users:", error);
-        toast.error(error?.response?.data?.message || "Failed to fetch users. Please try again.");
-        setAllEmployees([]);
+  const fetchEmployees = async (pageToFetch: number = 1) => {
+    setIsLoading(true);
+    try {
+      // REACT_ADMIN_HANDOVER.md + VERIFICATION_AND_ADMIN_ACTIONS.md: page, limit, search, role=USER, status
+      const params: Record<string, string | number> = {
+        role: "USER",
+        limit: DEFAULT_PAGE_SIZE,
+        page: pageToFetch,
+      };
+      const statusParam = FILTER_TO_STATUS[filter];
+      if (statusParam) params.status = statusParam;
+      if (searchQuery.trim()) params.search = searchQuery.trim();
+
+      const response = await axiosInstance.get("/admin/users", { params });
+
+      if (response.data?.success === false) {
+        toast.error(response.data?.message || "Failed to fetch users");
+        return;
       }
-    };
-    fetchEmployees();
-  }, []);
 
-  // Filter employees based on URL parameter
-  useEffect(() => {
-    let filtered = [...allEmployees];
+      const users = response?.data?.users || [];
+      const validUsers = Array.isArray(users)
+        ? users.filter((u: any) => (u.role || "").toString().toLowerCase() === "user")
+        : [];
+      const mapped: Employee[] = validUsers.map((user: any) => ({
+        id: user._id || user.id,
+        _id: user._id || user.id,
+        fullName: user.fullName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        mobile: user.phoneNumber || user.mobile,
+        gender: user.gender,
+        dob: user.dob,
+        nric: user.nric || user.icNumber,
+        icNumber: user.nric || user.icNumber,
+        profilePicture: user.profilePicture,
+        avatarUrl: user.profilePicture,
+        registrationDate: user.createdAt || user.registrationDate,
+        createdAt: user.createdAt,
+        role: user.role,
+        status: user.status,
+        workPassStatus: user.workPassStatus || user.verificationStatus,
+        verificationStatus: user.verificationStatus || user.workPassStatus,
+        profileCompleted: user.profileCompleted,
+        turnUpRate: user.turnUpRate,
+        attendanceStatus: user.attendanceStatus,
+      }));
 
-    switch (filter) {
-      case "activated":
-        // Filter for activated heroes (status: Active or Approved)
-        filtered = allEmployees.filter(
-          (emp) => emp.status === "Active" || emp.status === "Approved"
-        );
-        break;
-      case "pending-verification":
-        // Filter for pending verification (backend: user.status === 'Pending' or verificationStatus)
-        filtered = allEmployees.filter(
-          (emp) =>
-            emp.status === "Pending" ||
-            emp.workPassStatus === "Pending" ||
-            emp.verificationStatus === "Pending"
-        );
-        break;
-      case "verified":
-        // Filter for verified heroes (backend: status Verified, Activated, or Approved)
-        filtered = allEmployees.filter(
-          (emp) =>
-            emp.status === "Verified" ||
-            emp.status === "Activated" ||
-            emp.status === "Approved" ||
-            emp.workPassStatus === "Verified" ||
-            emp.verificationStatus === "Verified" ||
-            emp.verificationStatus === "Approved"
-        );
-        break;
-      case "suspended":
-        filtered = allEmployees.filter(
-          (emp) =>
-            emp.status === "Suspended" ||
-            emp.workPassStatus === "Suspended" ||
-            emp.verificationStatus === "Suspended"
-        );
-        break;
-      case "no-show":
-        // Filter for no-show heroes (need to check if backend has this field)
-        // For now, filtering by low turn-up rate or specific status
-        filtered = allEmployees.filter(
-          (emp) =>
-            (emp.turnUpRate && parseFloat(emp.turnUpRate) < 50) ||
-            emp.status === "No Show" ||
-            emp.attendanceStatus === "No Show"
-        );
-        break;
-      default:
-        // Show all employees
-        filtered = allEmployees;
+      setEmployees(mapped);
+      setAllEmployees(mapped);
+      setPagination(response?.data?.pagination || null);
+      setPage(pageToFetch);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to fetch users. Please try again.");
+      setEmployees([]);
+      setAllEmployees([]);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    setEmployees(filtered);
-  }, [filter, allEmployees]);
+  useEffect(() => {
+    fetchEmployees(1);
+  }, [filter, searchQuery]);
+
+  // When filter/search change, fetch resets to page 1 (handled in useEffect). No client-side filter – backend returns filtered list.
   const toggleSelectAll = () => {
     if (selectedRows.length === employees.length) {
       setSelectedRows([]);
@@ -324,12 +283,15 @@ export default function HustleHeroesList() {
       }
 
       toast.success("User deleted successfully");
-      setEmployees((prev) => prev.filter((emp) => (emp.id || emp._id) !== showDeleteModal.candidateId));
-      setAllEmployees((prev) => prev.filter((emp) => (emp.id || emp._id) !== showDeleteModal.candidateId));
       setShowDeleteModal({ isOpen: false, candidateId: null, candidateName: "" });
+      await fetchEmployees(page);
     } catch (error: any) {
-      console.error("Error deleting candidate:", error);
-      toast.error(error?.response?.data?.message || "Failed to delete candidate. Please try again.");
+      console.error("Error deleting user:", error);
+      const status = error?.response?.status;
+      const msg = error?.response?.data?.message;
+      if (status === 403) toast.error(msg || "Cannot delete an admin user.");
+      else if (status === 404) toast.error(msg || "User not found.");
+      else toast.error(msg || "Failed to delete user. Please try again.");
     } finally {
       setIsDeleting(false);
     }
@@ -367,7 +329,7 @@ export default function HustleHeroesList() {
     setIsVerifying(true);
     try {
       const body: { action: string; reason?: string } = { action };
-      if (reason && reason.trim()) body.reason = reason.trim();
+      if (reason && reason.trim()) body.reason = reason.trim(); // §5.3 optional for Approve; §5.4–5.5 for Reject/Suspend
       const response = await axiosInstance.put(`/admin/users/${userId}/verify`, body);
       if (response.data?.success === false) {
         toast.error(response.data?.message || "Action failed");
@@ -381,33 +343,7 @@ export default function HustleHeroesList() {
             : "User suspended";
       toast.success(response.data?.message || msg);
       setActionModal((m) => ({ ...m, open: false }));
-      const list = await axiosInstance.get("/admin/users", { params: { role: "USER", limit: 1000 } });
-      const users = list?.data?.users || [];
-      const valid = users.filter((u: any) => u.role === "USER" || u.role === "user");
-      const mapped: Employee[] = valid.map((user: any) => ({
-        id: user._id || user.id,
-        _id: user._id || user.id,
-        fullName: user.fullName,
-        email: user.email,
-        phoneNumber: user.phoneNumber,
-        mobile: user.phoneNumber || user.mobile,
-        gender: user.gender,
-        dob: user.dob,
-        nric: user.nric || user.icNumber,
-        icNumber: user.nric || user.icNumber,
-        profilePicture: user.profilePicture,
-        avatarUrl: user.profilePicture,
-        registrationDate: user.createdAt || user.registrationDate,
-        createdAt: user.createdAt,
-        role: user.role,
-        status: user.status,
-        workPassStatus: user.workPassStatus || user.verificationStatus,
-        verificationStatus: user.verificationStatus || user.workPassStatus,
-        profileCompleted: user.profileCompleted,
-        turnUpRate: user.turnUpRate,
-        attendanceStatus: user.attendanceStatus,
-      }));
-      setAllEmployees(mapped);
+      await fetchEmployees(page);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Action failed");
     } finally {
@@ -422,17 +358,58 @@ export default function HustleHeroesList() {
 
 
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 p-4">
-        <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">{getPageTitle()}</h1>
-        <div className="flex items-center gap-4">
-
-          <button className="p-[14px] rounded-[26px] shadow-lg bg-dark hover:bg-slate-950 ">
-            <Filter
-              className="w-[20px] h-[20px]"
-              color="#FFFFFF"
-              fill="#ffffff"
+      <div className="flex flex-col gap-4 mb-6 p-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h1 className="text-2xl sm:text-3xl md:text-[36px] font-[500] text-[#1F2937]">{getPageTitle()}</h1>
+        </div>
+        {/* REACT_ADMIN_HANDOVER.md: optional search; VERIFICATION_AND_ADMIN_ACTIONS.md: filter by status */}
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              placeholder="Search by name, email, phone..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), setSearchQuery(searchInput))}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </button>
+            <button
+              type="button"
+              onClick={() => setSearchQuery(searchInput)}
+              className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200"
+            >
+              Search
+            </button>
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchInput(""); setSearchQuery(""); }}
+                className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: "", label: "All" },
+              { key: "pending-verification", label: "Pending" },
+              { key: "verified", label: "Approved" },
+              { key: "rejected", label: "Rejected" },
+              { key: "suspended", label: "Suspended" },
+            ].map(({ key, label }) => (
+              <button
+                key={key || "all"}
+                type="button"
+                onClick={() => setSearchParams(key ? { filter: key } : {})}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  filter === key ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -471,7 +448,13 @@ export default function HustleHeroesList() {
             </tr>
           </thead>
           <tbody>
-            {employees.length === 0 ? (
+            {isLoading ? (
+              <tr>
+                <td colSpan={11} className="p-8 text-center text-gray-500">
+                  Loading...
+                </td>
+              </tr>
+            ) : employees.length === 0 ? (
               <tr>
                 <td colSpan={11} className="p-8 text-center text-gray-500">
                   No users found
@@ -647,7 +630,34 @@ export default function HustleHeroesList() {
           </tbody>
         </table>
       </div>
-      {/* <CustomScrollbar scrollContainerRef={scrollContainerRef} totalSteps={3} /> */}
+
+      {/* REACT_ADMIN_HANDOVER.md: optional page, limit – pagination when backend returns it */}
+      {pagination && pagination.totalPages > 1 && !isLoading && (
+        <div className="flex items-center justify-between px-4 py-3 border border-t-0 border-gray-200 rounded-b-lg bg-gray-50 text-sm">
+          <span className="text-gray-600">
+            Page {pagination.currentPage} of {pagination.totalPages}
+            {pagination.totalItems != null && ` (${pagination.totalItems} total)`}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => fetchEmployees(page - 1)}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => fetchEmployees(page + 1)}
+              disabled={page >= pagination.totalPages}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
@@ -679,18 +689,25 @@ export default function HustleHeroesList() {
               {actionModal.type === "suspend" &&
                 `Suspend ${actionModal.userName}? They will not be able to apply until you approve again.`}
             </p>
-            {(actionModal.type === "reject" || actionModal.type === "suspend") && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
-                <input
-                  type="text"
-                  value={actionModal.reason}
-                  onChange={(e) => setActionModal((m) => ({ ...m, reason: e.target.value }))}
-                  placeholder={actionModal.type === "reject" ? "e.g. Incomplete documents" : "e.g. Policy violation"}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
+            {/* VERIFICATION_AND_ADMIN_ACTIONS.md §5.3–5.5: optional reason for Approve (audit), Reject, Suspend */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {actionModal.type === "approve" ? "Note (optional, for audit)" : "Reason (optional)"}
+              </label>
+              <input
+                type="text"
+                value={actionModal.reason}
+                onChange={(e) => setActionModal((m) => ({ ...m, reason: e.target.value }))}
+                placeholder={
+                  actionModal.type === "approve"
+                    ? "e.g. Documents verified"
+                    : actionModal.type === "reject"
+                      ? "e.g. Incomplete documents"
+                      : "e.g. Policy violation"
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
             <div className="flex gap-2 justify-end">
               <button
                 type="button"

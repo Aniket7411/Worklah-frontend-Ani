@@ -250,9 +250,10 @@ export default function ProfileDashboard() {
         return;
       }
       axiosInstance
-        .put(`/admin/verify-candidate/${candidateId}`, {
-          action: action === "Approve" ? "approve" : "reject",
-          rejectionReason: action === "Reject" ? (rejectReasons[candidateId] || "").trim() : undefined,
+        .put(`/admin/users/${candidateId}/verify`, {
+          // Align with NEW_END_TO_END_API_DOCUMENTATION.md §6.3
+          action: action === "Approve" ? "Approved" : "Rejected",
+          reason: action === "Reject" ? (rejectReasons[candidateId] || "").trim() : undefined,
         })
         .then(() => {
           toast.success(`Candidate ${action === "Approve" ? "verified" : "rejected"}`);

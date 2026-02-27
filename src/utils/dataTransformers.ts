@@ -77,10 +77,10 @@ export const transformEmployerList = (response: any) => {
  * Build FormData for employer creation/update - SIMPLIFIED
  * Uses JSON for complex data, FormData only for files
  */
-export const buildEmployerFormData = (formData: any, outlets: any[], industry: string, generateCredentials: boolean = false) => {
+export const buildEmployerFormData = (formData: any, outlets: any[], industry: string, generateCredentials: boolean = false, additionalContacts: Array<{ extension: string; number: string }> = []) => {
   const formDataToSend = new FormData();
 
-  // Build clean data object (ADMIN_EMPLOYER_AND_OUTLET.md: phoneCountry, extensions)
+  // Build clean data object (see BACKEND_EMPLOYER_CONTACT_SCHEMA.md for backend schema)
   const employerData: any = {
     phoneCountry: formData.phoneCountry || "SG",
     companyLegalName: formData.companyLegalName,
@@ -89,11 +89,10 @@ export const buildEmployerFormData = (formData: any, outlets: any[], industry: s
     contactPersonName: formData.contactPersonName,
     jobPosition: formData.jobPosition || "",
     mainContactNumber: formData.mainContactNumber,
-    mainContactExtension: formData.mainContactExtension?.trim() || null,
-    alternateContactNumber: formData.alternateContactNumber || "",
-    alternateContactExtension: formData.alternateContactExtension?.trim() || null,
+    additionalContacts: (additionalContacts || [])
+      .filter((c) => c.number?.trim())
+      .map((c) => ({ extension: c.extension?.trim() || null, number: c.number.trim() })),
     emailAddress: formData.emailAddress,
-    accountManager: formData.accountManager || "",
     industry: industry,
     serviceAgreement: formData.serviceAgreement || "Active",
     contractExpiryDate: formData.contractExpiryDate || null,
@@ -215,7 +214,7 @@ export const validateEmail = (email: string): boolean => {
 export const buildEmployerUpdateFormData = (formData: any, outlets: any[], industry: string) => {
   const formDataToSend = new FormData();
 
-  // Build clean data object (ADMIN_EMPLOYER_AND_OUTLET.md: phoneCountry, extensions; include _id for existing outlets)
+  // Build clean data object (see BACKEND_EMPLOYER_CONTACT_SCHEMA.md for backend schema)
   const employerData: any = {
     phoneCountry: formData.phoneCountry || "SG",
     companyLegalName: formData.companyLegalName,
@@ -224,11 +223,10 @@ export const buildEmployerUpdateFormData = (formData: any, outlets: any[], indus
     contactPersonName: formData.contactPersonName,
     jobPosition: formData.jobPosition || "",
     mainContactNumber: formData.mainContactNumber,
-    mainContactExtension: formData.mainContactExtension?.trim() || null,
-    alternateContactNumber: formData.alternateContactNumber || "",
-    alternateContactExtension: formData.alternateContactExtension?.trim() || null,
+    additionalContacts: (formData.additionalContacts || [])
+      .filter((c: any) => c?.number?.trim())
+      .map((c: any) => ({ extension: c.extension?.trim() || null, number: c.number.trim() })),
     emailAddress: formData.emailAddress,
-    accountManager: formData.accountManager || "",
     industry: industry,
     serviceAgreement: formData.serviceAgreement || "Active",
     contractExpiryDate: formData.contractExpiryDate || null,

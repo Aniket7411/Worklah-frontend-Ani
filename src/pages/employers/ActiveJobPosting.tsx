@@ -385,13 +385,6 @@ const ActiveJobPosting = () => {
                   <p className="text-sm text-gray-900">{employer.serviceAgreement || "N/A"}</p>
                 </div>
               </div>
-              <div className="flex items-start gap-3">
-                <PiFolderSimpleUserLight className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Account Manager</p>
-                  <p className="text-sm text-gray-900">{employer.accountManager || "N/A"}</p>
-                </div>
-              </div>
             </div>
           </div>
         </div>

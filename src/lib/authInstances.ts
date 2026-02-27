@@ -2,19 +2,12 @@ import axios from 'axios'
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
-// API reference: NEW_END_TO_END_API_DOCUMENTATION.md (from backend developer)
-// Base URL: Production https://worklah-updated-dec.onrender.com/api | Dev http://localhost:3000/api
-// const API_BASE_URL =
-//   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_BASE_URL) ||
-//   "";
-// ⚠️ IMPORTANT: Base URL already includes '/api'
-// When making requests, use endpoints WITHOUT '/api' prefix
-// ✅ Correct: '/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/admin/login
-// ❌ Wrong: '/api/admin/login' → Full URL: https://worklah-updated-dec.onrender.com/api/api/admin/login (404 Error)
+// REACT_ADMIN_HANDOVER.md: Base URL = dev http://localhost:3000/api or deployed API (e.g. https://worklah-updated-dec.onrender.com/api)
+// Set VITE_API_BASE_URL in .env for production; omit for dev (localhost).
+// ⚠️ Base URL already includes '/api' – use paths like '/admin/login', not '/api/admin/login'
 
-const API_BASE_URL = "http://localhost:3000/api"
-// const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api"
-
+const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api";
+// const API_BASE_URL = "http://localhost:3000/api"
 
 
 export const axiosInstance = axios.create({

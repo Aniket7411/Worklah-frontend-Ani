@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { axiosFileInstance } from "../../lib/authInstances";
 import { useAuth } from "../../context/AuthContext";
@@ -8,20 +8,20 @@ import {
   Plus,
   X,
   Building2,
-  Mail,
   Phone,
   MapPin,
   User,
   FileText,
-  Calendar,
   Save,
   ArrowLeft,
   Clock,
   AlertTriangle
 } from "lucide-react";
 import toast from "react-hot-toast";
-import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
 import { buildEmployerFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
+import { AddressAutocomplete } from "../../components/location";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - phoneValidation is JS
 import { validatePhone, getPlaceholder, PHONE_RULES } from "../../utils/phoneValidation";
 
 // Google Maps API type declaration
@@ -48,46 +48,14 @@ const AddEmployer = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Check if user is admin
+  // Only redirect when we know the user is loaded and is not admin (don't redirect while auth is still loading)
   useEffect(() => {
-    if (user?.role !== "ADMIN") {
+    if (user == null) return;
+    if (user.role !== "ADMIN") {
       toast.error("Only admins can add employers");
       navigate("/employers");
     }
   }, [user, navigate]);
-
-  // Load Google Maps API
-  useEffect(() => {
-    const loadGoogleMaps = () => {
-      if (window.google && window.google.maps) {
-        setIsGoogleMapsLoaded(true);
-        return;
-      }
-
-      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        // API key not set, autocomplete will work as regular textarea
-        console.log("Google Maps API key not set. Address autocomplete will be disabled.");
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => setIsGoogleMapsLoaded(true);
-      script.onerror = () => {
-        console.error("Failed to load Google Maps API");
-        // Don't show error toast if API key is missing - it's expected
-        if (apiKey) {
-          toast.error("Failed to load Google Maps API");
-        }
-      };
-      document.head.appendChild(script);
-    };
-
-    loadGoogleMaps();
-  }, []);
 
   const [formData, setFormData] = useState({
     employerId: "", // Auto-generated, read-only
@@ -98,9 +66,6 @@ const AddEmployer = () => {
     contactPersonName: "", // Name (required)
     jobPosition: "", // Position in company
     mainContactNumber: "", // Contact no. (required)
-    mainContactExtension: "", // Optional extension
-    alternateContactNumber: "", // Alternate no. (Optional)
-    alternateContactExtension: "", // Optional extension
     emailAddress: "", // Email (required)
     acraBizfileCert: null as File | null,
     industry: "", // Industry type (required)
@@ -110,10 +75,10 @@ const AddEmployer = () => {
     contractExpiryDate: "",
   });
 
+  // Additional contact numbers: each has optional extension + number (validated per phoneCountry)
+  const [additionalContacts, setAdditionalContacts] = useState<Array<{ extension: string; number: string }>>([]);
+
   const [showCustomIndustry, setShowCustomIndustry] = useState(false);
-  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
-  const employerAddressRef = useRef<HTMLTextAreaElement>(null);
-  const outletAddressRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
 
   // Outlets are OPTIONAL - employer can be created without outlets
   // Outlets can be added later via update endpoint
@@ -153,38 +118,6 @@ const AddEmployer = () => {
     }
   };
 
-  // Google Places Autocomplete for Employer Address
-  // Only use autocomplete if Google Maps is available
-  const hasGoogleMapsKey = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const {
-    ready: employerAddressReady = false,
-    value: employerAddressValue = "",
-    suggestions: { status = "", data = [] } = { status: "", data: [] },
-    setValue: setEmployerAddressValue,
-    clearSuggestions,
-  } = usePlacesAutocomplete({
-    requestOptions: {
-      componentRestrictions: { country: "sg" }, // Singapore only
-    },
-    debounce: 300,
-    initOnMount: hasGoogleMapsKey && isGoogleMapsLoaded,
-  });
-
-  // Handle employer address selection
-  const handleEmployerAddressSelect = async (description: string) => {
-    setEmployerAddressValue(description, false);
-    clearSuggestions();
-    setFormData(prev => ({ ...prev, hqAddress: description }));
-
-    try {
-      const results = await getGeocode({ address: description });
-      const { lat, lng } = await getLatLng(results[0]);
-      // You can store lat/lng if needed
-    } catch (error) {
-      console.error("Error:", error);
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -208,7 +141,20 @@ const AddEmployer = () => {
 
   const addOutlet = () => {
     setOutlets([...outlets, { name: "", managerName: "", contactNumber: "", contactExtension: "", address: "", openingHours: "", closingHours: "", isActive: true }]);
-    outletAddressRefs.current.push(null);
+  };
+
+  const addAdditionalContact = () => {
+    setAdditionalContacts((prev) => [...prev, { extension: "", number: "" }]);
+  };
+  const updateAdditionalContact = (index: number, field: "extension" | "number", value: string) => {
+    setAdditionalContacts((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+  const removeAdditionalContact = (index: number) => {
+    setAdditionalContacts((prev) => prev.filter((_, i) => i !== index));
   };
 
   const openDeleteModal = (index: number) => {
@@ -237,9 +183,7 @@ const AddEmployer = () => {
     }
 
     if (deleteModal.outletIndex !== null) {
-      // Outlets are optional, so we can delete the last one
       setOutlets(outlets.filter((_, i) => i !== deleteModal.outletIndex));
-      outletAddressRefs.current = outletAddressRefs.current.filter((_, i) => i !== deleteModal.outletIndex);
       toast.success("Outlet deleted successfully");
     }
     closeDeleteModal();
@@ -277,11 +221,14 @@ const AddEmployer = () => {
       toast.error(phoneResult.message || "Invalid contact number");
       return false;
     }
-    if (formData.alternateContactNumber?.trim()) {
-      const altResult = validatePhone(formData.alternateContactNumber.trim(), phoneCountry);
-      if (!altResult.valid) {
-        toast.error(altResult.message || "Invalid alternate contact number");
-        return false;
+    for (let i = 0; i < additionalContacts.length; i++) {
+      const entry = additionalContacts[i];
+      if (entry.number?.trim()) {
+        const altResult = validatePhone(entry.number.trim(), phoneCountry);
+        if (!altResult.valid) {
+          toast.error(`Additional number ${i + 1}: ${altResult.message || "Invalid number"}`);
+          return false;
+        }
       }
     }
 
@@ -331,7 +278,7 @@ const AddEmployer = () => {
     }
 
     return true;
-  }, [formData, showCustomIndustry, outlets, phoneCountry]);
+  }, [formData, showCustomIndustry, outlets, phoneCountry, additionalContacts]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,7 +295,8 @@ const AddEmployer = () => {
         { ...formData, phoneCountry },
         outlets,
         industryToSend || "",
-        generateCredentials
+        generateCredentials,
+        additionalContacts
       );
 
       // Use file instance with longer timeout
@@ -408,7 +356,21 @@ const AddEmployer = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, outlets, showCustomIndustry, generateCredentials, validateForm, navigate]);
+  }, [formData, outlets, additionalContacts, showCustomIndustry, generateCredentials, validateForm, navigate]);
+
+  // Prevent form submit on Enter in inputs (browser default: Enter in a single input submits the form)
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== "Enter") return;
+    const target = e.target as HTMLElement;
+    const tagName = target.tagName;
+    const isTextarea = tagName === "TEXTAREA";
+    const isSubmitControl =
+      (tagName === "BUTTON" && (target as HTMLButtonElement).type === "submit") ||
+      (tagName === "INPUT" && ((target as HTMLInputElement).type === "submit" || (target as HTMLInputElement).type === "image"));
+    if (!isTextarea && !isSubmitControl) {
+      e.preventDefault();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-6 px-4 sm:px-6 lg:px-8 relative">
@@ -434,7 +396,7 @@ const AddEmployer = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Add New Employer</h1>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 sm:px-8 py-6 sm:py-8 space-y-8">
             {/* Section 1: Basic Information */}
             <section className="space-y-6">
@@ -580,50 +542,22 @@ const AddEmployer = () => {
                   )}
                 </div>
 
-                {/* HQ Address with Google Places Autocomplete */}
+                {/* Employer Address – type and select to auto-fill from Google */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Employer Address <span className="text-red-500">*</span>
-                    {hasGoogleMapsKey && isGoogleMapsLoaded && (
-                      <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses only)</span>
-                    )}
+                    <span className="text-gray-400 text-xs font-normal ml-2">(Singapore – type to fetch from Google)</span>
                   </label>
-                  <div className="relative">
-                    <textarea
-                      ref={employerAddressRef}
-                      name="hqAddress"
-                      value={hasGoogleMapsKey && isGoogleMapsLoaded ? (employerAddressValue || formData.hqAddress) ?? "" : formData.hqAddress ?? ""}
-                      onChange={(e) => {
-                        if (hasGoogleMapsKey && isGoogleMapsLoaded) {
-                          setEmployerAddressValue(e.target.value);
-                        }
-                        setFormData(prev => ({ ...prev, hqAddress: e.target.value }));
-                      }}
-                      placeholder={hasGoogleMapsKey && isGoogleMapsLoaded
-                        ? "Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
-                        : "Enter address (e.g., Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123)"}
-                      rows={4}
-                      required
-                      disabled={hasGoogleMapsKey && (!employerAddressReady || !isGoogleMapsLoaded)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-                    />
-                    {hasGoogleMapsKey && isGoogleMapsLoaded && status === "OK" && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {data.map(({ place_id, description }) => (
-                          <button
-                            key={place_id}
-                            type="button"
-                            onClick={() => handleEmployerAddressSelect(description)}
-                            className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm"
-                          >
-                            {description}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <AddressAutocomplete
+                    value={formData.hqAddress ?? ""}
+                    onChange={(val) => setFormData((prev) => ({ ...prev, hqAddress: val ?? "" }))}
+                    placeholder="Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                    country="sg"
+                    multiline
+                    rows={4}
+                  />
                   <p className="mt-1 text-xs text-gray-500">
-                    Format: Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123
+                    Type and select a Singapore address to auto-fill.
                   </p>
                 </div>
               </div>
@@ -637,6 +571,23 @@ const AddEmployer = () => {
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Location (Country) first – drives which number format/placeholder is shown */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Location (Country) <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={String(phoneCountry)}
+                    onChange={(e) => setPhoneCountry(e.target.value as keyof typeof PHONE_RULES)}
+                    className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  >
+                    <option value="SG">+65 Singapore</option>
+                    <option value="MY">+60 Malaysia</option>
+                    <option value="IN">+91 India</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">Contact numbers below use this country’s format.</p>
+                </div>
+
                 {/* Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -668,25 +619,8 @@ const AddEmployer = () => {
                   />
                 </div>
 
-                {/* Location first (drives contact validation) */}
+                {/* Contact Number (required) – validated per selected country */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Location (Country) <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={phoneCountry}
-                    onChange={(e) => setPhoneCountry(e.target.value as keyof typeof PHONE_RULES)}
-                    className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  >
-                    <option value="SG">+65 Singapore</option>
-                    <option value="MY">+60 Malaysia</option>
-                    <option value="IN">+91 India</option>
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">Used for contact number validation and format.</p>
-                </div>
-
-                {/* Contact Number (validated per phoneCountry) */}
-                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Contact Number <span className="text-red-500">*</span>
                   </label>
@@ -697,49 +631,55 @@ const AddEmployer = () => {
                     onChange={handleChange}
                     placeholder={getPlaceholder(phoneCountry)}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Extension <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="mainContactExtension"
-                    value={formData.mainContactExtension ?? ""}
-                    onChange={handleChange}
-                    placeholder="e.g. 101"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full max-w-xs px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
 
-                {/* Alternate Contact Number + Extension */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Alternate Contact Number <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="alternateContactNumber"
-                    value={formData.alternateContactNumber ?? ""}
-                    onChange={handleChange}
-                    placeholder={getPlaceholder(phoneCountry)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Alternate Extension <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="alternateContactExtension"
-                    value={formData.alternateContactExtension ?? ""}
-                    onChange={handleChange}
-                    placeholder="e.g. 102"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
+                {/* Additional numbers: Add number → extension + number per row */}
+                <div className="md:col-span-2 space-y-3">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-medium text-gray-700">Additional numbers</span>
+                    <button
+                      type="button"
+                      onClick={addAdditionalContact}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add number
+                    </button>
+                  </div>
+                  {additionalContacts.map((entry, index) => (
+                    <div key={index} className="flex flex-wrap items-end gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex-1 min-w-[120px]">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Extension (optional)</label>
+                        <input
+                          type="text"
+                          value={entry.extension}
+                          onChange={(e) => updateAdditionalContact(index, "extension", e.target.value)}
+                          placeholder="e.g. 101"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-[160px]">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Number</label>
+                        <input
+                          type="tel"
+                          value={entry.number}
+                          onChange={(e) => updateAdditionalContact(index, "number", e.target.value)}
+                          placeholder={getPlaceholder(phoneCountry)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAdditionalContact(index)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove number"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Email Address */}
@@ -982,18 +922,18 @@ const AddEmployer = () => {
                     <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-gray-600 mb-1">
                         Outlet Address <span className="text-red-500">*</span>
-                        <span className="text-gray-400 text-xs font-normal ml-2">(Singapore addresses only)</span>
+                        <span className="text-gray-400 text-xs font-normal ml-2">(Singapore – type to fetch from Google)</span>
                       </label>
-                      <textarea
+                      <AddressAutocomplete
                         value={outlet.address ?? ""}
-                        onChange={(e) => handleOutletChange(index, "address", e.target.value)}
+                        onChange={(val) => handleOutletChange(index, "address", val ?? "")}
                         placeholder="Start typing address (e.g., Blk 123 Ang Mo Kio Avenue 3)"
+                        country="sg"
+                        multiline
                         rows={3}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                       />
                       <p className="mt-1 text-xs text-gray-500">
-                        Format: Blk 123, Ang Mo Kio Avenue 3, #05-67, Singapore 560123
+                        Type and select a Singapore address to auto-fill.
                       </p>
                     </div>
                     <div>

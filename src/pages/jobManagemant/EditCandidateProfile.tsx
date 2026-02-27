@@ -16,6 +16,7 @@ import {
   XCircle,
   Loader2,
   PauseCircle,
+  Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
 // @ts-ignore - Loader is a JSX file without types
@@ -44,10 +45,19 @@ const EditCandidateProfile = () => {
     verificationStatus?: string;
     verificationAction?: string | null;
   }>({});
+  // User from GET /admin/users/:id – used for employmentStatus & phoneNumber when candidate record is sparse
+  const [displayUser, setDisplayUser] = useState<{
+    employmentStatus?: string | null;
+    phoneNumber?: string | null;
+    [key: string]: any;
+  } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [showSuspendReason, setShowSuspendReason] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [approvalNote, setApprovalNote] = useState(""); // VERIFICATION_AND_ADMIN_ACTIONS.md §5.3: optional reason for Approve (audit)
+  const [resumeDownloading, setResumeDownloading] = useState(false);
+  const [resumeViewing, setResumeViewing] = useState(false);
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -88,6 +98,15 @@ const EditCandidateProfile = () => {
     }
   }, [id]);
 
+  // When user data loads (GET /admin/users), fill mobile from phoneNumber if form has no mobile (employer can then approve)
+  useEffect(() => {
+    if (!displayUser?.phoneNumber) return;
+    setFormData((prev) => {
+      if (prev.mobile && prev.mobile.trim() !== "") return prev;
+      return { ...prev, mobile: displayUser.phoneNumber || prev.mobile };
+    });
+  }, [displayUser?.phoneNumber]);
+
   const fetchUserVerification = async () => {
     if (!id) return;
     try {
@@ -99,6 +118,7 @@ const EditCandidateProfile = () => {
         verificationStatus: user.verificationStatus ?? user.status,
         verificationAction: user.verificationAction ?? null,
       });
+      setDisplayUser(user);
     } catch {
       // User might be candidate-only; verification section will not show or show unknown
     }
@@ -212,6 +232,51 @@ const EditCandidateProfile = () => {
       console.error("Error fetching schools:", error);
       setSchoolsList([]);
       toast.error("Failed to load schools list. Please contact support.");
+    }
+  };
+
+  const fetchResumeBlob = async (resumeUrl: string): Promise<Blob> => {
+    const res = await fetch(resumeUrl, { mode: "cors" });
+    if (!res.ok) throw new Error("Failed to fetch resume");
+    const blob = await res.blob();
+    const type = blob.type === "application/pdf" ? blob.type : "application/pdf";
+    return blob.type === type ? blob : new Blob([await blob.arrayBuffer()], { type: "application/pdf" });
+  };
+
+  const handleResumeView = async (resumeUrl: string) => {
+    setResumeViewing(true);
+    try {
+      const blob = await fetchResumeBlob(resumeUrl);
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      toast.success("Resume opened in new tab");
+    } catch {
+      toast.error("Could not load resume. Try Download instead.");
+      window.open(resumeUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setResumeViewing(false);
+    }
+  };
+
+  const handleResumeDownload = async (resumeUrl: string) => {
+    setResumeDownloading(true);
+    try {
+      const blob = await fetchResumeBlob(resumeUrl);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `resume-${formData.fullName || "candidate"}.pdf`.replace(/[^a-zA-Z0-9.-]/g, "_");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Resume downloaded");
+    } catch {
+      toast.error("Download failed. Opening in new tab – use browser Save to save as PDF.");
+      window.open(resumeUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setResumeDownloading(false);
     }
   };
 
@@ -348,24 +413,28 @@ const EditCandidateProfile = () => {
   const isStudentPass = formData.registrationType === "Student Pass (Foreigner)";
   const showEmail = !userData?.candidateProfile?.email && !userData?.email;
 
+  // VERIFICATION_AND_ADMIN_ACTIONS.md §5.6: DELETE /admin/users/:userId; 403 = cannot delete admin, 404 = not found
   const handleDeleteCandidate = async () => {
     if (!id) return;
 
     setIsDeleting(true);
     try {
-      const response = await axiosInstance.delete(`/admin/candidates/${id}`);
+      const response = await axiosInstance.delete(`/admin/users/${id}`);
 
       if (response.data?.success === false) {
-        toast.error(response.data?.message || "Failed to delete candidate");
+        toast.error(response.data?.message || "Failed to delete user");
         return;
       }
 
-      toast.success("Candidate deleted successfully");
+      toast.success(response.data?.message || "User deleted successfully");
       navigate("/hustle-heroes");
     } catch (error: unknown) {
-      console.error("Error deleting candidate:", error);
-      const err = error as { response?: { data?: { message?: string } } };
-      toast.error(err?.response?.data?.message || "Failed to delete candidate. Please try again.");
+      const err = error as { response?: { status?: number; data?: { message?: string } } };
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message;
+      if (status === 403) toast.error(msg || "Cannot delete an admin user.");
+      else if (status === 404) toast.error(msg || "User not found.");
+      else toast.error(msg || "Failed to delete user. Please try again.");
     } finally {
       setIsDeleting(false);
       setShowDeleteModal(false);
@@ -380,9 +449,7 @@ const EditCandidateProfile = () => {
     try {
       const body: { action: string; reason?: string } = { action };
       const reason = rejectionReason.trim();
-      if (reason && (action === "Rejected" || action === "Suspended")) {
-        body.reason = reason;
-      }
+      if (reason) body.reason = reason; // §5.3: optional for Approve (audit); §5.4–5.5 optional for Reject/Suspend
       const response = await axiosInstance.put(`/admin/users/${id}/verify`, body);
       if (response.data?.success === false) {
         toast.error(response.data?.message || "Action failed");
@@ -396,6 +463,7 @@ const EditCandidateProfile = () => {
             : "User suspended";
       toast.success(response.data?.message || msg);
       setRejectionReason("");
+      setApprovalNote("");
       await fetchUserVerification();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || "Request failed";
@@ -419,7 +487,7 @@ const EditCandidateProfile = () => {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Edit Employee Profile</h1>
         </div>
 
-        {/* Profile Summary Card */}
+        {/* Profile Summary Card – employer can check and approve; show employment status & number from backend */}
         {userData && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -438,8 +506,55 @@ const EditCandidateProfile = () => {
               </div>
               <div className="flex-1">
                 <h2 className="text-xl font-semibold text-gray-900">{formData.fullName || "N/A"}</h2>
-                <p className="text-sm text-gray-600">Mobile: {formData.mobile || "N/A"}</p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium text-gray-700">Employment status:</span>{" "}
+                  {displayUser?.employmentStatus ?? userData?.user?.employmentStatus ?? (formData.registrationType === "Singaporean/PR" ? "Singaporean/Permanent Resident" : formData.registrationType === "LTVP" ? "Long Term Visit Pass Holder" : formData.registrationType === "Student Pass (Foreigner)" ? "Student Pass (Foreigner)" : formData.registrationType) ?? "N/A"}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium text-gray-700">Phone number:</span>{" "}
+                  {formData.mobile || displayUser?.phoneNumber || userData?.user?.phoneNumber || "N/A"}
+                </p>
                 <p className="text-sm text-gray-600">E-Wallet: ${formData.eWalletAmount.toFixed(2)}</p>
+                {/* Resume: admin can view and download before approval (user.resumeUrl from GET /admin/users/:id) */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-1">Resume</p>
+                  {(() => {
+                    const resumeUrl =
+                      displayUser?.resumeUrl ??
+                      userData?.user?.resumeUrl ??
+                      userData?.candidateProfile?.resumeUrl ??
+                      userData?.candidate?.resumeUrl;
+                    if (!resumeUrl || typeof resumeUrl !== "string") {
+                      return <span className="text-sm text-amber-600">Not uploaded</span>;
+                    }
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleResumeView(resumeUrl)}
+                          disabled={resumeViewing}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {resumeViewing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                          {resumeViewing ? "Opening..." : "View resume"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleResumeDownload(resumeUrl)}
+                          disabled={resumeDownloading}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {resumeDownloading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                          {resumeDownloading ? "Downloading..." : "Download resume"}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
           </div>
@@ -477,6 +592,18 @@ const EditCandidateProfile = () => {
               const isSuspended = st === "suspended" || vs === "suspended";
               return (
                 <div className="space-y-3">
+                  {!isVerified && (
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Note (optional, for audit when approving)</label>
+                      <input
+                        type="text"
+                        value={approvalNote}
+                        onChange={(e) => setApprovalNote(e.target.value)}
+                        placeholder="e.g. Documents verified"
+                        className="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {!isVerified && (
                       <button
@@ -1125,8 +1252,8 @@ const EditCandidateProfile = () => {
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
         onConfirm={handleDeleteCandidate}
-        title="Delete Candidate"
-        message={`Are you sure you want to delete ${formData.fullName || "this candidate"}? This action cannot be undone and will permanently remove all candidate data.`}
+        title="Delete User"
+        message={`Are you sure you want to delete ${formData.fullName || "this user"}? This action cannot be undone and will permanently remove all user data.`}
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"
