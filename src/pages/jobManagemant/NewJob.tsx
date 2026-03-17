@@ -14,6 +14,7 @@ import {
 import toast from "react-hot-toast";
 import { buildJobData } from "../../utils/dataTransformers";
 import { AddressAutocomplete } from "../../components/location";
+import RichTextEditor from "../../components/RichTextEditor";
 
 interface Employer {
   id: string;
@@ -85,8 +86,7 @@ const NewJob: React.FC = () => {
     foodHygieneCertRequired: false,
     jobStatus: "Active",
     applicationDeadline: "",
-    dressCode: "", // Replaces jobRequirements
-    skills: [] as string[], // Array format - list of skills
+    dressCode: "",
     locationDetails: "",
   });
 
@@ -105,8 +105,6 @@ const NewJob: React.FC = () => {
       standbyVacancy: 0, // Optional: default 0 (matches backend spec)
     },
   ]);
-
-  const [skillInput, setSkillInput] = useState<string>(""); // Temporary input for adding skills
 
   const [rateTypes, setRateTypes] = useState<string[]>([]);
   const [defaultPayRates, setDefaultPayRates] = useState<{ [key: string]: number }>({});
@@ -323,32 +321,6 @@ const NewJob: React.FC = () => {
     setShifts([...shifts, newShift]);
   };
 
-  // Add skill to array
-  const addSkill = () => {
-    if (skillInput.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        skills: [...prev.skills, skillInput.trim()]
-      }));
-      setSkillInput("");
-    }
-  };
-
-  // Remove skill from array
-  const removeSkill = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      skills: prev.skills.filter((_, i) => i !== index)
-    }));
-  };
-
-  // Handle Enter key for skill input
-  const handleSkillKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addSkill();
-    }
-  };
 
   const removeShift = (id: number) => {
     if (shifts.length > 1) {
@@ -391,7 +363,7 @@ const NewJob: React.FC = () => {
       toast.error("Job title is required");
       return false;
     }
-    if (!formData.jobDescription?.trim()) {
+    if (!(formData.jobDescription || "").replace(/<[^>]*>/g, "").trim()) {
       toast.error("Job description is required");
       return false;
     }
@@ -482,8 +454,8 @@ const NewJob: React.FC = () => {
         // Validation errors
         if (errorMessage.includes("date") || errorMessage.includes("Date")) {
           displayMessage = `Date Validation Error: ${errorMessage}. Please select a valid date (today or future).`;
-        } else if (errorMessage.includes("jobRequirements") || errorMessage.includes("array") || errorMessage.includes("skills")) {
-          displayMessage = `Data Format Error: ${errorMessage}. Skills/Requirements must be provided as an array.`;
+        } else if (errorMessage.includes("dressCode") || errorMessage.includes("Dress Code")) {
+          displayMessage = `Dress Code: ${errorMessage}`;
         } else if (errorMessage.includes("required") || errorMessage.includes("missing")) {
           displayMessage = `Missing Required Field: ${errorMessage}. Please fill in all required fields.`;
         } else if (errorMessage.includes("employer")) {
@@ -773,19 +745,16 @@ const NewJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Job Description */}
+                {/* Job Description - rich text (bullet, bold, font style) */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Job Description <span className="text-red-500">*</span>
                   </label>
-                  <textarea
-                    name="jobDescription"
+                  <RichTextEditor
                     value={formData.jobDescription ?? ""}
-                    onChange={handleChange}
-                    rows={4}
+                    onChange={(html) => setFormData((prev) => ({ ...prev, jobDescription: html }))}
                     placeholder="Enter detailed job description, responsibilities, requirements..."
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={4}
                   />
                 </div>
 
@@ -802,55 +771,6 @@ const NewJob: React.FC = () => {
                     placeholder="e.g., Uniform provided, Black pants and white shirt, Safety shoes required"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   />
-                </div>
-
-                {/* Skills - Array format (List) */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Skills <span className="text-gray-400 text-xs">(Optional - Add skills as a list)</span>
-                  </label>
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={skillInput}
-                        onChange={(e) => setSkillInput(e.target.value)}
-                        onKeyPress={handleSkillKeyPress}
-                        placeholder="Enter skill and press Enter or click Add"
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={addSkill}
-                        className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        Add
-                      </button>
-                    </div>
-                    {formData.skills.length > 0 && (
-                      <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        {formData.skills.map((skill, index) => (
-                          <span
-                            key={index}
-                            className="inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                          >
-                            {skill}
-                            <button
-                              type="button"
-                              onClick={() => removeSkill(index)}
-                              className="text-blue-600 hover:text-blue-800"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Skills are stored as an array. Each skill is a separate item in the list.
-                  </p>
                 </div>
 
                 {/* Food Hygiene Cert Required */}

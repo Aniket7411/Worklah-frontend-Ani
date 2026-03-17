@@ -902,7 +902,7 @@ function AddTransactionModal({ onClose, onSuccess }: { onClose: () => void; onSu
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 my-8">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg md:max-w-2xl p-6 my-8">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-xl font-bold">Add New Transaction</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

@@ -858,21 +858,24 @@ const JobManagement = () => {
                               {row.jobRoles}
                             </div>
                           )}
-                          {/* Skills/Requirements */}
-                          {row.jobRequirements && Array.isArray(row.jobRequirements) && row.jobRequirements.length > 0 && (
+                          {/* Dress Code */}
+                          {(row.dressCode || (Array.isArray(row.jobRequirements) && row.jobRequirements.length > 0) || (Array.isArray(row.skills) && row.skills.length > 0)) && (
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {row.jobRequirements.slice(0, 2).map((skill: string, idx: number) => (
-                                <span
-                                  key={idx}
-                                  className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-semibold border border-blue-200"
-                                >
-                                  {skill}
-                                </span>
-                              ))}
-                              {row.jobRequirements.length > 2 && (
-                                <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-semibold border border-gray-200">
-                                  +{row.jobRequirements.length - 2} more
-                                </span>
+                              {row.dressCode ? (
+                                <span className="text-xs text-gray-700 line-clamp-1">{row.dressCode}</span>
+                              ) : (
+                                <>
+                                  {(row.jobRequirements || row.skills || []).slice(0, 2).map((item, idx) => (
+                                    <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-semibold border border-blue-200">
+                                      {item}
+                                    </span>
+                                  ))}
+                                  {(row.jobRequirements || row.skills || []).length > 2 && (
+                                    <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full font-semibold border border-gray-200">
+                                      +{(row.jobRequirements || row.skills).length - 2} more
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           )}

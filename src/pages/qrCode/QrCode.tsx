@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import { axiosInstance } from "../../lib/authInstances";
 import Loader from "../../components/Loader";
 import toast from "react-hot-toast";
-import { Download, RefreshCw, Plus, Search, Printer, Filter, X, Eye } from "lucide-react";
+import { Download, RefreshCw, Plus, Search, Printer, Filter, X, Eye, ExternalLink } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 
 const IMAGE_BASE_URL = "https://worklah.onrender.com";
@@ -49,6 +50,8 @@ interface QRCode {
   /** Legacy/local only */
   status?: "Active" | "Inactive";
   generatedAt?: string;
+  /** Barcode image URL (backend-generated); optional */
+  barcodeImage?: string;
 }
 
 const QRCodeManagement: React.FC = () => {
@@ -124,8 +127,16 @@ const QRCodeManagement: React.FC = () => {
     return `${employerLetter}-1`;
   };
 
+  /** Job detail URL for this app (used in QR payload so scan can open job). */
+  const getJobDetailUrl = (jobId: string | undefined) => {
+    if (!jobId) return "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/jobs/${jobId}`;
+  };
+
   const generateQRData = (qrCode: QRCode | null): string => {
     if (!qrCode) return "";
+    const jobDetailUrl = getJobDetailUrl(qrCode.jobId);
     return JSON.stringify({
       qrCodeId: qrCode.qrCodeId,
       employerId: qrCode.employerId,
@@ -133,6 +144,8 @@ const QRCodeManagement: React.FC = () => {
       employerName: qrCode.employerName,
       outletName: qrCode.outletName,
       outletAddress: qrCode.outletAddress,
+      jobId: qrCode.jobId,
+      jobDetailUrl: jobDetailUrl || undefined,
     });
   };
 
@@ -346,6 +359,7 @@ const QRCodeManagement: React.FC = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Code</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Barcode</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">QR Code ID</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Job</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employer</th>
@@ -358,7 +372,7 @@ const QRCodeManagement: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredQRCodes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                     {searchQuery || selectedEmployerFilter !== "all"
                       ? "No QR codes found matching your filters"
                       : "No QR codes yet. Create a job to generate QRs, or use Generate QR Code for an extra QR."}
@@ -387,15 +401,39 @@ const QRCodeManagement: React.FC = () => {
                         <span className="text-xs text-gray-500">Scan for attendance</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3">
+                      {qr.barcodeImage ? (
+                        <img
+                          src={qr.barcodeImage}
+                          alt={`Barcode ${qr.qrCodeId}`}
+                          className="h-10 min-w-[80px] object-contain border border-gray-200 rounded bg-white"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-sm font-semibold text-blue-600">{qr.qrCodeId}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="text-sm text-gray-900">
-                        {qr.jobTitle || qr.jobName
-                          ? `${qr.jobTitle || qr.jobName}${qr.jobDate ? ` · ${new Date(qr.jobDate).toLocaleDateString()}` : ""}`
-                          : "—"}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm text-gray-900">
+                          {qr.jobTitle || qr.jobName
+                            ? `${qr.jobTitle || qr.jobName}${qr.jobDate ? ` · ${new Date(qr.jobDate).toLocaleDateString()}` : ""}`
+                            : "—"}
+                        </span>
+                        {qr.jobId && (
+                          <Link
+                            to={`/jobs/${qr.jobId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            <ExternalLink size={12} />
+                            View job
+                          </Link>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -486,15 +524,27 @@ const QRCodeManagement: React.FC = () => {
               <X size={24} />
             </button>
             <p className="text-center text-sm font-medium text-gray-500 mb-2">Scan for attendance</p>
-            <div className="flex justify-center mb-4 p-4 bg-gray-50 rounded-xl" ref={qrRef}>
-              {selectedQRCode.qrCodeImage ? (
-                <img
-                  src={selectedQRCode.qrCodeImage}
-                  alt={`QR ${selectedQRCode.qrCodeId}`}
-                  className="w-[220px] h-[220px] object-contain border border-gray-200 rounded-lg bg-white"
-                />
-              ) : (
-                <QRCodeCanvas value={generateQRData(selectedQRCode)} size={220} />
+            <div className="flex flex-wrap justify-center gap-4 mb-4 p-4 bg-gray-50 rounded-xl" ref={qrRef}>
+              <div>
+                {selectedQRCode.qrCodeImage ? (
+                  <img
+                    src={selectedQRCode.qrCodeImage}
+                    alt={`QR ${selectedQRCode.qrCodeId}`}
+                    className="w-[220px] h-[220px] object-contain border border-gray-200 rounded-lg bg-white"
+                  />
+                ) : (
+                  <QRCodeCanvas value={generateQRData(selectedQRCode)} size={220} />
+                )}
+              </div>
+              {selectedQRCode.barcodeImage && (
+                <div className="flex flex-col items-center">
+                  <img
+                    src={selectedQRCode.barcodeImage}
+                    alt={`Barcode ${selectedQRCode.qrCodeId}`}
+                    className="h-16 max-w-[200px] object-contain border border-gray-200 rounded bg-white"
+                  />
+                  <span className="text-xs text-gray-500 mt-1">Barcode</span>
+                </div>
               )}
             </div>
             <div className="border-t border-gray-200 pt-4 space-y-2">
@@ -505,6 +555,15 @@ const QRCodeManagement: React.FC = () => {
                   <span className="text-gray-500"> · {new Date(selectedQRCode.jobDate).toLocaleDateString()}</span>
                 )}
               </p>
+              {selectedQRCode.jobId && (
+                <Link
+                  to={`/jobs/${selectedQRCode.jobId}`}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  <ExternalLink size={16} />
+                  View job details
+                </Link>
+              )}
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mt-3">Venue</p>
               <p className="text-lg font-bold text-gray-900">{selectedQRCode.employerName ?? "—"}</p>
               <p className="text-sm text-gray-600">{[selectedQRCode.outletName, selectedQRCode.outletAddress].filter(Boolean).join(" · ") || "—"}</p>
@@ -543,14 +602,27 @@ const QRCodeManagement: React.FC = () => {
             <>
               <div className="text-center mb-6">
                 <h1 className="text-2xl font-bold mb-2">Attendance QR Code</h1>
-                {selectedQRCode.qrCodeImage ? (
-                  <img src={selectedQRCode.qrCodeImage} alt={`QR ${selectedQRCode.qrCodeId}`} className="mx-auto w-[300px] h-[300px] object-contain" />
-                ) : (
-                  <QRCodeCanvas value={generateQRData(selectedQRCode)} size={300} />
-                )}
+                <div className="flex flex-wrap justify-center items-end gap-6">
+                  {selectedQRCode.qrCodeImage ? (
+                    <img src={selectedQRCode.qrCodeImage} alt={`QR ${selectedQRCode.qrCodeId}`} className="w-[300px] h-[300px] object-contain" />
+                  ) : (
+                    <QRCodeCanvas value={generateQRData(selectedQRCode)} size={300} />
+                  )}
+                  {selectedQRCode.barcodeImage && (
+                    <div>
+                      <img src={selectedQRCode.barcodeImage} alt={`Barcode ${selectedQRCode.qrCodeId}`} className="mx-auto h-14 max-w-[240px] object-contain" />
+                      <p className="text-sm font-medium mt-1">Barcode</p>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="text-center space-y-2">
                 <p className="text-lg font-semibold">QR Code ID: {selectedQRCode.qrCodeId}</p>
+                {selectedQRCode.jobId && (
+                  <p className="text-sm text-blue-600 font-medium">
+                    Job: {typeof window !== "undefined" ? window.location.origin : ""}/jobs/{selectedQRCode.jobId}
+                  </p>
+                )}
                 <p className="text-md">Employer: {selectedQRCode.employerName ?? "—"}</p>
                 <p className="text-md">Outlet: {selectedQRCode.outletName ?? "—"}</p>
                 <p className="text-sm text-gray-600">{selectedQRCode.outletAddress ?? ""}</p>

@@ -40,9 +40,11 @@ const EmployerDetailPage: React.FC = () => {
         if (response.data.success) {
           setEmployerData(response.data);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching data:", error);
-        setError("Failed to load employer data.");
+        const msg = error?.response?.data?.message;
+        const is404 = error?.response?.status === 404;
+        setError(is404 && msg ? msg : "Failed to load employer data.");
       } finally {
         setLoading(false);
       }

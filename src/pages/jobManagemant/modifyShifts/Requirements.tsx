@@ -62,7 +62,7 @@ const Requirements: React.FC = () => {
           </div>
         </div>
 
-        {/* Job Requirements Section */}
+        {/* Dress Code Section */}
         <div className="mt-8">
           <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 py-4" >
@@ -72,7 +72,7 @@ const Requirements: React.FC = () => {
                 className="w-5 h-5"
               />
               <h2 className="text-[16px] leading-[19px] font-medium text-[#000000]">
-                Job Requirements
+                Dress Code
               </h2>
             </div>
             <Trash2 className="w-8 h-8 bg-[#FFDCD5] rounded-full p-2 cursor-pointer" />
@@ -85,7 +85,7 @@ const Requirements: React.FC = () => {
             </div>
 
             </div>
-            <p>Job requirements description</p>
+            <p>Dress code description</p>
             <div></div>
           </div>
           <div className="">
@@ -136,7 +136,7 @@ const Requirements: React.FC = () => {
                 className="w-10 h-10 rounded-full border-2 border-gray-100 p-2"
                 color="#000000"
               />
-              <p className="text-[16px] leading-[22px]  text-[#4C4C4C]">Add job scope description</p>
+              <p className="text-[16px] leading-[22px]  text-[#4C4C4C]">Add dress code item</p>
             </div>
           </div>
         </div>

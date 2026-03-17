@@ -9,11 +9,12 @@ import Servicereport from "../../components/payments/sevicereport";
 import SalesReport from "../../components/payments/salesreport";
 import Invoicereport from "../../components/payments/invoice";
 import toast from "react-hot-toast";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 
 export default function EmployeePayments() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const filter = searchParams.get("filter") || "";
   const [activeTab, setActiveTab] = useState("payments");
   const [workerClientTab, setWorkerClientTab] = useState("workers");
@@ -22,7 +23,15 @@ export default function EmployeePayments() {
   const [error, setError] = useState<string | null>(null);
   const [isLimitPopupOpen, setIsLimitPopupOpen] = useState(false);
   const popupRef = useRef<HTMLDivElement>(null);
-  const [activeClientTab, setActiveClientTab] = useState("serviceReport");
+  const tabFromState = (location.state as any)?.clientTab;
+  const [activeClientTab, setActiveClientTab] = useState(tabFromState || "serviceReport");
+
+  useEffect(() => {
+    if (tabFromState) {
+      setWorkerClientTab("clients");
+      setActiveClientTab(tabFromState);
+    }
+  }, [tabFromState]);
 
   // Get page title based on filter and active tab
   const getPageTitle = () => {

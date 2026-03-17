@@ -4,7 +4,7 @@
  *
  * Rules:
  * - India (91): 10 digits (e.g. 91 7275061192)
- * - Singapore: 8 digits (mobile)
+ * - Singapore (65): 8 or 10 digits after +65 (e.g. 65 9123 4567)
  * - Malaysia: 10 or 11 digits (mobile)
  */
 
@@ -19,9 +19,9 @@ const PHONE_RULES = {
   SG: {
     countryCode: '65',
     countryName: 'Singapore',
-    digits: 8,
+    digits: [8, 10], // 8 digits (standard mobile) or 10 digits (common user input)
     example: '65 9123 4567',
-    pattern: /^65\d{8}$/,
+    pattern: /^65\d{8,10}$/,
   },
   MY: {
     countryCode: '60',
@@ -94,11 +94,12 @@ function validatePhone(phone, countryKey = 'SG') {
       return { valid: false, message: 'Singapore numbers must include country code 65 (e.g. 65 91234567).' };
     }
     const national = normalized.slice(2);
-    if (national.length !== rule.digits) {
-      return { valid: false, message: `Singapore mobile must be 8 digits. You entered ${national.length}.` };
+    const allowed = Array.isArray(rule.digits) ? rule.digits : [rule.digits];
+    if (!allowed.includes(national.length)) {
+      return { valid: false, message: `Singapore number must be 8 or 10 digits after +65. You entered ${national.length}.` };
     }
-    if (!/^\d{8}$/.test(national)) {
-      return { valid: false, message: 'Singapore mobile should contain only digits.' };
+    if (!/^\d{8,10}$/.test(national)) {
+      return { valid: false, message: 'Singapore number should contain only digits (8 or 10 digits after +65).' };
     }
     return { valid: true, normalized: normalized };
   }

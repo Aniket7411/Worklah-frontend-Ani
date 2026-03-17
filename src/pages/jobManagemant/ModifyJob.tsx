@@ -12,6 +12,7 @@ import {
 import toast from "react-hot-toast";
 import { buildJobData } from "../../utils/dataTransformers";
 import { AddressAutocomplete } from "../../components/location";
+import RichTextEditor from "../../components/RichTextEditor";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import Loader from "../../components/Loader.jsx";
@@ -88,7 +89,7 @@ const ModifyJob: React.FC = () => {
     foodHygieneCertRequired: false,
     jobStatus: "Active",
     applicationDeadline: "",
-    jobRequirements: "",
+    dressCode: "",
     locationDetails: "",
     contactPhone: "",
     contactEmail: "",
@@ -210,29 +211,44 @@ const ModifyJob: React.FC = () => {
     try {
       setLoading(true);
       const response = await axiosInstance.get(`/admin/jobs/${jobId}`);
-      const job = response.data?.job || response.data;
+      const data = response.data;
+
+      // Resolve job: API may return { job } or { employer: { jobs: [...] } }
+      let job = data?.job;
+      if (!job && data?.employer?.jobs && Array.isArray(data.employer.jobs) && jobId) {
+        job = data.employer.jobs.find(
+          (j: any) => (j._id || j.id) === jobId
+        );
+      }
+      if (!job) job = data;
+
+      // Employer for outlets: may be on job or at top level
+      const employer = job?.employer || data?.employer;
 
       if (job) {
         const jobDate = job.jobDate || job.date || new Date().toISOString().split("T")[0];
-        const employerId = job.employerId || job.employer?.employerId || job.employer?._id || job.employer?.id || "";
+        const employerId = job.employerId || employer?.employerId || employer?._id || employer?.id || "";
         const outletId = job.outlet?._id || job.outlet?.id || job.outletId || "";
         const hasOutletId = !!outletId;
+        // When outlet is null, backend may send address/location on job – treat as manual outlet
+        const manualAddress = job.outletAddress || job.outlet?.address || job.address || job.locationDetails || job.location || "";
+        const useManualOutlet = !hasOutletId && !!manualAddress;
         setFormData({
           jobDate,
           jobTitle: job.jobTitle || job.jobName || "",
           jobDescription: job.jobDescription || job.jobScope || "",
           jobRoles: job.jobRoles || "",
           employerId,
-          employerName: job.employerName || job.employer?.name || job.employer?.companyLegalName || "",
+          employerName: job.employerName || employer?.name || employer?.companyLegalName || "",
           outletId,
-          outletAddress: job.outletAddress || job.outlet?.address || "",
-          useManualOutlet: !hasOutletId && !!(job.outletAddress || job.outlet?.address),
+          outletAddress: manualAddress,
+          useManualOutlet,
           totalPositions: job.totalPositions || job.totalPositionsNeeded || 1,
           foodHygieneCertRequired: job.foodHygieneCertRequired || false,
           jobStatus: job.jobStatus || job.status || "Active",
           applicationDeadline: job.applicationDeadline ? toLocalDateTimeString(job.applicationDeadline) : "",
-          jobRequirements: Array.isArray(job.skills) ? job.skills.join(", ") : Array.isArray(job.requirements) ? job.requirements.join(", ") : job.jobRequirements || "",
-          locationDetails: job.locationDetails || job.location || "",
+          dressCode: job.dressCode || job.jobRequirements || (Array.isArray(job.skills) ? job.skills.join(", ") : "") || "",
+          locationDetails: job.locationDetails || job.location || job.address || job.outlet?.address || "",
           contactPhone: job.contactInfo?.phone || "",
           contactEmail: job.contactInfo?.email || "",
           currentFulfilment: job.currentFulfilment || { filled: 0, total: job.totalPositions || 1 },
@@ -240,9 +256,9 @@ const ModifyJob: React.FC = () => {
 
         setSelectedEmployer(employerId);
 
-        // Pre-fill outlets from job's employer if available (so outlet dropdown is populated before useEffect)
-        if (job.employer?.outlets && Array.isArray(job.employer.outlets) && job.employer.outlets.length > 0) {
-          setAvailableOutlets(normalizeOutlets(job.employer.outlets));
+        // Pre-fill outlets from employer (job.employer or response.employer) so outlet dropdown is populated and selection can be shown
+        if (employer?.outlets && Array.isArray(employer.outlets) && employer.outlets.length > 0) {
+          setAvailableOutlets(normalizeOutlets(employer.outlets));
         }
 
         // Handle shifts - pre-select all existing shifts from job (multiple shifts supported)
@@ -411,7 +427,7 @@ const ModifyJob: React.FC = () => {
       toast.error("Job title is required");
       return false;
     }
-    if (!formData.jobDescription.trim()) {
+    if (!(formData.jobDescription || "").replace(/<[^>]*>/g, "").trim()) {
       toast.error("Job description is required");
       return false;
     }
@@ -445,16 +461,11 @@ const ModifyJob: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Convert jobRequirements to skills array (backend expects 'skills' field)
-      const skillsArray = formData.jobRequirements
-        ? formData.jobRequirements.split(",").map((s) => s.trim()).filter((s) => s)
-        : [];
-
-      // Use buildJobData utility to match backend spec
+      // Use buildJobData utility to match backend spec (Dress Code replaces skills/job requirements)
       const jobData = buildJobData(
         {
           ...formData,
-          skills: skillsArray, // Map jobRequirements to skills for API
+          skills: [],
           employerId: formData.employerId || null,
           outletId: formData.useManualOutlet ? null : formData.outletId,
           outletAddress: formData.useManualOutlet ? formData.outletAddress : null,
@@ -495,8 +506,8 @@ const ModifyJob: React.FC = () => {
           displayMessage = errorMessage.toLowerCase().includes("deadline")
             ? `Date validation: ${errorMessage}`
             : `Date validation: ${errorMessage}. When editing, ensure application deadline is on or after job date.`;
-        } else if (errorMessage.includes("jobRequirements") || errorMessage.includes("array") || errorMessage.includes("skills")) {
-          displayMessage = `Data Format Error: ${errorMessage}. Skills/Requirements must be provided as an array.`;
+        } else if (errorMessage.includes("dressCode") || errorMessage.includes("Dress Code")) {
+          displayMessage = `Dress Code: ${errorMessage}`;
         } else if (errorMessage.includes("required") || errorMessage.includes("missing")) {
           displayMessage = `Missing Required Field: ${errorMessage}. Please fill in all required fields.`;
         } else if (errorMessage.includes("employer")) {
@@ -828,38 +839,32 @@ const ModifyJob: React.FC = () => {
                   />
                 </div>
 
-                {/* Job Description */}
+                {/* Job Description - rich text (bullet, bold, font style) */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Job Description <span className="text-red-500">*</span>
                   </label>
-                  <textarea
-                    name="jobDescription"
-                    value={formData.jobDescription}
-                    onChange={handleChange}
-                    rows={4}
+                  <RichTextEditor
+                    value={formData.jobDescription || ""}
+                    onChange={(html) => setFormData((prev) => ({ ...prev, jobDescription: html }))}
                     placeholder="Enter detailed job description, responsibilities, requirements..."
-                    required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={4}
                   />
                 </div>
 
-                {/* Job Requirements / Skills */}
+                {/* Dress Code */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Skills / Job Requirements <span className="text-gray-400 text-xs">(Optional - comma-separated, will be saved as array)</span>
+                    Dress Code <span className="text-gray-400 text-xs">(Optional)</span>
                   </label>
                   <textarea
-                    name="jobRequirements"
-                    value={formData.jobRequirements}
+                    name="dressCode"
+                    value={formData.dressCode}
                     onChange={handleChange}
                     rows={3}
-                    placeholder="e.g., Experience preferred, Food hygiene cert, Physical fitness (Enter comma-separated values)"
+                    placeholder="e.g., Uniform provided, Black pants and white shirt, Safety shoes required"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Note: These will be converted to an array format when saved. Example: "Skill1, Skill2" → ["Skill1", "Skill2"]
-                  </p>
                 </div>
 
                 {/* Contact Information */}

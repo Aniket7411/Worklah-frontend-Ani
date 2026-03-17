@@ -24,6 +24,7 @@ import { FiEdit3 } from "react-icons/fi";
 import { axiosInstance } from "../../lib/authInstances";
 import { convertIdToFourDigits, formatDate } from "../../lib/utils";
 import OutletFilter from "../../components/Filter/OutletFilter";
+import OverViewTable from "./OverViewTable";
 
 const JobDetailsPage = () => {
   const companyImage = "https://worklah.onrender.com";
@@ -663,6 +664,28 @@ const JobDetailsPage = () => {
         </div>
       )}
 
+      {/* Shifts overview – all shifts by day with breakdown */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <OverViewTable job={jobsData} />
+      </div>
+
+      {/* Invoice & Service report links */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6 flex flex-wrap gap-4">
+        <Link
+          to="/payments"
+          state={{ clientTab: "invoice" }}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+        >
+          Generate invoice from completed shifts
+        </Link>
+        <Link
+          to="/payments"
+          state={{ clientTab: "serviceReport" }}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 text-sm font-medium"
+        >
+          Service report
+        </Link>
+      </div>
 
       {/* <CustomScrollbar scrollContainerRef={scrollContainerRef} totalSteps={3} /> */}
 
@@ -674,28 +697,39 @@ const JobDetailsPage = () => {
               <FileX2 className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
             </div>
-            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {jobsData.jobDescription}
-            </p>
+            <div
+              className="text-gray-700 leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
+              dangerouslySetInnerHTML={
+                jobsData.jobDescription && /<[^>]+>/.test(jobsData.jobDescription)
+                  ? { __html: jobsData.jobDescription }
+                  : undefined
+              }
+            >
+              {jobsData.jobDescription && !/<[^>]+>/.test(jobsData.jobDescription) ? jobsData.jobDescription : null}
+            </div>
           </div>
         )}
 
-        {((jobsData.skills && Array.isArray(jobsData.skills) && jobsData.skills.length > 0) || (jobsData.jobRequirements && Array.isArray(jobsData.jobRequirements) && jobsData.jobRequirements.length > 0)) && (
+        {(jobsData.dressCode || (jobsData.skills && Array.isArray(jobsData.skills) && jobsData.skills.length > 0) || (jobsData.jobRequirements && typeof jobsData.jobRequirements === "string" && jobsData.jobRequirements.trim())) && (
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-3">
               <AiOutlineFileDone className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Skills & Requirements</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Dress Code</h2>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(jobsData.skills ?? jobsData.jobRequirements ?? []).map((item: string, index: number) => (
-                <span
-                  key={index}
-                  className="px-3 py-1.5 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium border border-blue-200"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
+            {jobsData.dressCode ? (
+              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{jobsData.dressCode}</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(Array.isArray(jobsData.skills) ? jobsData.skills : [jobsData.jobRequirements].filter(Boolean)).map((item, index) => (
+                  <span
+                    key={index}
+                    className="px-3 py-1.5 bg-blue-50 text-blue-700 text-sm rounded-lg font-medium border border-blue-200"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
