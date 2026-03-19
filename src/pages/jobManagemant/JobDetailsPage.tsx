@@ -25,6 +25,7 @@ import { axiosInstance } from "../../lib/authInstances";
 import { convertIdToFourDigits, formatDate } from "../../lib/utils";
 import OutletFilter from "../../components/Filter/OutletFilter";
 import OverViewTable from "./OverViewTable";
+import { sanitizeJobDescriptionHtml } from "../../utils/jobDescriptionHtml";
 
 const JobDetailsPage = () => {
   const companyImage = "https://worklah.onrender.com";
@@ -701,7 +702,7 @@ const JobDetailsPage = () => {
               className="text-gray-700 leading-relaxed whitespace-pre-wrap prose prose-sm max-w-none"
               dangerouslySetInnerHTML={
                 jobsData.jobDescription && /<[^>]+>/.test(jobsData.jobDescription)
-                  ? { __html: jobsData.jobDescription }
+                  ? { __html: sanitizeJobDescriptionHtml(jobsData.jobDescription) }
                   : undefined
               }
             >

@@ -3,6 +3,8 @@
  * Clean, fast data transformation functions for API responses
  */
 
+import { roundToMoney, roundToHours } from "./money";
+
 /**
  * Transform employer data from API to frontend format
  * Images come as complete URLs from backend (e.g., "https://worklah.onrender.com/uploads/profile/admin123.jpg")
@@ -183,18 +185,18 @@ export const buildJobData = (formData: any, shifts: any[], userRole: string, use
       date: shift.shiftDate || shift.date || formData.jobDate || "",
       startTime: shift.startTime || "",
       endTime: shift.endTime || "",
-      breakHours: shift.breakDuration ?? shift.breakHours ?? 0,
+      breakHours: roundToHours(shift.breakDuration ?? shift.breakHours ?? 0),
       breakType: shift.breakType || "Paid",
-      payRate: shift.rates ?? shift.payRate ?? shift.payPerHour ?? 0,
+      payRate: roundToMoney(shift.rates ?? shift.payRate ?? shift.payPerHour ?? 0),
       vacancy: shift.vacancy ?? 1,
       standbyVacancy: shift.standbyVacancy ?? 0,
       // Legacy fields for backends that still expect them
       shiftDate: shift.shiftDate || formData.jobDate || "",
-      breakDuration: shift.breakDuration ?? 0,
-      totalWorkingHours: shift.totalWorkingHours ?? 0,
+      breakDuration: roundToHours(shift.breakDuration ?? 0),
+      totalWorkingHours: roundToHours(shift.totalWorkingHours ?? 0),
       rateType: shift.rateType || "Hourly",
-      rates: shift.rates ?? shift.payRate ?? 0,
-      totalWages: shift.totalWages ?? 0,
+      rates: roundToMoney(shift.rates ?? shift.payRate ?? 0),
+      totalWages: roundToMoney(shift.totalWages ?? 0),
     })),
   };
 };

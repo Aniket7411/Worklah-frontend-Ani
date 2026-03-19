@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { buildJobData } from "../../utils/dataTransformers";
+import { roundToMoney, roundToHours } from "../../utils/money";
 import { AddressAutocomplete } from "../../components/location";
 import RichTextEditor from "../../components/RichTextEditor";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -299,7 +300,7 @@ const ModifyJob: React.FC = () => {
 
     const diffMs = end.getTime() - start.getTime();
     const totalHours = diffMs / (1000 * 60 * 60);
-    return Math.max(0, totalHours - breakDuration);
+    return roundToHours(Math.max(0, totalHours - breakDuration));
   };
 
   const formatTimeDisplay = (startTime: string, endTime: string): string => {
@@ -338,11 +339,11 @@ const ModifyJob: React.FC = () => {
           // Calculate total wages by rate type (Hourly / Weekly / Monthly)
           const rate = updated.rates ?? updated.payPerHour ?? 0;
           if (updated.rateType === "Hourly") {
-            updated.totalWages = rate * updated.totalWorkingHours;
+            updated.totalWages = roundToMoney(rate * updated.totalWorkingHours);
           } else if (updated.rateType === "Weekly" || updated.rateType === "Monthly") {
-            updated.totalWages = rate;
+            updated.totalWages = roundToMoney(rate);
           } else {
-            updated.totalWages = rate * updated.totalWorkingHours;
+            updated.totalWages = roundToMoney(rate * updated.totalWorkingHours);
           }
 
           return updated;
@@ -372,7 +373,7 @@ const ModifyJob: React.FC = () => {
       rateType: defaultRateType as "Hourly" | "Weekly" | "Monthly",
       rates: defaultPayRate,
       payPerHour: defaultPayRate,
-      totalWages: defaultRateType === "Hourly" ? defaultPayRate * 8 : defaultPayRate,
+      totalWages: roundToMoney(defaultRateType === "Hourly" ? defaultPayRate * 8 : defaultPayRate),
       vacancy: 1,
       standbyVacancy: 0,
     };

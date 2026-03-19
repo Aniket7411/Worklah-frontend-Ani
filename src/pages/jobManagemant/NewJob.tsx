@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { buildJobData } from "../../utils/dataTransformers";
+import { roundToMoney, roundToHours } from "../../utils/money";
 import { AddressAutocomplete } from "../../components/location";
 import RichTextEditor from "../../components/RichTextEditor";
 
@@ -242,7 +243,7 @@ const NewJob: React.FC = () => {
 
     const diffMs = end.getTime() - start.getTime();
     const totalHours = diffMs / (1000 * 60 * 60);
-    return Math.max(0, totalHours - breakDuration);
+    return roundToHours(Math.max(0, totalHours - breakDuration));
   };
 
   const formatTimeDisplay = (startTime: string, endTime: string): string => {
@@ -281,11 +282,11 @@ const NewJob: React.FC = () => {
 
           // Auto-calculate total wages based on rate type
           if (updated.rateType === "Hourly") {
-            updated.totalWages = updated.rates * updated.totalWorkingHours;
+            updated.totalWages = roundToMoney(updated.rates * updated.totalWorkingHours);
           } else if (updated.rateType === "Weekly") {
-            updated.totalWages = updated.rates; // Weekly rate is fixed
+            updated.totalWages = roundToMoney(updated.rates); // Weekly rate is fixed
           } else if (updated.rateType === "Monthly") {
-            updated.totalWages = updated.rates; // Monthly rate is fixed
+            updated.totalWages = roundToMoney(updated.rates); // Monthly rate is fixed
           }
 
           return updated;

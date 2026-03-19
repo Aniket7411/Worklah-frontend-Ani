@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from "react";
+import { sanitizeJobDescriptionHtml } from "../utils/jobDescriptionHtml";
 
 /**
  * Basic rich text editor for job description: bullet points, bold, font style.
@@ -9,18 +10,30 @@ export default function RichTextEditor({ value = "", onChange, placeholder = "En
 
   useEffect(() => {
     if (!editorRef.current) return;
-    if (editorRef.current.innerHTML !== value) {
+    // Avoid resetting cursor position while the editor is focused.
+    const isFocused = editorRef.current === document.activeElement;
+    if (!isFocused && editorRef.current.innerHTML !== (value || "")) {
       editorRef.current.innerHTML = value || "";
     }
   }, [value]);
 
   const handleInput = () => {
     if (editorRef.current && onChange) {
-      onChange(editorRef.current.innerHTML || "");
+      const rawHtml = editorRef.current.innerHTML || "";
+      // Normalize legacy `<font>` tags + fix malformed list HTML before storing.
+      const cleanedHtml = sanitizeJobDescriptionHtml(rawHtml);
+      onChange(cleanedHtml);
     }
   };
 
   const execCmd = (command, value = null) => {
+    // Ensure font commands use CSS `span` style output when supported.
+    // (Some browsers still produce `<font>`; the sanitizer will normalize it.)
+    try {
+      if (command === "fontName" || command === "fontSize") document.execCommand("styleWithCSS", false, true);
+    } catch {
+      // ignore
+    }
     document.execCommand(command, false, value);
     editorRef.current?.focus();
     handleInput();
@@ -80,7 +93,7 @@ export default function RichTextEditor({ value = "", onChange, placeholder = "En
         contentEditable
         onInput={handleInput}
         onBlur={handleInput}
-        className="min-h-[100px] px-4 py-3 text-gray-900 outline-none prose prose-sm max-w-none"
+        className="min-h-[100px] px-4 py-3 text-gray-900 outline-none max-w-none break-words"
         data-placeholder={placeholder}
         style={{
           minHeight: typeof rows === "number" ? `${rows * 24}px` : undefined,
@@ -90,6 +103,8 @@ export default function RichTextEditor({ value = "", onChange, placeholder = "En
         [contenteditable]:empty:before { content: attr(data-placeholder); color: #9ca3af; }
         [contenteditable] ul { margin: 0.5em 0; padding-left: 1.5em; }
         [contenteditable] li { margin: 0.25em 0; }
+        /* Keep font inheritance so saved HTML renders consistently */
+        [contenteditable] { font-family: inherit; }
       `}</style>
     </div>
   );
