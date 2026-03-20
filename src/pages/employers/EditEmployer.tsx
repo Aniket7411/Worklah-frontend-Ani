@@ -808,7 +808,7 @@ const EditEmployer = () => {
                 </div>
 
                 {outlets.map((outlet, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
+                  <div key={outlet._id ?? index} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-gray-700">Outlet {index + 1}</h3>
                       {outlets.length > 1 && (

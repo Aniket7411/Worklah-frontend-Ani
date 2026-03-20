@@ -53,6 +53,19 @@ export function AddressAutocomplete(props: AddressAutocompleteProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const autocompleteInstanceRef = useRef<google.maps.places.Autocomplete | null>(null);
   const listenerRef = useRef<google.maps.MapsEventListener | null>(null);
+
+  // Keep the latest callbacks without re-binding Google listeners.
+  // This prevents stale closures that can update the wrong field after re-renders
+  // (e.g., when both HQ address + multiple outlet addresses use AddressAutocomplete).
+  const onChangeRef = useRef(onChange);
+  const onPlaceSelectRef = useRef(onPlaceSelect);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+  useEffect(() => {
+    onPlaceSelectRef.current = onPlaceSelect;
+  }, [onPlaceSelect]);
+
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
   const { isLoaded, loadError } = useLoadScript({ googleMapsApiKey: apiKey || "", libraries });
 
@@ -91,8 +104,10 @@ export function AddressAutocomplete(props: AddressAutocompleteProps) {
           const address = place.formatted_address || "";
           const parsed =
             place.address_components?.length ? parseAddressComponents(place.address_components) : {};
-          onChange(address);
-          onPlaceSelect?.({ address, latitude: lat, longitude: lng, ...parsed });
+
+          // Always call latest callbacks via refs.
+          onChangeRef.current(address);
+          onPlaceSelectRef.current?.({ address, latitude: lat, longitude: lng, ...parsed });
         });
         autocompleteInstanceRef.current = autocomplete;
         listenerRef.current = listener;
@@ -110,7 +125,7 @@ export function AddressAutocomplete(props: AddressAutocompleteProps) {
       }
       autocompleteInstanceRef.current = null;
     };
-  }, [usePlacesAutocomplete, country, onChange, onPlaceSelect]);
+  }, [usePlacesAutocomplete, country]);
 
   if (loadError || !apiKey) {
     if (multiline)

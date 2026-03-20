@@ -291,6 +291,7 @@ const AddEmployer = () => {
 
     try {
       const industryToSend = showCustomIndustry ? formData.customIndustry : formData.industry;
+      // Do not send employerId from frontend; backend owns employerId generation.
       const formDataToSend = buildEmployerFormData(
         { ...formData, phoneCountry },
         outlets,
@@ -329,21 +330,36 @@ const AddEmployer = () => {
         const status = error.response.status;
         const errorData = error.response.data;
         const errorMessage = errorData?.message || "An error occurred while adding the employer.";
+        const errorType = errorData?.error;
+        const lowerMessage = String(errorMessage).toLowerCase();
 
-        // Handle 409 Conflict (duplicate company number)
-        if (status === 409) {
+        const focusFieldBySelector = (selector: string) => {
+          const input = document.querySelector(selector) as HTMLInputElement | null;
+          if (input) {
+            input.focus();
+            input.select?.();
+          }
+        };
+
+        // Handle 409 Conflict from backend duplicate keys.
+        if (status === 409 && errorType === "DuplicateKeyError") {
           toast.error(errorMessage, {
             duration: 6000,
             icon: "⚠️"
           });
-          // Focus on company number field if duplicate
-          if (errorMessage.includes("company number")) {
-            const companyNumberInput = document.querySelector('input[name="companyNumber"]') as HTMLInputElement;
-            if (companyNumberInput) {
-              companyNumberInput.focus();
-              companyNumberInput.select();
-            }
+
+          // Highlight related field when we can infer it from backend message.
+          if (lowerMessage.includes("email")) {
+            focusFieldBySelector('input[name="emailAddress"]');
+          } else if (lowerMessage.includes("company number")) {
+            focusFieldBySelector('input[name="companyNumber"]');
+          } else if (lowerMessage.includes("employerid") || lowerMessage.includes("employer id")) {
+            // employerId is backend generated; we surface message but don't ask user to edit any field.
+            focusFieldBySelector('input[name="companyLegalName"]');
           }
+        } else if (status === 409) {
+          // Non-DuplicateKey 409: still show exact backend message and keep user data intact.
+          toast.error(errorMessage, { duration: 6000, icon: "⚠️" });
         } else {
           toast.error(errorMessage, { duration: 5000 });
         }
