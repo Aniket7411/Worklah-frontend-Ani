@@ -348,6 +348,8 @@ Generate, list, send-email, download — `adminTimesheetRoutes.js` (email/PDF ma
 
 Stats, charts, overview — `dashboardRoutes.js` (admin-only).
 
+**React admin panel:** charts use `GET /api/admin/dashboard/charts` and stats use `GET /api/admin/dashboard/stats`. The dashboard “New applications” sidebar uses `GET /api/admin/candidates?limit=4&sort=-createdAt` (same as the `NewApplications` widget) so all traffic stays under `/api/admin/...`.
+
 ### Employers
 
 Same as **Employers** section: **`/api/admin/employers`**.

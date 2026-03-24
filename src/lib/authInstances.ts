@@ -2,13 +2,19 @@ import axios from 'axios'
 import Cookies from 'js-cookie';
 import toast from 'react-hot-toast';
 
-// REACT_ADMIN_HANDOVER.md: Base URL = dev http://localhost:3000/api or deployed API (e.g. https://worklah-updated-dec.onrender.com/api)
-// Set VITE_API_BASE_URL in .env for production; omit for dev (localhost).
-// ⚠️ Base URL already includes '/api' – use paths like '/admin/login', not '/api/admin/login'
+// See REACT_ADMIN_API.md + API_HANDOVER.md §2–§3: base URL must include `/api`.
+// Paths are relative to that base, e.g. `/admin/login` → `GET https://host/api/admin/login`
+// function getApiBaseUrl(): string {
+//   const raw = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL;
+//   if (raw && typeof raw === 'string' && raw.trim()) {
+//     return raw.trim().replace(/\/+$/, '');
+//   }
+//   return 'http://localhost:3000/api';
+// }
 
-const API_BASE_URL = "https://worklah-updated-dec.onrender.com/api";
-// const API_BASE_URL = "http://localhost:3000/api"
-
+// const API_BASE_URL = getApiBaseUrl();
+// const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL ="https://worklah-updated-dec.onrender.com/api"
 
 export const axiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -18,8 +24,6 @@ export const axiosInstance = axios.create({
   withCredentials: true,
   timeout: 30000, // 30 seconds timeout for regular requests
 })
-
-console.log("ahaghga")
 
 // Separate instance for file uploads with longer timeout
 export const axiosFileInstance = axios.create({

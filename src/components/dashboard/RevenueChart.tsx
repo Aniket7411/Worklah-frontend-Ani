@@ -12,6 +12,30 @@ import { axiosInstance } from "../../lib/authInstances";
 import { Loader2 } from "lucide-react";
 import { getProfilePicUrl } from "../../utils/avatarUtils";
 
+/**
+ * New Applications column — uses admin Candidates API (API_HANDOVER §6, same as NewApplications.tsx).
+ * Avoids non-admin `/dashboard/...` paths. If a backend adds `GET /admin/dashboard/recent-applications`,
+ * switch here once the route is guaranteed to exist (otherwise 404 triggers global toast).
+ */
+async function fetchDashboardRecentApplicants(): Promise<
+  Array<{ id?: string; name: string; appliedFor: string; avatar?: string }>
+> {
+  try {
+    const res = await axiosInstance.get("/admin/candidates?limit=4&sort=-createdAt");
+    if (res.data?.success === false) return [];
+    const candidates = res.data?.candidates || [];
+    if (!Array.isArray(candidates) || candidates.length === 0) return [];
+    return candidates.slice(0, 4).map((c: any) => ({
+      id: c._id || c.id,
+      name: c.fullName || "",
+      appliedFor: "—",
+      avatar: c.profilePicture || c.avatarUrl || "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
 const RevenueChart = () => {
   const [revenueData, setRevenueData] = useState<any[]>([]);
   const [applicants, setApplicants] = useState<any[]>([]);
@@ -65,31 +89,8 @@ const RevenueChart = () => {
           setTotalRevenue(revenueStats.total || 0);
         }
 
-        // Fetch new applications from backend
-        const applicationsResponse = await axiosInstance.get(
-          "/dashboard/recent-applications?limit=4"
-        );
-        
-        // Check for success field according to API spec
-        if (applicationsResponse.data?.success === false) {
-          console.error("Failed to fetch applications:", applicationsResponse.data?.message);
-          setApplicants([]);
-          return;
-        }
-        const applications = applicationsResponse?.data?.applications || [];
-
-        if (!Array.isArray(applications) || applications.length === 0) {
-          setApplicants([]);
-        } else {
-          // Use data exactly as backend provides it
-          const formattedApplicants = applications.map((app: any) => ({
-            id: app._id,
-            name: app.user?.fullName || app.candidateName || "",
-            appliedFor: app.job?.jobName || "",
-            avatar: app.user?.profileImage || "",
-          }));
-          setApplicants(formattedApplicants);
-        }
+        const formattedApplicants = await fetchDashboardRecentApplicants();
+        setApplicants(formattedApplicants);
       } catch (err: any) {
         console.error("Error fetching revenue data:", err);
         setError(err?.response?.data?.message || "Failed to load revenue data");
