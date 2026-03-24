@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { buildEmployerFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
+import { copyTextToClipboard } from "../../utils/clipboard";
 import { AddressAutocomplete } from "../../components/location";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore - phoneValidation is JS
@@ -310,19 +311,38 @@ const AddEmployer = () => {
         return;
       }
 
-      // Success - handle response (credentials modal commented out; navigate to list)
+      // Success — optional credentials modal when backend returns login details
       if (response.status === 201 || response.status === 200) {
-        if (generateCredentials && response.data?.credentials) {
-          const credentials = response.data.credentials;
-          if (credentials.emailSent === false || credentials.sentToEmail === false) {
+        const creds = response.data?.credentials;
+        const password =
+          creds &&
+          (creds.password ?? creds.plainPassword ?? creds.tempPassword ?? creds.generatedPassword);
+        const loginEmail = creds?.email || creds?.loginEmail || formData.emailAddress;
+
+        if (generateCredentials && creds && password) {
+          const emailSent = creds.emailSent !== false && creds.sentToEmail !== false;
+          if (!emailSent) {
+            toast.success("Employer added. Copy credentials below — email was not sent.");
+          } else {
+            toast.success("Employer added! Credentials were emailed; you can also copy them below.");
+          }
+          setEmployerCredentials({
+            email: String(loginEmail || ""),
+            password: String(password),
+            emailSent,
+          });
+          setShowCredentials(true);
+        } else if (generateCredentials && creds) {
+          if (creds.emailSent === false || creds.sentToEmail === false) {
             toast.success("Employer added successfully. Share login details with the employer manually if needed.");
           } else {
             toast.success("Employer added successfully! Credentials have been sent via email.");
           }
+          setTimeout(() => navigate("/employers"), 800);
         } else {
           toast.success("Employer added successfully!");
+          setTimeout(() => navigate("/employers"), 800);
         }
-        setTimeout(() => navigate("/employers"), 800);
       }
     } catch (error: any) {
       // Handle different error types
@@ -425,13 +445,13 @@ const AddEmployer = () => {
                 {/* Employer ID - Read Only */}
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Employer ID <span className="text-gray-400 text-xs">(Auto-generated)</span>
+                    Employer ID <span className="text-gray-400 text-xs">(Mongo ObjectId or UUID — server-generated)</span>
                   </label>
                   <input
                     type="text"
-                    value={formData.employerId || "Will be generated automatically"}
+                    value={formData.employerId || "Assigned after save (not EMP-001 style)"}
                     disabled
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed"
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed font-mono text-sm"
                   />
                 </div>
 
@@ -828,8 +848,8 @@ const AddEmployer = () => {
                 </div>
               </div>
 
-              {/* Generate Login Credentials */}
-              {/* <div className="md:col-span-2">
+              {/* Generate Login Credentials — backend: generateCredentials in multipart JSON `data` */}
+              <div className="md:col-span-2">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -839,15 +859,16 @@ const AddEmployer = () => {
                   />
                   <div>
                     <span className="text-sm font-medium text-gray-700">
-                      Generate Login Credentials for Employer
+                      Generate login credentials for employer portal
                     </span>
                     <p className="text-xs text-gray-500 mt-1">
-                      If checked, system will generate email and password for employer login.
-                      {formData.emailAddress && " Email will be sent to: " + formData.emailAddress}
+                      When enabled, the backend should create an employer user and return credentials in the response
+                      (and send email when configured). Uses the email address above.
+                      {formData.emailAddress ? ` Sent to: ${formData.emailAddress}` : ""}
                     </p>
                   </div>
                 </label>
-              </div> */}
+              </div>
             </section>
 
             {/* Section 4: Outlets */}
@@ -871,7 +892,7 @@ const AddEmployer = () => {
                 <div key={index} className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-medium text-gray-700">Outlet {index + 1}</h3>
-                    {outlets.length > 1 && (
+                    {outlets.length > 0 && (
                       <button
                         type="button"
                         onClick={() => openDeleteModal(index)}
@@ -1088,8 +1109,77 @@ const AddEmployer = () => {
           </div>
         </form>
 
-        {/* Credentials Modal - COMMENTED OUT: modal after employer creation (navigate to list instead) */}
-        {/* {showCredentials && employerCredentials && ( ... modal JSX ... )} */}
+        {showCredentials && employerCredentials && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+            <div
+              className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4 border border-gray-200"
+              role="dialog"
+              aria-labelledby="credentials-title"
+            >
+              <h3 id="credentials-title" className="text-lg font-semibold text-gray-900">
+                Employer login credentials
+              </h3>
+              <p className="text-sm text-gray-600">
+                {employerCredentials.emailSent === false
+                  ? "Email delivery is off or failed — copy these details and share them securely with the employer."
+                  : "Credentials were sent by email. You can copy them here if needed."}
+              </p>
+              <div className="space-y-3 rounded-lg bg-gray-50 p-4 font-mono text-sm break-all">
+                <div>
+                  <span className="text-xs font-sans font-medium text-gray-500">Email</span>
+                  <p className="mt-0.5 text-gray-900">{employerCredentials.email}</p>
+                </div>
+                <div>
+                  <span className="text-xs font-sans font-medium text-gray-500">Password</span>
+                  <p className="mt-0.5 text-gray-900">{employerCredentials.password}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyTextToClipboard(employerCredentials.email, "Email copied")
+                  }
+                  className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
+                >
+                  Copy email
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyTextToClipboard(employerCredentials.password, "Password copied")
+                  }
+                  className="px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100"
+                >
+                  Copy password
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyTextToClipboard(
+                      `Email: ${employerCredentials.email}\nPassword: ${employerCredentials.password}`,
+                      "Credentials copied"
+                    )
+                  }
+                  className="px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Copy both
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCredentials(false);
+                  setEmployerCredentials(null);
+                  navigate("/employers");
+                }}
+                className="w-full py-3 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

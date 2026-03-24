@@ -4,21 +4,18 @@
  */
 
 import { roundToMoney, roundToHours } from "./money";
+import { formatEmployerIdShort, getCanonicalEmployerApiId } from "./employerIdDisplay";
 
 /**
  * Transform employer data from API to frontend format
  * Images come as complete URLs from backend (e.g., "https://worklah.onrender.com/uploads/profile/admin123.jpg")
  */
 export const transformEmployer = (employer) => {
-  const employerIdForAPI = employer.employerId || employer._id || employer.id;
+  // Prefer Mongo _id as canonical unique key; backend may also expose employerId as ObjectId or UUID (not EMP-001).
+  const employerIdForAPI = getCanonicalEmployerApiId(employer);
   const mongoId = employer._id || employer.id;
 
-  // Format employer ID for display (extract number from EMP-1234 format)
-  const employerIdDisplay = employerIdForAPI
-    ? employerIdForAPI.startsWith("EMP-")
-      ? employerIdForAPI.split("-")[1] || employerIdForAPI.slice(-4)
-      : employerIdForAPI.slice(-4)
-    : "N/A";
+  const employerIdDisplay = employerIdForAPI ? formatEmployerIdShort(employerIdForAPI) : "N/A";
 
   // Extract contact person info (support multiple formats)
   const mainContactPerson =

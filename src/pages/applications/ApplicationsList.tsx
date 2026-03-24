@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Search,
-  Filter,
   Eye,
   FileText,
   Loader2,
@@ -12,13 +11,28 @@ import {
 } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
+import { normalizeApplicationId } from "../../utils/applicationId";
+import {
+  getJobEmployerLabel,
+  getJobOutletName,
+  getJobWorkLocationLine,
+} from "../../utils/applicationJobDisplay";
 
+/** List API may return shallow `job`; backend should populate employer/outlet for clarity */
 interface Application {
   _id: string;
   userId: string;
   user?: { fullName?: string; phoneNumber?: string; email?: string; profilePicture?: string };
   jobId: string;
-  job?: { jobName?: string; jobDate?: string };
+  job?: Record<string, unknown> & {
+    jobName?: string;
+    jobDate?: string;
+    employerName?: string;
+    outletAddress?: string;
+    location?: string;
+    locationDetails?: string;
+    shortAddress?: string;
+  };
   shiftId?: string;
   shift?: { startTime?: string; endTime?: string };
   status?: string;
@@ -37,7 +51,6 @@ const statusOptions = [
 ];
 
 export default function ApplicationsList() {
-  const navigate = useNavigate();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,7 +87,8 @@ export default function ApplicationsList() {
       setTotalPages(statusFilter === "approved_not_confirmed" ? 1 : (pag.totalPages || 1));
       setTotalItems(statusFilter === "approved_not_confirmed" ? list.length : (pag.totalItems || list.length));
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to load applications");
+      const msg = err?.response?.data?.message || "Failed to load applications";
+      toast.error(msg);
       setApplications([]);
     } finally {
       setLoading(false);
@@ -167,62 +181,146 @@ export default function ApplicationsList() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+            {/* Mobile: stacked cards */}
+            <div className="md:hidden space-y-3">
+              {applications.map((app) => {
+                const detailId =
+                  normalizeApplicationId(app._id) ??
+                  normalizeApplicationId((app as { id?: string }).id);
+                const employer = getJobEmployerLabel(app.job);
+                const outlet = getJobOutletName(app.job);
+                const location = getJobWorkLocationLine(app.job);
+                return (
+                  <div
+                    key={app._id}
+                    className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm space-y-2"
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">{app.user?.fullName || "—"}</p>
+                        <p className="text-xs text-gray-500 truncate">{app.user?.phoneNumber || app.user?.email || "—"}</p>
+                      </div>
+                      {getStatusBadge(app.adminStatus, app.status)}
+                    </div>
+                    <p className="text-sm text-gray-800">
+                      <span className="text-gray-500">Job:</span> {app.job?.jobName || "—"}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      <span className="font-medium text-gray-700">Employer:</span> {employer}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      <span className="font-medium text-gray-700">Outlet:</span> {outlet !== "—" ? outlet : "—"}
+                    </p>
+                    <p className="text-xs text-gray-600 line-clamp-2" title={location}>
+                      <span className="font-medium text-gray-700">Location:</span> {location}
+                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                      <span className="text-xs text-gray-500">
+                        {app.appliedAt ? new Date(app.appliedAt).toLocaleString() : "—"}
+                      </span>
+                      {detailId ? (
+                        <Link to={`/applications/${detailId}`}>
+                          <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-600">View <Eye className="w-4 h-4" /></span>
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-amber-600">Unavailable</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto -mx-px">
+                <table className="w-full min-w-[920px]">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Applicant</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Job</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Shift</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Applied</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Candidate confirmed</th>
-                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Applicant</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Job</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Employer</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Outlet</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Location</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Shift</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase hidden xl:table-cell">Applied</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase hidden lg:table-cell">Confirmed</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {applications.map((app) => (
                       <tr key={app._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">
                           <div>
-                            <p className="font-medium text-gray-900">{app.user?.fullName || "—"}</p>
-                            <p className="text-sm text-gray-500">{app.user?.phoneNumber || app.user?.email || "—"}</p>
+                            <p className="font-medium text-gray-900 text-sm">{app.user?.fullName || "—"}</p>
+                            <p className="text-xs text-gray-500 truncate max-w-[140px]" title={app.user?.phoneNumber || app.user?.email}>
+                              {app.user?.phoneNumber || app.user?.email || "—"}
+                            </p>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <p className="text-gray-900">{app.job?.jobName || "—"}</p>
-                          <p className="text-sm text-gray-500">{app.job?.jobDate ? new Date(app.job.jobDate).toLocaleDateString() : "—"}</p>
+                        <td className="px-4 py-3">
+                          <p className="text-sm text-gray-900 font-medium">{app.job?.jobName || "—"}</p>
+                          <p className="text-xs text-gray-500">{app.job?.jobDate ? new Date(app.job.jobDate).toLocaleDateString() : "—"}</p>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-sm text-gray-800 max-w-[160px]">
+                          <span className="line-clamp-2" title={getJobEmployerLabel(app.job)}>
+                            {getJobEmployerLabel(app.job)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-800 max-w-[140px]">
+                          <span className="line-clamp-2" title={getJobOutletName(app.job)}>
+                            {getJobOutletName(app.job)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 max-w-[180px]">
+                          <span className="line-clamp-2" title={getJobWorkLocationLine(app.job)}>
+                            {getJobWorkLocationLine(app.job)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
                           {app.shift?.startTime && app.shift?.endTime
-                            ? `${app.shift.startTime} - ${app.shift.endTime}`
+                            ? `${app.shift.startTime} – ${app.shift.endTime}`
                             : "—"}
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-4 py-3 text-xs text-gray-600 hidden xl:table-cell whitespace-nowrap">
                           {app.appliedAt ? new Date(app.appliedAt).toLocaleString() : "—"}
                         </td>
-                        <td className="px-6 py-4">{getStatusBadge(app.adminStatus, app.status)}</td>
-                        <td className="px-6 py-4">
+                        <td className="px-4 py-3">{getStatusBadge(app.adminStatus, app.status)}</td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
                           {getCandidateConfirmLabel(app) === "Confirmed" && (
-                            <span className="inline-flex px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                            <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
                               Yes
                             </span>
                           )}
                           {getCandidateConfirmLabel(app) === "Awaiting confirm" && (
-                            <span className="inline-flex px-2.5 py-1 text-xs font-medium rounded-full border bg-amber-50 text-amber-700 border-amber-200">
-                              Awaiting confirm
+                            <span className="inline-flex px-2 py-0.5 text-xs font-medium rounded-full border bg-amber-50 text-amber-700 border-amber-200">
+                              Pending
                             </span>
                           )}
                           {!getCandidateConfirmLabel(app) && <span className="text-gray-400">—</span>}
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <Link to={`/applications/${app._id}`}>
-                            <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                              <Eye className="w-4 h-4" />
-                              View
-                            </button>
-                          </Link>
+                        <td className="px-4 py-3 text-center">
+                          {(() => {
+                            const detailId =
+                              normalizeApplicationId(app._id) ??
+                              normalizeApplicationId((app as { id?: string }).id);
+                            return detailId ? (
+                              <Link to={`/applications/${detailId}`}>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                >
+                                  <Eye className="w-4 h-4 shrink-0" />
+                                  View
+                                </button>
+                              </Link>
+                            ) : (
+                              <span className="text-xs text-amber-600" title="Missing or invalid application id">
+                                —
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))}

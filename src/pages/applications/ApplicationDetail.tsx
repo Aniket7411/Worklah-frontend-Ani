@@ -1,14 +1,24 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, CheckCircle, XCircle, User, Briefcase, Clock, FileText, Image } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle, XCircle, User, Briefcase, Clock, FileText, Image, Copy, Building2, MapPin, Hash } from "lucide-react";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
 import { getProfilePicUrl } from "../../utils/avatarUtils";
+import { normalizeApplicationId } from "../../utils/applicationId";
+import {
+  getJobClockInBarcode,
+  getJobDisplayCode,
+  getJobEmployerLabel,
+  getJobOutletName,
+  getJobWorkLocationLine,
+} from "../../utils/applicationJobDisplay";
+import { copyTextToClipboard } from "../../utils/clipboard";
 
 interface ApplicationDetailData {
   _id: string;
   userId: string;
   user?: {
+    _id?: string;
     fullName?: string;
     email?: string;
     phoneNumber?: string;
@@ -26,13 +36,23 @@ interface ApplicationDetailData {
     status?: string;
   };
   jobId: string;
-  job?: {
+  job?: Record<string, unknown> & {
+    _id?: string;
     jobName?: string;
     jobDate?: string;
     jobTitle?: string;
+    jobId?: string;
+    employerName?: string;
+    employer?: string | { companyLegalName?: string; name?: string };
+    outlet?: string | { name?: string; address?: string; outletName?: string; outletAddress?: string };
+    outletAddress?: string;
+    outletId?: string;
     location?: string;
-    employer?: { companyLegalName?: string };
-    outlet?: { name?: string; address?: string };
+    locationDetails?: string;
+    shortAddress?: string;
+    dressCode?: string;
+    barcodes?: Array<{ barcode?: string; outletName?: string; outletId?: string }>;
+    qrCodes?: Array<{ barcode?: string; outletName?: string; qrCodeImage?: string }>;
   };
   shiftId?: string;
   shift?: {
@@ -53,14 +73,20 @@ interface ApplicationDetailData {
 }
 
 export default function ApplicationDetail() {
-  const { applicationId } = useParams<{ applicationId: string }>();
+  const { applicationId: applicationIdParam } = useParams<{ applicationId: string }>();
   const navigate = useNavigate();
+  const applicationId = useMemo(
+    () => normalizeApplicationId(applicationIdParam),
+    [applicationIdParam]
+  );
   const [application, setApplication] = useState<ApplicationDetailData | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [rejectModal, setRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [approveNotes, setApproveNotes] = useState("");
+  const [postalResolvedAddress, setPostalResolvedAddress] = useState<string | null>(null);
+  const [postalLookupLoading, setPostalLookupLoading] = useState(false);
 
   const fetchApplication = async () => {
     if (!applicationId) return;
@@ -80,8 +106,63 @@ export default function ApplicationDetail() {
   };
 
   useEffect(() => {
+    if (!applicationId) {
+      setLoading(false);
+      setApplication(null);
+      return;
+    }
     fetchApplication();
   }, [applicationId]);
+
+  // Enrich candidate location for admin: SG postal → street (same API as edit candidate)
+  useEffect(() => {
+    const pc = application?.user?.postalCode;
+    if (!pc) {
+      setPostalResolvedAddress(null);
+      return;
+    }
+    const trimmed = String(pc).trim();
+    if (!/^\d{6}$/.test(trimmed)) {
+      setPostalResolvedAddress(null);
+      return;
+    }
+    let cancelled = false;
+    setPostalLookupLoading(true);
+    axiosInstance
+      .get(`/admin/postal-code/${trimmed}`)
+      .then((res) => {
+        if (cancelled) return;
+        const street = res.data?.streetAddress;
+        setPostalResolvedAddress(typeof street === "string" && street.trim() ? street.trim() : null);
+      })
+      .catch(() => {
+        if (!cancelled) setPostalResolvedAddress(null);
+      })
+      .finally(() => {
+        if (!cancelled) setPostalLookupLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [application?.user?.postalCode, application?._id]);
+
+  if (applicationIdParam && !applicationId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+        <p className="text-gray-900 font-semibold mb-2">Invalid application ID</p>
+        <p className="text-sm text-gray-600 text-center max-w-md mb-4">
+          The link must use a valid MongoDB application id (24 hex characters). Do not pass a whole application object in the URL.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/applications")}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Back to applications
+        </button>
+      </div>
+    );
+  }
 
   const handleApprove = async () => {
     if (!applicationId) return;
@@ -156,7 +237,7 @@ export default function ApplicationDetail() {
   const status = application.adminStatus || application.status || "Pending";
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-8">
+    <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <button
         onClick={() => navigate("/applications")}
         className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
@@ -228,8 +309,27 @@ export default function ApplicationDetail() {
                 <p><span className="text-gray-500">Employment status:</span> {application.user?.employmentStatus || "—"}</p>
                 <p><span className="text-gray-500">DOB:</span> {application.user?.dateOfBirth ? new Date(application.user.dateOfBirth).toLocaleDateString() : "—"}</p>
                 <p><span className="text-gray-500">Gender:</span> {application.user?.gender || "—"}</p>
-                <p><span className="text-gray-500">Postal code:</span> {application.user?.postalCode || "—"}</p>
-                <p className="sm:col-span-2"><span className="text-gray-500">Address:</span> {application.user?.address || "—"}</p>
+                <p>
+                  <span className="text-gray-500">Postal code:</span> {application.user?.postalCode || "—"}
+                  {postalLookupLoading && (
+                    <span className="ml-2 text-xs text-blue-600">Looking up address…</span>
+                  )}
+                </p>
+                <p className="sm:col-span-2">
+                  <span className="text-gray-500">Address on profile:</span> {application.user?.address || "—"}
+                </p>
+                {postalResolvedAddress && (
+                  <p className="sm:col-span-2 text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-sm">
+                    <span className="font-medium">Resolved from postal (Singapore):</span> {postalResolvedAddress}
+                    <button
+                      type="button"
+                      onClick={() => copyTextToClipboard(postalResolvedAddress, "Address copied")}
+                      className="ml-2 inline-flex items-center gap-1 text-xs text-emerald-700 underline"
+                    >
+                      <Copy className="w-3 h-3" /> Copy
+                    </button>
+                  </p>
+                )}
                 <p><span className="text-gray-500">NRIC:</span> {application.user?.nric || "—"}</p>
               </div>
               <div className="border-t border-gray-200 pt-3">
@@ -265,17 +365,94 @@ export default function ApplicationDetail() {
             </div>
           </section>
 
+          {/* Employer & work site (API may use flat employerName / outlet ids — helpers normalize) */}
+          <section>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 mb-3">
+              <Building2 className="w-5 h-5" />
+              Employer & work site
+            </h2>
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+              <p>
+                <span className="text-gray-500">Employer:</span>{" "}
+                <span className="font-medium text-gray-900">{getJobEmployerLabel(application.job)}</span>
+              </p>
+              <p>
+                <span className="text-gray-500">Outlet:</span>{" "}
+                <span className="font-medium text-gray-900">{getJobOutletName(application.job)}</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                <span>
+                  <span className="text-gray-500">Work location:</span>{" "}
+                  {getJobWorkLocationLine(application.job)}
+                </span>
+              </p>
+              {application.job?.dressCode && (
+                <p>
+                  <span className="text-gray-500">Dress code:</span> {application.job.dressCode}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Worker clock-in: display code + barcode (native app manual entry / scan) */}
+          <section>
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 mb-3">
+              <Hash className="w-5 h-5" />
+              Worker clock-in codes
+            </h2>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3 text-sm">
+              <p className="text-amber-900 text-xs sm:text-sm">
+                Workers can scan a QR/barcode at the outlet, or enter the job code in the app if manual entry is enabled on native.
+              </p>
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
+                {getJobDisplayCode(application.job) && (
+                  <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                    <span className="text-gray-500 text-xs">Job code</span>
+                    <code className="font-mono font-semibold text-amber-900">{getJobDisplayCode(application.job)}</code>
+                    <button
+                      type="button"
+                      onClick={() => copyTextToClipboard(getJobDisplayCode(application.job) || "", "Job code copied")}
+                      className="p-1 rounded hover:bg-amber-100 text-amber-800"
+                      title="Copy"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {getJobClockInBarcode(application.job) &&
+                  getJobClockInBarcode(application.job) !== getJobDisplayCode(application.job) && (
+                    <div className="flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                      <span className="text-gray-500 text-xs">Barcode value</span>
+                      <code className="font-mono font-semibold text-amber-900">{getJobClockInBarcode(application.job)}</code>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyTextToClipboard(getJobClockInBarcode(application.job) || "", "Barcode copied")
+                        }
+                        className="p-1 rounded hover:bg-amber-100 text-amber-800"
+                        title="Copy"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+              </div>
+              {!getJobDisplayCode(application.job) && !getJobClockInBarcode(application.job) && (
+                <p className="text-amber-800 text-xs">No job/barcode code on this record. Open the job page or QR management after backend attaches barcodes.</p>
+              )}
+            </div>
+          </section>
+
           {/* Job & Shift */}
           <section>
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 mb-3">
               <Briefcase className="w-5 h-5" />
-              Job & Shift
+              Job & shift
             </h2>
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
               <p><span className="text-gray-500">Job:</span> {application.job?.jobName || application.job?.jobTitle || "—"}</p>
               <p><span className="text-gray-500">Date:</span> {application.job?.jobDate ? new Date(application.job.jobDate).toLocaleDateString() : "—"}</p>
-              <p><span className="text-gray-500">Employer:</span> {application.job?.employer?.companyLegalName || "—"}</p>
-              <p><span className="text-gray-500">Outlet:</span> {application.job?.outlet?.name || "—"} {application.job?.outlet?.address && `(${application.job.outlet.address})`}</p>
               {application.shift && (
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
                   <Clock className="w-4 h-4 text-gray-500" />

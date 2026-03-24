@@ -233,7 +233,14 @@ const QRCodeManagement: React.FC = () => {
         toast.error(response.data?.message || "Failed to generate QR code");
       }
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to generate QR code");
+      const msg = err?.response?.data?.message || "Failed to generate QR code";
+      const status = err?.response?.status;
+      toast.error(
+        status
+          ? `${msg}${status === 500 ? " — check backend logs (storage, job/outlet ids)." : ""}`
+          : msg,
+        { duration: 6000 }
+      );
     }
   };
 

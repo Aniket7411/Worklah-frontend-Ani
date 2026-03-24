@@ -6,6 +6,7 @@ import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { getProfilePicUrl } from "../../utils/avatarUtils";
+import { normalizeApplicationId } from "../../utils/applicationId";
 // import Image from "next/image"
 
 interface Candidate {
@@ -133,6 +134,10 @@ export default function CandidateManagement() {
 
 
   const getCandidateId = (c: Candidate) => String(c._id ?? c.applicationId ?? c.id);
+
+  /** MongoDB application id for POST /admin/applications/:id/approve|reject */
+  const getApplicationApiId = (c: Candidate): string | null =>
+    normalizeApplicationId(c.applicationId) ?? normalizeApplicationId((c as { _id?: string })._id);
   const handleActionClick = (action: string, id: string | number) => {
     if (action === "View Candidate") {
       navigate(`/jobs/${jobId}/candidates/${id}`);
@@ -143,14 +148,19 @@ export default function CandidateManagement() {
     setIsPopupOpen(isPopupOpen === candidateId ? null : candidateId);
   };
 
-  const handleStatusSelection = (userId: string, newStatus: string) => {
+  const handleStatusSelection = (candidate: Candidate, newStatus: string) => {
+    const appId = getApplicationApiId(candidate);
+    if (!appId) {
+      toast.error("Missing or invalid application id. Cannot approve/reject from this row.");
+      return;
+    }
     if (newStatus === "Rejected") {
-      setShowRejectionModal({ isOpen: true, userId });
+      setShowRejectionModal({ isOpen: true, userId: appId });
       setRejectionReason("");
       return;
     }
 
-    setShowConfirmModal({ isOpen: true, userId, newStatus });
+    setShowConfirmModal({ isOpen: true, userId: appId, newStatus });
   };
 
   const handleConfirmStatusChange = async () => {
@@ -181,17 +191,26 @@ export default function CandidateManagement() {
       // According to API documentation:
       // - POST /api/admin/applications/:applicationId/approve (for approval)
       // - POST /api/admin/applications/:applicationId/reject (for rejection)
-      const appId = applicationIdOrCandidateId;
+      const normalizedAppId = normalizeApplicationId(applicationIdOrCandidateId);
       if (newStatus === "Approved" || newStatus === "Confirmed") {
-        await axiosInstance.post(`/admin/applications/${appId}/approve`, {
+        if (!normalizedAppId) {
+          toast.error("Invalid application ID");
+          return;
+        }
+        await axiosInstance.post(`/admin/applications/${normalizedAppId}/approve`, {
           notes: reason || undefined
         });
       } else if (newStatus === "Rejected") {
-        await axiosInstance.post(`/admin/applications/${appId}/reject`, {
+        if (!normalizedAppId) {
+          toast.error("Invalid application ID");
+          return;
+        }
+        await axiosInstance.post(`/admin/applications/${normalizedAppId}/reject`, {
           reason: reason || undefined,
           notes: reason || undefined
         });
       } else {
+        const appId = applicationIdOrCandidateId;
         const candidate = candidates.find((c: any) => c.id === appId || c._id === appId || c.applicationId === appId);
         const userId = (candidate as any)?.userId || (candidate as any)?.user?._id || (candidate as any)?.user?.id;
         // NEW_END_TO_END_API_DOCUMENTATION.md §5.6: PUT applications/status – body: status, newStatus?, notes?
@@ -512,7 +531,7 @@ export default function CandidateManagement() {
                   <select
                     value={candidate.approvedStatus}
                     onChange={(e) =>
-                      handleStatusSelection(getCandidateId(candidate), e.target.value)
+                      handleStatusSelection(candidate, e.target.value)
                     }
                     className={`px-3 py-1 pr-6 rounded-full text-sm font-medium appearance-none w-full cursor-pointer ${candidate.approvedStatus === "Confirmed"
                       ? "bg-green-100 text-green-700"

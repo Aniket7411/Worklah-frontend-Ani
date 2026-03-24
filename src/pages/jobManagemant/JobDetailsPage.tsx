@@ -13,6 +13,8 @@ import {
   RefreshCw,
   Settings,
   UserCheck,
+  Copy,
+  Hash,
 } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { FaCaretDown } from "react-icons/fa";
@@ -26,6 +28,8 @@ import { convertIdToFourDigits, formatDate } from "../../lib/utils";
 import OutletFilter from "../../components/Filter/OutletFilter";
 import OverViewTable from "./OverViewTable";
 import { sanitizeJobDescriptionHtml } from "../../utils/jobDescriptionHtml";
+import { getJobClockInBarcode, getJobDisplayCode } from "../../utils/applicationJobDisplay";
+import { copyTextToClipboard } from "../../utils/clipboard";
 
 const JobDetailsPage = () => {
   const companyImage = "https://worklah.onrender.com";
@@ -296,6 +300,63 @@ const JobDetailsPage = () => {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Worker clock-in: human-readable job code + barcode (fallback when QR image fails to generate) */}
+            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <h3 className="text-sm font-semibold text-amber-900 flex items-center gap-2">
+                  <Hash className="w-4 h-4 shrink-0" />
+                  Worker clock-in (code entry)
+                </h3>
+                <Link
+                  to="/qrCode"
+                  className="text-xs font-medium text-amber-800 underline hover:text-amber-950 whitespace-nowrap"
+                >
+                  QR / barcode management →
+                </Link>
+              </div>
+              <p className="text-xs text-amber-900/90">
+                Share this code with workers: they enter it in the mobile app for check-in when QR scan is unavailable. Same value is often used as barcode data.
+              </p>
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2">
+                {getJobDisplayCode(jobsData) && (
+                  <div className="inline-flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                    <span className="text-xs text-gray-500">Code</span>
+                    <code className="font-mono text-sm font-bold text-amber-950">{getJobDisplayCode(jobsData)}</code>
+                    <button
+                      type="button"
+                      onClick={() => copyTextToClipboard(getJobDisplayCode(jobsData) || "", "Code copied")}
+                      className="p-1.5 rounded-lg hover:bg-amber-100 text-amber-900"
+                      aria-label="Copy clock-in code"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {getJobClockInBarcode(jobsData) &&
+                  getJobClockInBarcode(jobsData) !== getJobDisplayCode(jobsData) && (
+                    <div className="inline-flex items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                      <span className="text-xs text-gray-500">Barcode</span>
+                      <code className="font-mono text-sm font-bold text-amber-950">{getJobClockInBarcode(jobsData)}</code>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          copyTextToClipboard(getJobClockInBarcode(jobsData) || "", "Barcode copied")
+                        }
+                        className="p-1.5 rounded-lg hover:bg-amber-100 text-amber-900"
+                        aria-label="Copy barcode"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+              </div>
+              {!getJobDisplayCode(jobsData) && !getJobClockInBarcode(jobsData) && (
+                <p className="text-xs text-amber-800">
+                  No job code on file yet. Save the job from admin and ensure the backend assigns <code className="bg-white/80 px-1 rounded">jobId</code> (e.g. JOB-0003) and barcodes; then refresh.
+                </p>
+              )}
             </div>
 
             {/* Barcodes / QR codes for this job (QR_CODE_SPEC: GET job returns qrCodes with qrCodeImage as full URL) */}

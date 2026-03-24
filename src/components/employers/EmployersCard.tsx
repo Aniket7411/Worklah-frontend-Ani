@@ -55,7 +55,12 @@ const EmployersCard: React.FC<EmployersCardProps> = ({
                 <h3 className="text-sm font-semibold text-gray-900 truncate">
                   {employer.companyLegalName}
                 </h3>
-                <p className="text-xs text-gray-500">ID: {employer.employerId}</p>
+                <p
+                  className="text-xs text-gray-500 font-mono"
+                  title={employer.employerIdForAPI ? `Full ID: ${employer.employerIdForAPI}` : undefined}
+                >
+                  ID: {employer.employerId}
+                </p>
               </div>
             </div>
 

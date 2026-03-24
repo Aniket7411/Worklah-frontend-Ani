@@ -107,6 +107,7 @@ const Employers = () => {
           employer.mainContactPerson.toLowerCase().includes(query) ||
           employer.companyEmail.toLowerCase().includes(query) ||
           employer.mainContactNumber.includes(query) ||
+          (employer.employerIdForAPI || "").toLowerCase().includes(query) ||
           employer.employerId.toLowerCase().includes(query)
         );
       });
@@ -339,7 +340,12 @@ const Employers = () => {
                               <div className="text-sm font-semibold text-gray-900 truncate">
                                 {employer.companyLegalName}
                               </div>
-                              <div className="text-xs text-gray-500 mt-0.5">ID: {employer.employerId}</div>
+                              <div
+                                className="text-xs text-gray-500 mt-0.5 font-mono"
+                                title={employer.employerIdForAPI ? `Full ID: ${employer.employerIdForAPI}` : undefined}
+                              >
+                                ID: {employer.employerId}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -509,7 +515,12 @@ const Employers = () => {
                       )}
                       <div className="min-w-0 flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 truncate">{employer.companyLegalName}</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">ID: {employer.employerId}</p>
+                        <p
+                          className="text-xs text-gray-500 mt-0.5 font-mono"
+                          title={employer.employerIdForAPI ? `Full ID: ${employer.employerIdForAPI}` : undefined}
+                        >
+                          ID: {employer.employerId}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">

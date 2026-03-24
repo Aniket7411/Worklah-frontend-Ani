@@ -14,6 +14,7 @@ import { buildJobData } from "../../utils/dataTransformers";
 import { roundToMoney, roundToHours } from "../../utils/money";
 import { AddressAutocomplete } from "../../components/location";
 import RichTextEditor from "../../components/RichTextEditor";
+import { getCanonicalEmployerApiId } from "../../utils/employerIdDisplay";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 import Loader from "../../components/Loader.jsx";
@@ -161,10 +162,10 @@ const ModifyJob: React.FC = () => {
     try {
       const response = await axiosInstance.get("/admin/employers?limit=100");
       if (response.data?.employers) {
-        // Map employers to use employerId (EMP-xxxx) format when available, fallback to _id
+        // Canonical employer key: Mongo ObjectId (or UUID), not sequential EMP-001
         const mappedEmployers = response.data.employers.map((emp: any) => ({
           ...emp,
-          id: emp.employerId || emp._id || emp.id, // Prefer EMP-xxxx format for API calls
+          id: getCanonicalEmployerApiId(emp),
         }));
         setEmployers(mappedEmployers);
       }
@@ -175,7 +176,7 @@ const ModifyJob: React.FC = () => {
 
   const fetchEmployerOutlets = async (employerId: string) => {
     try {
-      // API accepts both MongoDB ObjectId and EMP-xxxx format
+      // API: prefer MongoDB ObjectId / UUID in path (legacy EMP-xxxx may still work)
       const response = await axiosInstance.get(`/admin/employers/${employerId}`);
       if (response.data?.employer?.outlets && response.data.employer.outlets.length > 0) {
         setAvailableOutlets(normalizeOutlets(response.data.employer.outlets));

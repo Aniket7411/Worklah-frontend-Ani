@@ -20,6 +20,7 @@ import toast from "react-hot-toast";
 // @ts-ignore - Loader is a JSX file without types
 import Loader from "../../components/Loader";
 import { buildEmployerUpdateFormData, validateEmail, validateDate } from "../../utils/dataTransformers";
+import { getCanonicalEmployerApiId } from "../../utils/employerIdDisplay";
 import { validatePhone, getPlaceholder } from "../../utils/phoneValidation";
 import { AddressAutocomplete } from "../../components/location";
 
@@ -89,8 +90,7 @@ const EditEmployer = () => {
   const fetchEmployerData = async () => {
     try {
       setLoading(true);
-      // API accepts both MongoDB ObjectId and EMP-xxxx format
-      // The id from URL params can be either format
+      // URL :id should be Mongo ObjectId or UUID; legacy EMP-xxxx may still work
       const response = await axiosInstance.get(`/admin/employers/${id}`);
 
       // Check for success field according to API spec
@@ -103,7 +103,7 @@ const EditEmployer = () => {
       if (employer) {
         const country = (employer.phoneCountry === "MY" || employer.phoneCountry === "IN") ? employer.phoneCountry : "SG";
         setFormData({
-          employerId: employer.employerId || employer._id || "",
+          employerId: getCanonicalEmployerApiId(employer),
           companyLegalName: employer.companyLegalName || employer.companyName || "",
           companyNumber: employer.companyNumber || "",
           hqAddress: employer.hqAddress || "",
@@ -393,13 +393,13 @@ const EditEmployer = () => {
                   {/* Employer ID - Read Only */}
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Employer ID <span className="text-gray-400 text-xs">(Auto-generated)</span>
+                      Employer ID <span className="text-gray-400 text-xs">(unique ObjectId / UUID from server)</span>
                     </label>
                     <input
                       type="text"
                       value={formData.employerId || "N/A"}
                       disabled
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed font-mono text-sm"
                     />
                   </div>
 

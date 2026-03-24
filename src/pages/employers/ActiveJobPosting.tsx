@@ -24,6 +24,7 @@ import { axiosInstance } from "../../lib/authInstances";
 import { useNavigate, useParams } from "react-router-dom";
 import { GoDuplicate } from "react-icons/go";
 import { IoMdInformationCircleOutline } from "react-icons/io";
+import { formatEmployerIdShort, getCanonicalEmployerApiId } from "../../utils/employerIdDisplay";
 
 type Tab = {
   id: string;
@@ -99,8 +100,7 @@ const ActiveJobPosting = () => {
       try {
         setLoading(true);
         setError(null);
-        // API accepts both MongoDB ObjectId and EMP-xxxx format
-        // The id from URL params can be either format
+        // Prefer MongoDB ObjectId (or UUID) in URL; legacy EMP-xxxx may still work until backend migrates
         // Endpoint: GET /api/admin/employers/:id
         const response = await axiosInstance.get(`/admin/employers/${id}`);
 
@@ -121,7 +121,7 @@ const ActiveJobPosting = () => {
         if (jobsList.length === 0 && (employerData._id || employerData.employerId || id)) {
           try {
             const jobsRes = await axiosInstance.get("/admin/jobs", {
-              params: { employerId: employerData._id || employerData.employerId || id, limit: 100 },
+              params: { employerId: getCanonicalEmployerApiId(employerData) || id, limit: 100 },
             });
             jobsList = Array.isArray(jobsRes?.data?.jobs) ? jobsRes.data.jobs : [];
           } catch {
@@ -218,6 +218,7 @@ const ActiveJobPosting = () => {
   }
 
   const employer = data.employer;
+  const employerCanonicalId = getCanonicalEmployerApiId(employer);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -234,7 +235,7 @@ const ActiveJobPosting = () => {
             </button>
             <div className="flex items-center gap-3">
               <button 
-                onClick={() => navigate('/jobs/create-job', { state: { employerId: id } })}
+                onClick={() => navigate('/jobs/create-job', { state: { employerId: employerCanonicalId || id } })}
                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium"
                 title="Create New Job for this Employer"
               >
@@ -349,9 +350,13 @@ const ActiveJobPosting = () => {
                 <FaRegAddressCard className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Employer ID</p>
-                  <p className="text-sm font-mono text-gray-900">
-                    {employer.employerId ? `#${employer.employerId.split("-")[1] || employer.employerId.slice(-4)}` : (employer._id ? `#${employer._id.slice(-4)}` : "N/A")}
+                  <p
+                    className="text-xs sm:text-sm font-mono text-gray-900 break-all"
+                    title={employerCanonicalId ? `Full ID: ${employerCanonicalId}` : undefined}
+                  >
+                    {employerCanonicalId ? formatEmployerIdShort(employerCanonicalId) : "N/A"}
                   </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Unique ObjectId / UUID (not sequential 001, 004)</p>
                 </div>
               </div>
             </div>

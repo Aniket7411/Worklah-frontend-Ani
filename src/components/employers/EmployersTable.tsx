@@ -96,7 +96,12 @@ const EmployersTable: React.FC<EmployersTableProps> = ({
                     <div className="text-sm font-medium text-gray-900 truncate">
                       {employer.companyLegalName}
                     </div>
-                    <div className="text-xs text-gray-500">ID: {employer.employerId}</div>
+                    <div
+                      className="text-xs text-gray-500 font-mono"
+                      title={employer.employerIdForAPI ? `Full ID: ${employer.employerIdForAPI}` : undefined}
+                    >
+                      ID: {employer.employerId}
+                    </div>
                   </div>
                 </div>
               </td>

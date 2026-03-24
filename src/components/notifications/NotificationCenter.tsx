@@ -5,12 +5,14 @@ import { Bell, X, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { axiosInstance } from "../../lib/authInstances";
 import toast from "react-hot-toast";
+import { normalizeApplicationId } from "../../utils/applicationId";
 
 interface Notification {
   _id: string;
   userId?: string;
   jobId?: string;
-  applicationId?: string;
+  /** Backend may send string or populated object — always normalize before navigation */
+  applicationId?: string | Record<string, unknown>;
   type?: string;
   title: string;
   message: string;
@@ -74,9 +76,10 @@ export default function NotificationCenter() {
 
   const handleNotificationClick = (n: Notification) => {
     if (!n.isRead && !n.read) handleMarkAsRead(n._id);
-    if (n.applicationId) {
+    const appId = normalizeApplicationId(n.applicationId);
+    if (appId) {
       setIsOpen(false);
-      navigate(`/applications/${n.applicationId}`);
+      navigate(`/applications/${appId}`);
     } else if (n.jobId) {
       setIsOpen(false);
       navigate(`/jobs/${n.jobId}/candidates`);
